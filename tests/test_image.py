@@ -34,8 +34,8 @@ def test_settings_script_does_not_pipe_the_password_through_powershell():
     # regression: `$pw | openssl passwd -6 -stdin` sends "\r\n" after the password from PowerShell, the stored hash then
     # belonged to "password<CR>" and no typed password was ever accepted (SSH "Permission denied").
     text = (ROOT / "image" / "first-boot-settings.ps1").read_text(encoding="utf-8")
-    assert "New-PasswordHash" in text and "StandardInput.BaseStream.Write" in text
-    assert "| & $openssl" not in text
+    assert "New-PasswordHash" in text and "RrSha512Crypt" in text      # computed in the script itself: no OpenSSL / Git needed
+    assert "| & $openssl" not in text and "openssl.exe" not in text
 
 
 def test_stage_layout_matches_pi_gen():

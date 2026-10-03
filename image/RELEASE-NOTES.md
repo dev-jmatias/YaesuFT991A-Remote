@@ -13,7 +13,7 @@ included but **EXPERIMENTAL** (written from the manuals, simulator-tested only).
 2. Raspberry Pi Imager > Choose OS > **Use custom** > the `.img.xz` file > write the card. (Imager 2.x offers no "Edit settings"
    for custom images, so the next step sets the name, user and password.)
 3. Remove the card and put it back in the PC so Windows shows the small **bootfs** volume, then run
-   `pwsh -File first-boot-settings.ps1` (needs PowerShell 7 and Git for Windows). It asks for hostname, user, password and Wi-Fi.
+   `pwsh -File first-boot-settings.ps1` (needs PowerShell 7 only). It asks for hostname, user, password and Wi-Fi.
 4. Put the card in the Pi and power on. After about two minutes open `https://<hostname>.local`, create the administrator account,
    then Admin > Config: choose the radio model and serial port. Remote access from anywhere: `sudo tailscale up` once.
 

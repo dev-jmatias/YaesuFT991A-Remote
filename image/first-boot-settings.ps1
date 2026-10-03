@@ -9,8 +9,8 @@
   2. Run (Windows PowerShell):   pwsh image\first-boot-settings.ps1        (add -Drive E: if bootfs is not found by itself)
   3. Answer the questions, eject the card, put it in the Pi and power on.
 
-  The password is typed hidden and only its hash (SHA-512 crypt, made with the OpenSSL that comes with Git for Windows) is
-  written to the card. Nothing is sent anywhere.
+  The password is typed hidden and only its hash (SHA-512 crypt, computed by this script: nothing else has to be installed) is
+  written to the card. Nothing is sent anywhere. Needs PowerShell 7 (pwsh).
 #>
 param(
   [string]$Drive,                 # for example E:   (default: the volume labelled bootfs)
@@ -25,25 +25,65 @@ function Ask($prompt, $default = "") {
   $a = Read-Host ($(if ($default) { "$prompt [$default]" } else { $prompt }))
   if ([string]::IsNullOrWhiteSpace($a)) { $default } else { $a.Trim() }
 }
-# SHA-512 crypt hash of the password. The password goes to openssl's stdin as exact bytes WITHOUT a trailing newline:
-# piping a string from PowerShell appends "\r\n", which would silently become part of the password.
-function New-PasswordHash($password, $openssl, $salt = "") {
-  $psi = New-Object Diagnostics.ProcessStartInfo
-  $psi.FileName = $openssl
-  foreach ($a in @("passwd", "-6")) { $psi.ArgumentList.Add($a) }
-  if ($salt) { $psi.ArgumentList.Add("-salt"); $psi.ArgumentList.Add($salt) }
-  $psi.ArgumentList.Add("-stdin")
-  $psi.RedirectStandardInput = $true; $psi.RedirectStandardOutput = $true; $psi.RedirectStandardError = $true
-  $psi.UseShellExecute = $false
-  $p = [Diagnostics.Process]::Start($psi)
-  $bytes = (New-Object Text.UTF8Encoding($false)).GetBytes($password)
-  $p.StandardInput.BaseStream.Write($bytes, 0, $bytes.Length)
-  $p.StandardInput.BaseStream.Flush()
-  $p.StandardInput.Close()
-  $out = $p.StandardOutput.ReadToEnd().Trim()
-  $p.WaitForExit()
-  if ($p.ExitCode -ne 0 -or $out -notmatch '^\$6\$') { throw "could not create the password hash: $($p.StandardError.ReadToEnd())" }
-  $out
+# SHA-512 crypt ("$6$...") password hash, computed here so that nothing else has to be installed (no OpenSSL / Git needed).
+# It is the algorithm of glibc crypt(3) / "openssl passwd -6" (5000 rounds); the password bytes are exactly what you typed (UTF-8).
+if (-not ("RrSha512Crypt" -as [type])) {
+  Add-Type -TypeDefinition @'
+using System;
+using System.Collections.Generic;
+using System.Security.Cryptography;
+using System.Text;
+public static class RrSha512Crypt {
+  const string Alphabet = "./0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+  static byte[] H(byte[] d) { using (var h = SHA512.Create()) { return h.ComputeHash(d); } }
+  static void B64(StringBuilder sb, int b2, int b1, int b0, int n) {
+    int w = (b2 << 16) | (b1 << 8) | b0;
+    for (int i = 0; i < n; i++) { sb.Append(Alphabet[w & 0x3f]); w >>= 6; }
+  }
+  public static string RandomSalt() {
+    var r = new byte[16]; using (var g = RandomNumberGenerator.Create()) { g.GetBytes(r); }
+    var sb = new StringBuilder(); foreach (var b in r) sb.Append(Alphabet[b & 0x3f]); return sb.ToString();
+  }
+  public static string Hash(string password, string salt) {
+    byte[] pw = new UTF8Encoding(false).GetBytes(password);
+    byte[] sl = Encoding.ASCII.GetBytes(salt);
+    var t = new List<byte>(); t.AddRange(pw); t.AddRange(sl); t.AddRange(pw);
+    byte[] b = H(t.ToArray());
+    var a = new List<byte>(); a.AddRange(pw); a.AddRange(sl);
+    int cnt;
+    for (cnt = pw.Length; cnt > 64; cnt -= 64) a.AddRange(b);
+    for (int i = 0; i < cnt; i++) a.Add(b[i]);
+    for (cnt = pw.Length; cnt > 0; cnt >>= 1) { if ((cnt & 1) != 0) a.AddRange(b); else a.AddRange(pw); }
+    byte[] da = H(a.ToArray());
+    var dpIn = new List<byte>(); for (int i = 0; i < pw.Length; i++) dpIn.AddRange(pw);
+    byte[] dp = H(dpIn.ToArray());
+    byte[] p = new byte[pw.Length]; for (int i = 0; i < p.Length; i++) p[i] = dp[i % 64];
+    var dsIn = new List<byte>(); for (int i = 0; i < 16 + da[0]; i++) dsIn.AddRange(sl);
+    byte[] ds = H(dsIn.ToArray());
+    byte[] s = new byte[sl.Length]; for (int i = 0; i < s.Length; i++) s[i] = ds[i % 64];
+    byte[] c = da;
+    for (int i = 0; i < 5000; i++) {
+      var ctx = new List<byte>();
+      if ((i & 1) != 0) ctx.AddRange(p); else ctx.AddRange(c);
+      if (i % 3 != 0) ctx.AddRange(s);
+      if (i % 7 != 0) ctx.AddRange(p);
+      if ((i & 1) != 0) ctx.AddRange(c); else ctx.AddRange(p);
+      c = H(ctx.ToArray());
+    }
+    int[,] order = { {0,21,42},{22,43,1},{44,2,23},{3,24,45},{25,46,4},{47,5,26},{6,27,48},{28,49,7},{50,8,29},{9,30,51},
+                     {31,52,10},{53,11,32},{12,33,54},{34,55,13},{56,14,35},{15,36,57},{37,58,16},{59,17,38},{18,39,60},
+                     {40,61,19},{62,20,41} };
+    var sb = new StringBuilder("$6$" + salt + "$");
+    for (int i = 0; i < 21; i++) B64(sb, c[order[i,0]], c[order[i,1]], c[order[i,2]], 4);
+    B64(sb, 0, 0, c[63], 2);
+    return sb.ToString();
+  }
+}
+'@
+}
+function New-PasswordHash($password, $salt = "") {
+  if (-not $salt) { $salt = [RrSha512Crypt]::RandomSalt() }
+  [RrSha512Crypt]::Hash($password, $salt)
 }
 function YamlQuote($s) { '"' + ($s -replace '\\', '\\' -replace '"', '\"') + '"' }
 
@@ -74,10 +114,7 @@ if (-not $PasswordHash) {
   $p2 = [Net.NetworkCredential]::new("", $sec2).Password
   if ($p1 -ne $p2) { throw "the passwords do not match" }
   if ($p1.Length -lt 8) { throw "use at least 8 characters" }
-  $openssl = @("C:\Program Files\Git\usr\bin\openssl.exe", "C:\Program Files (x86)\Git\usr\bin\openssl.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
-  if (-not $openssl) { $c = Get-Command openssl -ErrorAction SilentlyContinue; if ($c) { $openssl = $c.Source } }
-  if (-not $openssl) { throw "openssl not found (it ships with Git for Windows)" }
-  $PasswordHash = New-PasswordHash $p1 $openssl
+  $PasswordHash = New-PasswordHash $p1
   $p1 = $p2 = $null
   if ($PasswordHash -notmatch '^\$6\$') { throw "could not create the password hash" }
 }
