@@ -61,8 +61,11 @@ jobs:
       - name: Build the release files
         run: |
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then TAG="$GITHUB_REF_NAME"; else TAG=auto; fi   # a tag must match __version__
+          # os-list.json: lets Raspberry Pi Imager 2.x list the image with its own hostname / user / password / Wi-Fi screens
+          python scripts/build_imager_repo.py --image "${{ steps.build.outputs.image-path }}" --tag "$TAG" \
+            --repo "$GITHUB_REPOSITORY" --out os-list.json
           python scripts/build_release_assets.py --tag "$TAG" --out release-assets --installer --skip-docs \
-            --extra "${{ steps.build.outputs.image-path }}" image/first-boot-settings.ps1
+            --extra "${{ steps.build.outputs.image-path }}" image/first-boot-settings.ps1 os-list.json
           cat release-assets/SHA256SUMS
 
       - uses: actions/upload-artifact@v4

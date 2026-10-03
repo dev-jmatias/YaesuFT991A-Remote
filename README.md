@@ -15,12 +15,21 @@ Download the files from the **[latest release](../../releases/latest)**.
 
 ### A. Ready-made image (easiest)
 
-1. Download `image_…-radio-remote.img.xz` and `first-boot-settings.ps1` from the release.
-2. Write the image with **Raspberry Pi Imager** (*Choose OS > Use custom*).
-3. Run `first-boot-settings.ps1` (Windows PowerShell 7) to set the hostname, user, password and Wi-Fi.
-4. Put the card in the Pi, power on, wait two minutes, open `https://<hostname>.local`.
+**With Raspberry Pi Imager 2.x** (nothing to download first): open Imager, go to *App Options > Content Repository*, choose a custom
+repository and paste
 
-Details and screenshots of each step: [image/README.md](image/README.md).
+```
+https://github.com/dev-jmatias/YaesuFT991A-Remote/releases/latest/download/os-list.json
+```
+
+Then pick your Pi, choose **Radio Remote for Yaesu** in the OS list, and fill in Imager's own screens (hostname, user, password, Wi-Fi,
+SSH). Write the card, put it in the Pi, power on, wait two minutes, open `https://<hostname>.local`.
+
+**If that does not work for you** (older Imager, or no repository option): download `image_…-radio-remote.img.xz` and
+`first-boot-settings.ps1` from the release, write the image with Imager (*Choose OS > Use custom*), then run the script (Windows
+PowerShell 7) while the card is still in the PC: it sets the hostname, user, password and Wi-Fi.
+
+Details of each step: [image/README.md](image/README.md).
 
 ### B. On top of Raspberry Pi OS
 

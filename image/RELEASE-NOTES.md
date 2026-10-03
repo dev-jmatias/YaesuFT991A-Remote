@@ -6,11 +6,15 @@ included but **experimental** (written from the manuals, simulator-tested only).
 
 ### Get started: pick one
 
-**A. Ready-made image (easiest).** Download `image_…-radio-remote.img.xz` and `first-boot-settings.ps1` below.
-Write the image with Raspberry Pi Imager (*Choose OS > Use custom*; do not unzip it), then run
-`pwsh -ExecutionPolicy Bypass -File first-boot-settings.ps1` (Windows, PowerShell 7) while the card's small *bootfs* volume is visible: it asks
-for the hostname, user, password and Wi-Fi. Put the card in the Pi, power on, wait two minutes, open `https://<hostname>.local`.
-Run the script on a freshly written card, before its first boot.
+**A. Ready-made image (easiest).**
+*With Raspberry Pi Imager 2.x:* in its application options choose **Content Repository**, enter a custom repository and paste
+`https://github.com/dev-jmatias/YaesuFT991A-Remote/releases/latest/download/os-list.json`. Then choose your Pi and **Radio Remote for Yaesu**,
+fill in Imager's own screens (hostname, user, password, Wi-Fi) and write the card. Put it in the Pi, power on, wait two minutes,
+open `https://<hostname>.local`.
+*If that does not work for you* (older Imager, or no repository option): download `image_…-radio-remote.img.xz` and
+`first-boot-settings.ps1` below, write the image with Imager (*Choose OS > Use custom*; do not unzip it), then run
+`pwsh -ExecutionPolicy Bypass -File first-boot-settings.ps1` (Windows, PowerShell 7) while the card's small *bootfs* volume is visible: it
+asks for the hostname, user, password and Wi-Fi. Run it on a freshly written card, before its first boot.
 
 **B. On top of Raspberry Pi OS Lite (64-bit).** Write the official OS with Imager (set user, password, Wi-Fi and SSH in its settings),
 download `radio-remote-installer-….zip` below, unzip it, copy the folder to the Pi and run `sudo bash install-everything.sh`.
@@ -31,7 +35,8 @@ and goes back by itself if the new version does not start. Settings and accounts
 | File | What it is |
 |---|---|
 | `image_…-radio-remote.img.xz` | the Raspberry Pi image (route A) |
-| `first-boot-settings.ps1` | sets hostname, user, password and Wi-Fi on a freshly written card (route A) |
+| `os-list.json` | the repository file for Raspberry Pi Imager 2.x (route A; you paste its link, you do not download it) |
+| `first-boot-settings.ps1` | sets hostname, user, password and Wi-Fi on a freshly written card (route A, without the repository) |
 | `radio-remote-installer-….zip` | installer pack with the program, the manual and offline libraries (route B) |
 | `radio-remote-v….tar.gz` | the program only: used by `self_update.sh`, or by hand to update a running Pi |
 | `SHA256SUMS` | checksums of all of the above |

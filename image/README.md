@@ -1,36 +1,57 @@
 # Raspberry Pi image
 
-A ready-to-flash 64-bit Raspberry Pi OS Lite image with Radio Remote already installed, built with
-[pi-gen](https://github.com/RPi-Distro/pi-gen). **Status: written from the pi-gen and pi-gen-action documentation, not yet
-built or booted** - treat the first build as a test (see "First build" below).
+A ready-to-write 64-bit Raspberry Pi OS Lite image (Debian Trixie) with Radio Remote already installed, built with
+[pi-gen](https://github.com/RPi-Distro/pi-gen) by GitHub Actions. Verified on a Raspberry Pi 4 with an FT-991A.
 
 ## What the image contains
 
-- Raspberry Pi OS Lite (64-bit), SSH enabled, no password set (the account is locked until you set one).
+- Raspberry Pi OS Lite (64-bit), SSH enabled, **no password set**: the account is locked until you set one while writing the card.
 - Radio Remote installed exactly like `install.sh` does it (`--image` mode): service user, `/opt/radio-remote`, config for the
   FT-991A, udev rule, systemd service and backup timer, Caddy (HTTPS), Tailscale (installed, not logged in), the manual at `/docs/`.
-- Transmitting disabled (`allow_ptt = false`), as always.
+- Transmitting disabled (`allow_ptt = false`) until an administrator enables it in the web page.
 - `radio-remote-caddy-host.service`: on every boot, before Caddy starts, sets the HTTPS site name to `<hostname>.local`, so the
   address matches whatever hostname you chose when writing the card.
+- Root login stays disabled. The user you create has `sudo`, like on every Raspberry Pi OS.
 
-## Using the image
+## Writing the card: two ways
 
-1. Download `radio-remote-*.img.xz` (GitHub Actions artifact or release).
-2. Open Raspberry Pi Imager > Choose OS > Use custom > select the file and write the card. (Imager 2.x shows its
-   "Edit settings" step only for official Raspberry Pi OS images, so it is not offered here.)
-3. Take the card out and put it back in the PC so Windows shows the small **bootfs** drive (do this right after writing, **before
-   the card has ever booted**: the settings are read on the first boot only; to change them later, write the card again), then run
-   `pwsh image\first-boot-settings.ps1`. It asks for a hostname, user name, password, Wi-Fi and time zone and writes the
-   cloud-init files (`user-data`, `network-config`) onto the card. The password is stored only as a hash. (Older Imager
-   versions: use "Edit settings" instead.)
-4. Eject the card, boot the Pi, wait about two minutes, then open `https://<hostname>.local` and create the administrator account.
-5. Admin > Config: choose the radio model and the serial port. For remote access: `sudo tailscale up`.
+### 1. With Raspberry Pi Imager 2.x and the content repository (recommended)
+
+Each release carries `os-list.json`, a small file that makes Imager list this image next to the official ones **and** show its own
+customisation screens (hostname, user name and password, Wi-Fi, SSH, time zone) for it. Nothing needs to be downloaded by hand.
+
+1. Open Raspberry Pi Imager 2.x. In the application options choose **Content Repository** and enter a custom repository (URL):
+   `https://github.com/dev-jmatias/YaesuFT991A-Remote/releases/latest/download/os-list.json`
+   (the same works from a terminal: `rpi-imager --repo <URL>`).
+2. Choose your Pi (4 or 5; the 3 should work but is untested), then **Radio Remote for Yaesu** in the list.
+3. Choose the card, fill in the customisation screens, and write.
+4. Put the card in the Pi, power on, wait about two minutes, open `https://<hostname>.local` and create the administrator account
+   (use your callsign as the user name). Then Admin > Config: radio model and serial port. Remote access: `sudo tailscale up`.
+
+### 2. With the settings script (older Imager, or if the repository option is missing)
+
+1. Download `image_…-radio-remote.img.xz` and `first-boot-settings.ps1` from the release.
+2. Imager > *Choose OS > Use custom* > the `.img.xz` file (do not unzip it) > write the card. (Imager 2.x does not offer its settings
+   step for plain custom images, which is why the repository above exists.)
+3. Take the card out and put it back in the PC so Windows shows the small **bootfs** volume (it may have no drive letter: that is fine).
+   Do this right after writing, **before the card has ever booted**: the settings are read on the first boot only.
+4. In PowerShell 7 run `pwsh -ExecutionPolicy Bypass -File first-boot-settings.ps1`. It asks for a hostname, user name, password
+   (8+ characters), Wi-Fi and time zone and writes the cloud-init files (`user-data`, `network-config`, `meta-data`) onto the card.
+   The password is stored only as a hash, computed by the script itself (nothing else has to be installed).
+5. Eject the card, boot the Pi and continue as in step 4 above.
+
+To change the name, password or Wi-Fi later, write the card again (or change them over SSH).
 
 ## Building it
 
-**On GitHub (recommended):** push the project to a GitHub repository, then Actions > "Build Raspberry Pi image" > Run workflow.
-It runs the tests, builds the manual, and builds the image on a native arm64 runner (about 30-60 minutes). The image is an artifact
-of the run; pushing a tag such as `v1.0.0` also attaches it to a release.
+**On GitHub:** push a tag that matches `__version__` (for example `v1.2.0`) or run Actions > "Build Raspberry Pi image". It runs the
+tests, builds the manual, builds the image on a native arm64 runner (about 10 minutes), and then
+`scripts/build_release_assets.py` and `scripts/build_imager_repo.py` produce the update package, the installer zip, `os-list.json` and
+`SHA256SUMS`. For a tag, everything is attached to the release (text from `RELEASE-NOTES.md`).
+
+**Testing `os-list.json` before publishing:** `python scripts/build_imager_repo.py --image X.img.xz --tag auto --repo owner/name
+--out os-list.json --image-url file:///C:/path/X.img.xz` writes a repository file that points at a local copy of the image; load it in
+Imager as a custom repository from a file or from a local web server.
 
 **Locally (Linux or WSL2 with Docker):** run `python scripts/build_docs.py && bash image/stage_program.sh`, then use
 pi-gen's own `build-docker.sh` with a `config` file containing:
@@ -56,11 +77,7 @@ image/
       01-run-chroot.sh                 inside the image: run install.sh --image
       files/radio-remote-caddy-host.*  keeps the HTTPS name equal to <hostname>.local
   first-boot-settings.ps1              writes hostname/user/password/Wi-Fi onto the flashed card (cloud-init files)
+  RELEASE-NOTES.md                     the text of each GitHub release
 ```
 
-## First build - what to check
-
-The workflow and stage could not be run on the development PC. After the first build, flash it and check: the page opens at
-`https://<hostname>.local`, `systemctl is-active radio-remote caddy` are both active, the radio connects, and
-`sudo /opt/radio-remote/current/scripts/doctor.sh` is clean. Likely first-build problems: the pi-gen release/branch pairing
-(`RELEASE` and `pi-gen-version` must match the base image generation), or a package that cannot start inside the chroot.
+The stage scripts must be committed **executable** (pi-gen silently skips the ones that are not); a test checks it.
