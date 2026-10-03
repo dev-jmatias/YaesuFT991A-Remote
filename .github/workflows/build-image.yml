@@ -80,3 +80,4 @@ jobs:
           files: |
             ${{ steps.build.outputs.image-path }}
             ${{ steps.sum.outputs.path }}
+            image/first-boot-settings.ps1
