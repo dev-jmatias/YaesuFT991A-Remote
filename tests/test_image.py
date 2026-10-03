@@ -61,5 +61,8 @@ def test_workflow_runs_tests_stages_program_and_builds_with_pi_gen_action():
     wf = (ROOT / ".github" / "workflows" / "build-image.yml").read_text()
     assert wf.index("pytest") < wf.index("bash image/stage_program.sh") < wf.index("uses: usimd/pi-gen-action")
     assert "./image/stage-radio-remote" in wf and "stage0 stage1 stage2" in wf
+    # every release carries the update package and the checksums next to the image, built by one script
+    assert "scripts/build_release_assets.py" in wf and "--installer" in wf and "files: release-assets/*" in wf
+    assert wf.index("uses: usimd/pi-gen-action") < wf.index("scripts/build_release_assets.py") < wf.index("softprops/action-gh-release")
     assert "password:" not in wf.split("with:")[-1].replace("# no password", "")    # never a baked-in password
     assert "enable-ssh: 1" in wf

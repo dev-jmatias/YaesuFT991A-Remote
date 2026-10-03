@@ -4,7 +4,7 @@
 Needs no radio, no sound card and no network: it measures Opus encode/decode cost and a full in-process
 WebRTC loopback (server track -> Opus -> SRTP -> client) using the same code as the app.
 
-  python scripts/audio_spike.py
+  python tools/audio_spike.py
 """
 import asyncio
 import os

@@ -176,8 +176,9 @@ Done.
   Open:   https://$HOST_NAME        (or http://127.0.0.1:8080 on the Pi itself)
   First visit creates the administrator account.
   Then:   Admin > Config  -> choose your radio model and serial port, Save, Restart.
-  PTT:    transmitting is DISABLED. When you are ready (dummy load first), set  allow_ptt = true  in
-          $CONF_DIR/config.toml  and run:  sudo systemctl restart radio-remote
+  PTT:    transmitting is DISABLED. When you are ready (dummy load first), sign in as the administrator and use
+          Admin > Config > "Transmitting (PTT)", or set  allow_ptt = true  in $CONF_DIR/config.toml  and run:
+          sudo systemctl restart radio-remote
   HTTPS:  your devices must trust Caddy's local certificate once (docs/06-security-remote.md), or use Tailscale.
   Docs:   https://$HOST_NAME/docs/   (the manual is installed on the Pi, no internet needed)
   Help:   sudo $PREFIX/current/scripts/doctor.sh      (paste its output when asking for help)

@@ -45,7 +45,8 @@ Next steps
   2. Admin > Config: choose the radio model and serial port, Save, restart when asked.
   3. Set the radio's own menus (CAT rate, USB audio): the manual is installed on the Pi at  https://<this pi>/docs/
      (also in the "docs" folder of this pack).
-  4. Transmitting is DISABLED. Enable it only when you are ready (dummy load first):
+  4. Transmitting is DISABLED. Enable it only when you are ready (dummy load first): in the web page, Admin > Config >
+     "Transmitting (PTT)" (asks for your password), or in the file:
         sudo nano /etc/radio-remote/config.toml     # set  allow_ptt = true  under [safety]
         sudo systemctl restart radio-remote
   5. Remote access from outside your home: log Tailscale in once with  sudo tailscale up  (install it with --with-tailscale).

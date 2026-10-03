@@ -27,7 +27,8 @@ INSTALL IN FOUR STEPS
   4. Open the address it prints (for example https://radio.local), create the administrator account,
      then Admin > Config: choose the radio model and the serial port.
 
-Transmitting is DISABLED until you enable it in /etc/radio-remote/config.toml (allow_ptt = true).
+Transmitting is DISABLED until you enable it: Admin > Config > "Transmitting (PTT)" in the web page (it asks for your
+password), or allow_ptt = true in /etc/radio-remote/config.toml.
 Use a dummy load for the first tests.
 
 The step-by-step guide with pictures of every option is docs/INSTALL.html (or INSTALL.md). Read the

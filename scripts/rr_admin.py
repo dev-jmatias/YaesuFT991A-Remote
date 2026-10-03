@@ -10,12 +10,15 @@ Only `render-config` needs the app's venv (it imports radio_remote.config); ever
   rr_admin.py prune   --dir DIR --keep N [--glob PATTERN]
   rr_admin.py health  --url http://127.0.0.1:8080/api/status [--timeout 30]
   rr_admin.py doctor  [--config CFG] [--url URL]
+  rr_admin.py fetch-release --repo owner/name --out DIR [--check] [--force]     (used by self_update.sh)
 """
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
+import re
 import shutil
 import sqlite3
 import subprocess
@@ -172,6 +175,114 @@ def cmd_prune(a) -> int:
     return 0
 
 
+# ------------------------------------------------------------ self update: fetch the newest release
+GITHUB_API = "https://api.github.com"
+UPDATE_ASSET = re.compile(r"radio-remote-v?\d+(?:\.\d+){0,3}\.tar\.gz")
+MAX_UPDATE_BYTES = 150 * 1024 * 1024
+EXIT_UP_TO_DATE = 10
+
+
+def _version_tuple(text: str) -> tuple[int, ...] | None:
+    m = re.fullmatch(r"v?(\d+(?:\.\d+){0,3})", text.strip()) if isinstance(text, str) and len(text) <= 40 else None
+    return tuple(int(x) for x in m.group(1).split(".")) if m else None
+
+
+def _newer(a: tuple[int, ...], b: tuple[int, ...]) -> bool:
+    n = max(len(a), len(b))
+    return a + (0,) * (n - len(a)) > b + (0,) * (n - len(b))
+
+
+def installed_version() -> str:
+    text = (ROOT / "backend" / "radio_remote" / "__init__.py").read_text(encoding="utf-8")
+    m = re.search(r'__version__\s*=\s*"([^"]+)"', text)
+    return m.group(1) if m else "0"
+
+
+def _get(url: str, limit: int | None = None, timeout: int = 30) -> bytes:
+    req = urllib.request.Request(url, headers={"User-Agent": f"radio-remote-self-update/{installed_version()}",
+                                               "Accept": "application/vnd.github+json, application/octet-stream"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        data = r.read(limit + 1 if limit else -1)
+    if limit and len(data) > limit:
+        raise ValueError(f"{url} is bigger than {limit} bytes: refusing it")
+    return data
+
+
+def _safe_extract(archive: Path, dest: Path) -> None:
+    """Unpack a .tar.gz only if it holds plain files and folders inside its own top folder (no '..', no absolute paths, no links)."""
+    with tarfile.open(archive, "r:gz") as tf:
+        members = tf.getmembers()
+        if not members:
+            raise ValueError("the update package is empty")
+        for m in members:
+            parts = Path(m.name).parts
+            if m.name.startswith("/") or ".." in parts or not (m.isfile() or m.isdir()):
+                raise ValueError(f"the update package holds an unsafe entry: {m.name!r}")
+        tf.extractall(dest, members=members, filter="data") if sys.version_info >= (3, 12) else tf.extractall(dest, members=members)
+
+
+def cmd_fetch_release(a) -> int:
+    """Download the newest GitHub release's update package, verify its checksum and unpack it. Prints 'READY <folder>' on success.
+    Exit 10 = already up to date. This only fetches; self_update.sh then runs the package's own update.sh (backup, switch, rollback)."""
+    api = a.api_base.rstrip("/")
+    try:
+        rel = json.loads(_get(f"{api}/repos/{a.repo}/releases/latest", limit=2_000_000, timeout=20))
+    except (urllib.error.URLError, OSError, ValueError) as e:
+        print(f"could not ask GitHub for the newest release: {e}", file=sys.stderr)
+        return 1
+    tag = rel.get("tag_name")
+    latest, current = _version_tuple(tag) if isinstance(tag, str) else None, _version_tuple(installed_version())
+    if latest is None or current is None:
+        print(f"unusable version (release {tag!r}, installed {installed_version()!r})", file=sys.stderr)
+        return 1
+    print(f"installed version {installed_version()}, newest release {tag}")
+    is_new = _newer(latest, current)
+    if not is_new and not a.force:
+        print("Already up to date.")
+        return EXIT_UP_TO_DATE
+    if a.check:
+        print("A newer release is available." if is_new else "Nothing newer (use --force to reinstall).")
+        return 0 if is_new else EXIT_UP_TO_DATE
+    prefix = f"https://github.com/{a.repo}/releases/download/" if api == GITHUB_API else api
+    assets = {x["name"]: x["browser_download_url"] for x in rel.get("assets", [])
+              if isinstance(x, dict) and isinstance(x.get("name"), str) and isinstance(x.get("browser_download_url"), str)
+              and x["browser_download_url"].startswith(prefix)}
+    pkg = next((n for n in sorted(assets) if UPDATE_ASSET.fullmatch(n)), None)
+    if not pkg or "SHA256SUMS" not in assets:
+        print(f"release {tag} has no update package (radio-remote-<version>.tar.gz and SHA256SUMS): it may still be building; "
+              "try again in a few minutes", file=sys.stderr)
+        return 1
+    out = Path(a.out)
+    out.mkdir(parents=True, exist_ok=True)
+    try:
+        sums = _get(assets["SHA256SUMS"], limit=1_000_000).decode("utf-8", "replace")
+        want = next((ln.split()[0].lower() for ln in sums.splitlines()
+                     if len(ln.split()) >= 2 and ln.split()[1].lstrip("*") == pkg), None)
+        if not want or not re.fullmatch(r"[0-9a-f]{64}", want):
+            print(f"SHA256SUMS has no checksum for {pkg}", file=sys.stderr)
+            return 1
+        print(f"downloading {pkg} ...")
+        data = _get(assets[pkg], limit=MAX_UPDATE_BYTES, timeout=120)
+        got = hashlib.sha256(data).hexdigest()
+        if got != want:
+            print(f"CHECKSUM MISMATCH for {pkg}: expected {want}, got {got}. Nothing was installed.", file=sys.stderr)
+            return 1
+        archive = out / pkg
+        archive.write_bytes(data)
+        folder = out / "package"
+        _safe_extract(archive, folder)
+    except (urllib.error.URLError, OSError, ValueError, tarfile.TarError) as e:
+        print(f"download failed: {e}", file=sys.stderr)
+        return 1
+    root = next((p for p in sorted(folder.iterdir()) if (p / "update.sh").is_file() and (p / "backend" / "radio_remote").is_dir()), None)
+    if root is None:
+        print("the update package does not look like a Radio Remote release", file=sys.stderr)
+        return 1
+    print(f"checksum ok: {want}")
+    print(f"READY {root}")
+    return 0
+
+
 # ------------------------------------------------------------------ health / doctor
 def cmd_health(a) -> int:
     end = time.monotonic() + a.timeout
@@ -280,6 +391,14 @@ def main(argv=None) -> int:
     p.add_argument("--keep", type=int, required=True)
     p.add_argument("--glob", default="*")
     p.set_defaults(fn=cmd_prune)
+
+    p = sub.add_parser("fetch-release")
+    p.add_argument("--repo", required=True, help="owner/name of the GitHub repository")
+    p.add_argument("--out", required=True)
+    p.add_argument("--api-base", default=GITHUB_API, help=argparse.SUPPRESS)          # tests point it at a local server
+    p.add_argument("--check", action="store_true", help="only say whether a newer release exists")
+    p.add_argument("--force", action="store_true", help="fetch even when the newest release is not newer")
+    p.set_defaults(fn=cmd_fetch_release)
 
     p = sub.add_parser("health")
     p.add_argument("--url", default="http://127.0.0.1:8080/api/status")

@@ -56,28 +56,26 @@ jobs:
           compression: xz
           verbose-output: true
 
+      # Everything a release offers, in one folder with one SHA256SUMS:
+      #   the image, first-boot-settings.ps1, radio-remote-vX.tar.gz (what self_update.sh / the update notice use) and the installer zip
+      - name: Build the release files
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then TAG="$GITHUB_REF_NAME"; else TAG=auto; fi   # a tag must match __version__
+          python scripts/build_release_assets.py --tag "$TAG" --out release-assets --installer --skip-docs \
+            --extra "${{ steps.build.outputs.image-path }}" image/first-boot-settings.ps1
+          cat release-assets/SHA256SUMS
+
       - uses: actions/upload-artifact@v4
         with:
-          name: radio-remote-image
-          path: ${{ steps.build.outputs.image-path }}
+          name: radio-remote-release-files
+          path: release-assets/*
           if-no-files-found: error
           retention-days: 14
-
-      - name: Checksum
-        id: sum
-        run: |
-          cd "$(dirname "${{ steps.build.outputs.image-path }}")"
-          sha256sum "$(basename "${{ steps.build.outputs.image-path }}")" > SHA256SUMS
-          cat SHA256SUMS
-          echo "path=$(pwd)/SHA256SUMS" >> "$GITHUB_OUTPUT"
 
       - name: Attach to the release (tags only)
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          name: Radio Remote ${{ github.ref_name }} - Raspberry Pi image
+          name: Radio Remote ${{ github.ref_name }}
           body_path: image/RELEASE-NOTES.md
-          files: |
-            ${{ steps.build.outputs.image-path }}
-            ${{ steps.sum.outputs.path }}
-            image/first-boot-settings.ps1
+          files: release-assets/*
