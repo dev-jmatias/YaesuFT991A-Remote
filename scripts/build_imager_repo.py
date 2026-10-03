@@ -50,7 +50,13 @@ def uncompressed_stats(path: Path) -> tuple[int, str]:
     return n, h.hexdigest()
 
 
-def build(image: Path, tag: str, repo: str, image_url: str | None = None, date: str | None = None) -> dict:
+INIT_FORMATS = ("cloudinit-rpi", "cloudinit", "systemd", "rpi-preseed", "none")
+
+
+def build(image: Path, tag: str, repo: str, image_url: str | None = None, date: str | None = None,
+          init_format: str = "cloudinit-rpi") -> dict:
+    if init_format not in INIT_FORMATS:
+        raise ValueError(f"init_format must be one of {INIT_FORMATS}")
     size, digest = uncompressed_stats(image)
     url = image_url or f"https://github.com/{repo}/releases/download/{tag}/{image.name}"
     return {
@@ -66,7 +72,7 @@ def build(image: Path, tag: str, repo: str, image_url: str | None = None, date: 
             "extract_sha256": digest,
             "image_download_size": image.stat().st_size,
             "release_date": date or time.strftime("%Y-%m-%d", time.gmtime()),
-            "init_format": "cloudinit-rpi",
+            "init_format": init_format,
             "devices": IMAGE_DEVICES,
             "capabilities": [],
         }],
@@ -81,9 +87,11 @@ def main(argv=None) -> int:
     ap.add_argument("--out", required=True)
     ap.add_argument("--image-url", help="download URL to write instead of the release URL (for a local test: file:///...)")
     ap.add_argument("--date", help="release date YYYY-MM-DD (default: today, UTC)")
+    ap.add_argument("--init-format", default="cloudinit-rpi", choices=INIT_FORMATS,
+                    help="how Imager customises the image (default cloudinit-rpi, like the official Trixie images)")
     a = ap.parse_args(argv)
     tag = f"v{program_version()}" if a.tag == "auto" else a.tag
-    doc = build(Path(a.image), tag, a.repo, a.image_url, a.date)
+    doc = build(Path(a.image), tag, a.repo, a.image_url, a.date, a.init_format)
     Path(a.out).write_text(json.dumps(doc, indent=2) + "\n", encoding="utf-8", newline="\n")
     e = doc["os_list"][0]
     print(f"wrote {a.out}: {e['name']} ({e['image_download_size'] / 1048576:.0f} MB download, {e['extract_size'] / 1048576:.0f} MB written)")
