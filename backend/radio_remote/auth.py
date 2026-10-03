@@ -4,6 +4,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import re
 import secrets
 import sqlite3
 import time
@@ -14,6 +15,7 @@ ROLES = ("viewer", "operator", "admin")
 SESSION_IDLE_S = 12 * 3600
 SESSION_ABSOLUTE_S = 7 * 24 * 3600
 MIN_PASSWORD_LEN = 10
+_USERNAME = re.compile(r"[^\W_]+(?:[._/-][^\W_]+)*")       # letters/digits (any alphabet), single separators between them
 
 _N, _R, _P = 2**14, 8, 1
 
@@ -79,8 +81,10 @@ class AuthStore:
     def create_user(self, username: str, password: str, role: str) -> int:
         if role not in ROLES:
             raise ValueError("bad role")
-        if not (1 <= len(username) <= 32) or not username.replace("_", "").replace("-", "").replace(".", "").isalnum():
-            raise ValueError("username must be 1-32 chars: letters, digits, . _ -")
+        # a user name may be a callsign: letters and digits, with single separators . _ - / between them (portable callsigns such
+        # as G4XYZ/P); it starts and ends with a letter or digit, so things like "../x" are refused
+        if not (1 <= len(username) <= 32) or not _USERNAME.fullmatch(username):
+            raise ValueError("user name (callsign) must be 1-32 characters: letters and digits, with single . _ - / between them")
         if len(password) < MIN_PASSWORD_LEN:
             raise ValueError(f"password must be at least {MIN_PASSWORD_LEN} characters")
         cur = self.db.execute(

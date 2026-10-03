@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import copy
 import os
+import re
 import tomllib
 from pathlib import Path
 from typing import Any
@@ -35,8 +36,17 @@ DEFAULTS: dict[str, dict[str, Any]] = {
         # the manual gives no calibration; set from what your radio's meter shows (see docs/05-ui.md).
         "meter_alc_full": 160,
         "meter_comp_full": 255,
+        # SWR warning: the SWR meter turns red and a message appears while transmitting at or above this ratio (0 = off). Radios that
+        # report a ratio (the newer HF radios) are compared directly; the FT-991A reports only a raw 0..255 value, which is turned into an
+        # estimated ratio with a straight line through "1:1 = 0" and "3:1 = swr_raw_at_3". PROVISIONAL: the CAT manual gives no
+        # calibration, so set swr_raw_at_3 from what the radio's own meter shows (see docs/05-ui.md).
+        "swr_warn": 3.0,
+        "swr_raw_at_3": 100,
     },
     "logging": {"level": "INFO"},
+    # update check: once a day the server asks GitHub (api.github.com, anonymous, read-only) for the newest release and tells the
+    # administrators when it is newer than this program. Nothing is downloaded or installed automatically. check = false switches it off.
+    "updates": {"check": True, "repo": "dev-jmatias/YaesuFT991A-Remote"},
     "storage": {"data_dir": "data"},
 }
 
@@ -82,6 +92,10 @@ def validate(cfg: dict) -> dict:
     for k in ("meter_alc_full", "meter_comp_full"):
         if not 10 <= cfg["ui"][k] <= 255:
             raise ConfigError(f"ui.{k} must be 10..255")
+    if not (cfg["ui"]["swr_warn"] == 0 or 1.2 <= cfg["ui"]["swr_warn"] <= 10):
+        raise ConfigError("ui.swr_warn must be 0 (off) or 1.2..10")
+    if not 10 <= cfg["ui"]["swr_raw_at_3"] <= 255:
+        raise ConfigError("ui.swr_raw_at_3 must be 10..255")
     a = cfg["audio"]
     if a["backend"] not in ("auto", "alsa", "test"):
         raise ConfigError("audio.backend must be auto, alsa or test")
@@ -99,6 +113,8 @@ def validate(cfg: dict) -> dict:
             raise ConfigError(f"audio.{k} = {a[k]!r} is not an ALSA device name: leave it empty for auto-detection, or use e.g. plughw:CARD=CODEC,DEV=0 (see `aplay -l`)")
     if cfg["logging"]["level"].upper() not in LOG_LEVELS:
         raise ConfigError("logging.level invalid")
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,38}/[A-Za-z0-9._-]{1,100}", cfg["updates"]["repo"]):
+        raise ConfigError("updates.repo must look like owner/name")
     return cfg
 
 

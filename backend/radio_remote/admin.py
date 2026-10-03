@@ -10,23 +10,24 @@ from aiohttp import web
 
 from . import __version__, config, sysinfo
 from .common import (COOKIE, K_AUDIO, K_AUTH, K_CFG, K_CFGPATH, K_DRIVER, K_GUARD, K_HUB, K_RESTART, K_SESSION,
-                     K_STARTED, client_ip, read_json, require_admin)
+                     K_STARTED, K_UPDATES, client_ip, read_json, require_admin)
 from .logs import RING, scrub
 
 log = logging.getLogger("admin")
 
-# What the web UI may change. Deliberately NOT here: safety.allow_ptt (must be edited in the file on the Pi),
-# server.* (a typo would lock you out of your own radio), storage.*.
+# What the generic config form may change. Deliberately NOT here: safety.allow_ptt (it has its own endpoint, POST /api/admin/ptt,
+# which asks for the administrator's password), server.* (a typo would lock you out of your own radio), storage.*.
 EDITABLE = {
     "radio": {"model", "serial_port", "baud", "hamlib_model"},
     "audio": {"enabled", "backend", "input_device", "output_device", "rx_gain_db", "tx_gain_db",
               "opus_bitrate", "max_peers"},
     "safety": {"tx_timeout_s", "ptt_heartbeat_timeout_s", "control_request_timeout_s"},
-    "ui": {"tuning_steps_hz", "meter_alc_full", "meter_comp_full"},
+    "ui": {"tuning_steps_hz", "meter_alc_full", "meter_comp_full", "swr_warn", "swr_raw_at_3"},
     "logging": {"level"},
+    "updates": {"check"},
 }
-LOCKED = ["safety.allow_ptt", "server.host", "server.port", "server.allowed_origins", "storage.data_dir"]
-LIVE = {("logging", "level"), ("audio", "rx_gain_db"), ("audio", "tx_gain_db")}
+LOCKED = ["safety.allow_ptt", "server.host", "server.port", "server.allowed_origins", "storage.data_dir", "updates.repo"]
+LIVE = {("logging", "level"), ("audio", "rx_gain_db"), ("audio", "tx_gain_db"), ("updates", "check")}
 
 
 async def _run(fn, *a):
@@ -185,7 +186,55 @@ async def get_config(request):
         "config": cfg, "editable": {k: sorted(v) for k, v in EDITABLE.items()}, "locked": LOCKED,
         "models": sorted(config.KNOWN_MODELS), "serial_ports": await _run(ports),
         "writable": app.get(K_CFGPATH) is not None,
+        "ptt": {"enabled": app[K_GUARD].allow_ptt, "mock": app[K_DRIVER].is_mock},
     })
+
+
+async def set_ptt_permission(request):
+    """Turn the transmit permission (safety.allow_ptt) on or off from the web UI.
+
+    Enabling needs the administrator's password again (a stolen session cannot switch the transmitter on) and is audited.
+    It takes effect immediately and is written to the config file so it survives a restart. Disabling needs no password and
+    first un-keys a running transmission."""
+    admin = require_admin(request)
+    app, auth = request.app, request.app[K_AUTH]
+    path = app.get(K_CFGPATH)
+    if path is None:
+        raise web.HTTPConflict(text="no config file is in use; start with --config to enable editing")
+    b = await read_json(request)
+    enabled, password = b.get("enabled"), b.get("password")
+    if not isinstance(enabled, bool) or b.get("confirm") is not True:
+        raise web.HTTPBadRequest(text="enabled (true/false) and confirm are required")
+    ip, guard = client_ip(request), app[K_GUARD]
+    if enabled:
+        if not isinstance(password, str):
+            raise web.HTTPBadRequest(text="your password is required to enable transmitting")
+        key = f"ptt-permission:{admin.username}"
+        wait = auth.retry_after(ip, key)
+        if wait > 0:
+            raise web.HTTPTooManyRequests(text=f"too many attempts; retry in {int(wait) + 1}s")
+        if not await _run(auth.check_password, admin.user_id, password):
+            auth._record_fail(ip, key)
+            auth.audit("ptt_permission_denied", admin.username, ip, "wrong password")
+            raise web.HTTPForbidden(text="wrong password")
+        auth._fails.pop((ip, key.lower()), None)
+    new = copy.deepcopy(app[K_CFG])
+    new["safety"]["allow_ptt"] = enabled
+    try:
+        config.validate(new)
+        config.save(new, path)
+    except config.ConfigError as e:
+        raise web.HTTPBadRequest(text=str(e)) from None
+    except OSError as e:
+        raise web.HTTPConflict(text=f"could not write the config file: {e}") from None
+    if not enabled and guard.keyed:
+        await guard.emergency_unkey("transmitting disabled by administrator")
+    guard.allow_ptt = enabled
+    app[K_CFG].update(new)
+    app[K_HUB]._broadcast({"t": "safety", "d": {"ptt_permitted": guard.permitted}})      # open pages update their PTT button
+    auth.audit("ptt_enabled" if enabled else "ptt_disabled", admin.username, ip)
+    log.warning("transmitting %s by %s", "ENABLED" if enabled else "disabled", admin.username)
+    return web.json_response({"ok": True, "enabled": enabled})
 
 
 async def put_config(request):
@@ -217,6 +266,84 @@ async def put_config(request):
         app[K_AUDIO].set_gains(new["audio"]["rx_gain_db"], new["audio"]["tx_gain_db"])     # takes effect immediately
     app[K_AUTH].audit("config_changed", admin.username, client_ip(request), ", ".join(changed) or "no change")
     return web.json_response({"ok": True, "changed": changed, "restart_required": bool(changed) and not live_only})
+
+
+MAX_RESTORE_BYTES = 16 * 1024            # the server refuses larger request bodies anyway (client_max_size); a settings file is ~1 KB
+
+
+async def update_state(request):
+    """What the update check knows (administrators only): current and newest version, link, when it last asked, last error."""
+    require_admin(request)
+    return web.json_response(request.app[K_UPDATES].state())
+
+
+async def update_check_now(request):
+    """Ask GitHub right now (the 'Check now' button). Does nothing when the check is switched off."""
+    admin = require_admin(request)
+    state = await request.app[K_UPDATES].check()
+    request.app[K_AUTH].audit("update_check", admin.username, client_ip(request), state["latest"] or state["error"] or "")
+    return web.json_response(state)
+
+
+async def backup_config(request):
+    """Download the current settings as a TOML file (administrators only). It holds no passwords or keys."""
+    admin = require_admin(request)
+    app = request.app
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    text = (f"# Radio Remote settings backup, {time.strftime('%Y-%m-%d %H:%M:%S')}, version {__version__}.\n"
+            "# Restore it in Admin > Config > Settings backup. Only the settings the web page may change are restored:\n"
+            "# server.*, storage.* and safety.allow_ptt are never taken from a backup.\n\n" + config.dumps(app[K_CFG]))
+    app[K_AUTH].audit("config_backup", admin.username, client_ip(request))
+    return web.Response(text=text, content_type="text/plain", charset="utf-8",
+                        headers={"Content-Disposition": f'attachment; filename="radio-remote-settings-{stamp}.toml"',
+                                 "Cache-Control": "no-store"})
+
+
+async def restore_config(request):
+    """Apply a settings backup (TOML text). Only the settings the web UI may change are taken (EDITABLE): the listener address, the
+    storage folder and the transmit permission are never restored, so a backup from another Pi or an old backup cannot lock you out
+    or switch transmitting on. Needs a restart to take effect."""
+    import tomllib
+    admin = require_admin(request)
+    app = request.app
+    path = app.get(K_CFGPATH)
+    if path is None:
+        raise web.HTTPConflict(text="no config file is in use; start with --config to enable editing")
+    b = await read_json(request)
+    text = b.get("toml")
+    if not isinstance(text, str) or not text.strip():
+        raise web.HTTPBadRequest(text="the backup text is missing")
+    if len(text.encode("utf-8")) > MAX_RESTORE_BYTES:
+        raise web.HTTPRequestEntityTooLarge(max_size=MAX_RESTORE_BYTES, actual_size=len(text))
+    try:
+        data = tomllib.loads(text)
+    except tomllib.TOMLDecodeError as e:
+        raise web.HTTPBadRequest(text=f"this is not a valid settings file: {e}") from None
+    applied: dict[str, dict] = {}
+    ignored: list[str] = []
+    for section, values in data.items():
+        if not isinstance(values, dict) or section not in config.DEFAULTS:
+            ignored.append(str(section))
+            continue
+        for key, val in values.items():
+            if key in EDITABLE.get(section, ()):
+                applied.setdefault(section, {})[key] = val
+            else:
+                ignored.append(f"{section}.{key}")
+    if not applied:
+        raise web.HTTPBadRequest(text="the file has no settings that can be restored here")
+    try:
+        new = config._merge(copy.deepcopy(config.DEFAULTS), _flatten_over(app[K_CFG], applied))
+        config.validate(new)
+        config.save(new, path)
+    except config.ConfigError as e:
+        raise web.HTTPBadRequest(text=f"the backup was refused: {e}") from None
+    except OSError as e:
+        raise web.HTTPConflict(text=f"could not write the config file: {e}") from None
+    changed = [f"{s}.{k}" for s, v in applied.items() for k in v if app[K_CFG][s][k] != new[s][k]]
+    app[K_CFG].update(new)
+    app[K_AUTH].audit("config_restored", admin.username, client_ip(request), ", ".join(changed) or "no change")
+    return web.json_response({"ok": True, "changed": changed, "ignored": ignored, "restart_required": bool(changed)})
 
 
 def _flatten_over(current: dict, body: dict) -> dict:
@@ -270,5 +397,10 @@ def add_routes(app: web.Application) -> None:
     r.add_get("/api/audit", audit_log)
     r.add_get("/api/config", get_config)
     r.add_put("/api/config", put_config)
+    r.add_post("/api/admin/ptt", set_ptt_permission)
+    r.add_get("/api/admin/update", update_state)
+    r.add_post("/api/admin/update/check", update_check_now)
+    r.add_get("/api/admin/backup", backup_config)
+    r.add_post("/api/admin/restore", restore_config)
     r.add_post("/api/admin/restart", restart)
     r.add_get("/api/diagnostics", diagnostics)

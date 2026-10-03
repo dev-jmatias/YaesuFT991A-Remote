@@ -5,6 +5,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import os
 import secrets
 import time
 from dataclasses import dataclass, field
@@ -13,11 +14,11 @@ from urllib.parse import urlsplit
 
 from aiohttp import WSMsgType, web
 
-from . import __version__, admin, logs, sdnotify
+from . import __version__, admin, logs, sdnotify, updates
 from .audio.service import AudioService, AudioUnavailable
 from .auth import AuthStore, Session
 from .common import (COOKIE, K_AUDIO, K_AUTH, K_CFG, K_CFGPATH, K_DRIVER, K_GUARD, K_HUB, K_RESTART, K_SESSION,
-                     K_STARTED, CommandError, client_ip, is_https, read_json)
+                     K_STARTED, K_UPDATES, CommandError, client_ip, is_https, read_json)
 from .lease import ControlLease, LeaseError
 from .radio import controls
 from .radio.base import METER_FIELDS, RadioDriver, RadioError
@@ -229,6 +230,7 @@ class Hub:
             if not 1 <= ch <= 99:
                 raise CommandError("memory channel must be 1..99")
             self._not_while_transmitting()
+            log.info("memory_select: the page asked for channel %s (%s)", ch, session.username)
             await self.driver.memory_select(ch)
             self.auth.audit("memory_select", session.username, None)
         elif typ == "memory_vfo":
@@ -489,9 +491,12 @@ async def audio_status(request):
 
 async def memories(request):
     """The radio's stored channels (read from the radio, cached by the driver; ?refresh=1 re-reads). Any signed-in user may look."""
+    refresh = request.query.get("refresh") == "1"
+    log.info("memory list requested (refresh=%s) by %s", refresh, request[K_SESSION].username)
     try:
-        items = await request.app[K_DRIVER].memory_channels(refresh=request.query.get("refresh") == "1")
+        items = await request.app[K_DRIVER].memory_channels(refresh=refresh)
     except RadioError as e:
+        log.warning("memory list failed: %s", e)
         raise web.HTTPConflict(text=str(e)) from None
     return web.json_response({"channels": items})
 
@@ -541,8 +546,10 @@ def create_app(cfg: dict, driver: RadioDriver | None = None, auth: AuthStore | N
     )
     app[K_AUDIO] = app[K_HUB].audio = audio
     app[K_HUB].ui = {"steps": cfg["ui"]["tuning_steps_hz"],
-                     "meter": {"alc_full": cfg["ui"]["meter_alc_full"], "comp_full": cfg["ui"]["meter_comp_full"]}}
+                     "meter": {"alc_full": cfg["ui"]["meter_alc_full"], "comp_full": cfg["ui"]["meter_comp_full"],
+                               "swr_warn": cfg["ui"]["swr_warn"], "swr_raw_at_3": cfg["ui"]["swr_raw_at_3"]}}
     app[K_STARTED] = time.monotonic()
+    app[K_UPDATES] = updates.UpdateChecker(lambda: app[K_CFG]["updates"])        # reads the live config: Admin > Config applies at once
 
     watchdog = sdnotify.Watchdog(lambda: guard._task is not None and not guard._task.done())
 
@@ -555,8 +562,11 @@ def create_app(cfg: dict, driver: RadioDriver | None = None, auth: AuthStore | N
             log.exception("audio failed to start; continuing without audio")
         log.info("started: radio=%s allow_ptt=%s", driver.caps.data["model"]["name"], guard.allow_ptt)
         watchdog.start()
+        if not driver.is_mock and not os.environ.get("RADIO_REMOTE_TESTING"):        # a simulated radio / the tests never phone home
+            app[K_UPDATES].start()
 
     async def on_stop(app):
+        await app[K_UPDATES].stop()
         await watchdog.stop()
         await guard.stop()          # un-keys first
         await audio.stop()
