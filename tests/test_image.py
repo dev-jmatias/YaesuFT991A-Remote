@@ -16,6 +16,20 @@ def test_image_scripts_are_lf_and_have_a_shebang(path):
     assert raw.startswith(b"#!/")
 
 
+def test_pi_gen_stage_scripts_are_executable_in_git():
+    # regression: pi-gen silently skips prerun.sh / NN-run*.sh that lack the executable bit (git on Windows drops it),
+    # so the stage had no root filesystem and the build died with "Unable to chroot".
+    import shutil
+    import subprocess
+    if shutil.which("git") is None or not (ROOT / ".git").exists():
+        pytest.skip("not a git checkout")
+    out = subprocess.run(["git", "ls-files", "--stage", "image"], cwd=ROOT, capture_output=True, text=True, check=True).stdout
+    modes = {line.split("\t")[1]: line.split()[0] for line in out.splitlines()}
+    for rel, mode in modes.items():
+        if rel.endswith(".sh"):
+            assert mode == "100755", f"{rel} must be committed executable (git update-index --chmod=+x {rel})"
+
+
 def test_stage_layout_matches_pi_gen():
     assert (STAGE / "EXPORT_IMAGE").read_text().strip().startswith("IMG_SUFFIX")
     assert "copy_previous" in (STAGE / "prerun.sh").read_text()
