@@ -1,0 +1,44 @@
+[Unit]
+Description=Radio Remote (web control for Yaesu transceivers)
+Documentation=file:///opt/radio-remote/current/docs/operations.md
+After=network-online.target sound.target
+Wants=network-online.target
+
+[Service]
+# Type=notify: the app tells systemd when it is ready, and keeps pinging a watchdog while its event loop and
+# TX safety watchdog are alive. A hung process is restarted; a radio that is merely switched off is NOT a failure.
+Type=notify
+NotifyAccess=main
+WatchdogSec=20
+
+User=radio-remote
+Group=radio-remote
+# dialout: USB serial (CAT). audio: ALSA devices (USB audio codec).
+SupplementaryGroups=dialout audio
+WorkingDirectory=/var/lib/radio-remote
+Environment=PYTHONPATH=/opt/radio-remote/current/backend
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/radio-remote/venv/bin/python -m radio_remote --config /etc/radio-remote/config.toml
+
+Restart=always
+RestartSec=3
+# Shutdown un-keys the transmitter before exiting; give it time, then SIGKILL.
+KillSignal=SIGTERM
+TimeoutStopSec=20
+
+# Sandbox. The code is root-owned and read-only to the service; only config and data are writable.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/etc/radio-remote /var/lib/radio-remote
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+MemoryMax=450M
+
+[Install]
+WantedBy=multi-user.target

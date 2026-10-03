@@ -1,0 +1,5 @@
+aiohttp>=3.9
+pyserial>=3.5
+aiortc>=1.9,<2
+numpy>=1.26
+

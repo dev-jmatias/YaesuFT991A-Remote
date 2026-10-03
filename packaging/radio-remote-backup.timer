@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily Radio Remote backup
+
+[Timer]
+OnCalendar=daily
+RandomizedDelaySec=1h
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,34 @@
+RADIO REMOTE - installer pack
+=============================
+
+Web remote control for Yaesu radios on a Raspberry Pi (frequency, mode, filters, meters, memories,
+PTT with server-side safety, remote audio, several users). No cloud, no app store.
+
+WHAT IS IN THIS FOLDER
+  START-HERE.txt           this page
+  install-everything.sh    the installer you run on the Raspberry Pi
+  radio-remote/            the program
+  wheels/                  the Python libraries for the Pi (so nothing has to be compiled or downloaded from PyPI)
+  docs/                    the manual: open docs/index.html in any browser (PDF versions are included too)
+
+INSTALL IN FOUR STEPS
+  1. On your PC flash "Raspberry Pi OS Lite (64-bit)" to the SD card with Raspberry Pi Imager.
+     In "Edit settings" set the hostname (for example: radio), a user and password, Wi-Fi if you need it,
+     and enable SSH. Boot the Pi and wait two minutes.
+
+  2. Copy this whole folder to the Pi. In a Windows PowerShell opened next to the folder:
+         scp -r radio-remote-installer <user>@radio.local:~
+
+  3. Connect to the Pi and run the installer:
+         ssh <user>@radio.local
+         cd radio-remote-installer
+         sudo bash install-everything.sh
+
+  4. Open the address it prints (for example https://radio.local), create the administrator account,
+     then Admin > Config: choose the radio model and the serial port.
+
+Transmitting is DISABLED until you enable it in /etc/radio-remote/config.toml (allow_ptt = true).
+Use a dummy load for the first tests.
+
+The step-by-step guide with pictures of every option is docs/INSTALL.html (or INSTALL.md). Read the
+section "First run" before you transmit. If anything fails: docs/troubleshooting.html.

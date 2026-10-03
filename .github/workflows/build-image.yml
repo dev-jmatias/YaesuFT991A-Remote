@@ -1,0 +1,66 @@
+name: Build Raspberry Pi image
+
+# Builds a ready-to-flash 64-bit Raspberry Pi OS Lite image with Radio Remote installed (pi-gen, via usimd/pi-gen-action).
+# Run it by hand (Actions > Build Raspberry Pi image > Run workflow) or push a tag such as v1.0.0 to also create a release.
+on:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: "Debian release of the base image (Raspberry Pi OS current: trixie; older: bookworm)"
+        default: "trixie"
+  push:
+    tags: ["v*"]
+
+jobs:
+  image:
+    # a native arm64 runner: no QEMU, much faster than emulating on x86
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run the tests
+        run: |
+          pip install -r requirements.txt pytest pytest-asyncio markdown
+          PYTHONPATH=backend python -m pytest -q
+
+      - name: Build the manual and stage the program
+        run: |
+          python scripts/build_docs.py
+          bash image/stage_program.sh
+
+      - name: Build the image
+        id: build
+        uses: usimd/pi-gen-action@v1
+        with:
+          image-name: radio-remote
+          stage-list: stage0 stage1 stage2 ./image/stage-radio-remote
+          release: ${{ inputs.release || 'trixie' }}
+          pi-gen-version: arm64
+          hostname: radio
+          username: pi
+          # no password is set (the account stays locked): the user sets name, password, Wi-Fi and hostname in
+          # Raspberry Pi Imager ("Edit settings") when writing the image. SSH is on so those settings can use it.
+          enable-ssh: 1
+          disable-first-boot-user-rename: 1
+          locale: en_GB.UTF-8
+          timezone: Europe/London
+          compression: xz
+          verbose-output: true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: radio-remote-image
+          path: ${{ steps.build.outputs.image-path }}
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Attach to the release (tags only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.build.outputs.image-path }}

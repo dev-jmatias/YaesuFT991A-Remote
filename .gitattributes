@@ -1,0 +1,10 @@
+# Shell scripts, units and rules must keep LF endings or they fail on the Pi.
+*.sh text eol=lf
+*.service text eol=lf
+*.timer text eol=lf
+*.rules text eol=lf
+*.py text eol=lf
+*.toml text eol=lf
+Caddyfile* text eol=lf
+*.png binary
+

@@ -1,0 +1,70 @@
+# Development profile used by the mock radio. NOT a real radio.
+# It mimics a subset of FT-991A behaviour so UI work is realistic.
+[model]
+id = "mock"
+name = "Mock Radio (simulated)"
+verified_source = "none - simulator"
+is_mock = true
+
+[features]
+vhf = true
+uhf = true
+antenna_switching = false
+swr_meter = true
+alc_meter = true
+comp_meter = true
+ptt = true
+power_off_cat = false
+power_on_cat = false
+width = true
+if_shift = true
+contour = true
+apf = true
+manual_notch = true
+auto_notch = true
+dnr = true
+noise_blanker = true
+ipo = true
+att = true
+rit = true
+xit = true
+processor = true
+monitor = true
+tuner = true
+tuner_tune = true
+dgid = true
+memories = true
+agc = true
+att_levels = true
+mic_select = true
+vfo_b = true
+split = true
+quick_split = true
+
+[frequency]
+# inclusive ranges in Hz
+ranges = [[30000, 56000000], [118000000, 164000000], [420000000, 470000000]]
+
+[modes]
+list = ["LSB", "USB", "CW-U", "CW-L", "AM", "FM", "DATA-U", "DATA-L", "C4FM"]
+
+[levels.af_gain]
+min = 0
+max = 255
+label = "AF Gain"
+[levels.rf_gain]
+min = 0
+max = 255
+label = "RF Gain"
+[levels.mic_gain]
+min = 0
+max = 100
+label = "Mic Gain"
+[levels.rf_power]
+min = 5
+max = 100
+label = "TX Power"
+
+[bands]
+list = ["160m", "80m", "60m", "40m", "30m", "20m", "17m", "15m", "12m", "10m", "6m", "2m", "70cm"]
+

@@ -1,0 +1,9 @@
+data/
+.venv/
+__pycache__/
+config/radio-remote.toml
+*.bak
+
+dist/
+docs-html/
+image/stage-radio-remote/00-radio-remote/files/radio-remote-src/

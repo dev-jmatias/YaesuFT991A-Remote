@@ -1,0 +1,521 @@
+/* Radio Remote - flat dark slate, LED-edge buttons (yellow = selected), labelled blocks, two VFO panels.
+   Colour is kept for things that mean something: RX blue, TX red, signal/meters, selection yellow, active panel cyan. */
+:root {
+  --bg: #070b14; --panel: #0b1220; --panel2: #111a2e; --panel3: #19243d; --line: #1c2a44; --line2: #26365a; --seg-off: #131d31;
+  --text: #e6ecf8; --dim: #7f8fae; --seg-text: #a9b7d3;
+  --blue: #3b82f6; --cyan: #22d3ee; --teal: #2dd4bf; --green: #34d399; --yellow: #fbbf24; --orange: #fb923c; --red: #f43f5e; --purple: #a78bfa;
+  --accent: var(--cyan); --ok: var(--green); --warn: var(--yellow); --tx: var(--red);
+  --radius: 8px; --gap: 8px;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; color: var(--text); }
+body {
+  min-height: 100dvh; padding: max(8px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
+  background: linear-gradient(180deg, #0a1020 0%, var(--bg) 220px) fixed, var(--bg);
+}
+h2, h3 { margin: 0; }
+button, select, input { font: inherit; color: inherit; }
+
+/* ---- buttons: flat slate; .led adds a small indicator bar on the left edge (grey off, yellow selected) ---- */
+button { background: linear-gradient(180deg, #1a263d, #131d31); border: 1px solid var(--line2); border-radius: 6px; color: #dbe4f6; padding: 4px 12px; min-height: 34px; font-size: .88rem; cursor: pointer; touch-action: manipulation; transition: border-color .12s, background .12s; }
+button:hover { border-color: var(--cyan); }
+button:focus-visible, .dial:focus-visible, .strip:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+button:disabled { opacity: .4; cursor: not-allowed; }
+button.led { position: relative; padding-left: 16px; }
+button.led::before { content: ""; position: absolute; left: 5px; top: 22%; bottom: 22%; width: 3px; border-radius: 2px; background: #38445f; }
+button.led.active, button.led.on { background: linear-gradient(180deg, #243456, #19264a); border-color: #3a5083; color: #fff; font-weight: 600; }
+button.led.active::before, button.led.on::before { background: var(--yellow); box-shadow: 0 0 7px rgba(251,191,36,.85); }
+button.active:not(.led), button.on:not(.led) { background: linear-gradient(180deg, #2bb8cf, #1596b1); border-color: transparent; color: #04141c; font-weight: 700; }
+input, select { background: #0e1729; border: 1px solid var(--line2); border-radius: 6px; padding: 4px 10px; min-height: 34px; }
+.dim { color: var(--dim); }
+.row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.row.center { justify-content: center; }
+.err { color: var(--red); min-height: 1.1em; font-size: .85rem; }
+.mt10 { margin-top: 10px; } .mt12 { margin-top: 12px; } .mt14 { margin-top: 14px; }
+
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; min-width: 0; }
+.card > h2 { font-size: .66rem; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); margin-bottom: 6px; font-weight: 600; }
+.card input[type=range] { accent-color: var(--cyan); }
+
+/* ---------- login ---------- */
+.login { max-width: 380px; margin: 12vh auto 0; display: grid; gap: 12px; }
+.login h1 { margin: 0 0 4px; font-size: 1.4rem; color: var(--cyan); }
+
+/* ---------- top bar + radio tab ---------- */
+.topbar { display: flex; gap: 8px; align-items: center; justify-content: space-between; flex-wrap: wrap; margin-bottom: 6px; }
+.brand { letter-spacing: .06em; color: var(--text); font-size: 1rem; }
+.topbar .row { gap: 5px; } .topbar button { min-height: 30px; padding: 2px 10px; font-size: .82rem; }
+button.icon { width: 34px; padding: 0; } button.icon.wide { width: auto; padding: 0 10px; }
+.radiobar { display: flex; align-items: center; gap: 10px; padding: 6px 10px; margin-bottom: var(--gap); border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+.rlabel { font-size: .66rem; letter-spacing: .14em; color: var(--dim); font-weight: 600; }
+.rtab { display: inline-flex; align-items: center; gap: 8px; padding: 4px 12px; border-radius: 6px; background: var(--panel3); border-left: 3px solid var(--cyan); font-size: .85rem; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: #4b587a; display: inline-block; }
+.dot.ok { background: var(--green); box-shadow: 0 0 6px rgba(52,211,153,.8); } .dot.bad { background: var(--red); }
+.badge { padding: 1px 8px; border-radius: 999px; font-size: .72rem; border: 1px solid var(--line2); white-space: nowrap; color: var(--dim); }
+.badge.ok { color: var(--green); border-color: #1f5f4a; } .badge.bad { color: var(--red); border-color: #6b1a30; } .badge.warn { color: var(--yellow); }
+.mockbanner { background: #2a1f08; color: var(--yellow); border: 1px solid #6b4b0a; border-radius: 8px; padding: 3px 10px; font-size: .75rem; margin-bottom: var(--gap); }
+.offline { background: #2a0f1a; color: #ffb3c0; border: 1px solid #6b1a30; border-radius: 8px; padding: 6px 12px; margin-bottom: var(--gap); }
+.is-offline .layout { opacity: .55; pointer-events: none; }
+
+/* ---------- layout: phone first ---------- */
+.layout { display: grid; gap: var(--gap); grid-template-columns: minmax(0, 1fr); padding-bottom: 66px; }
+.tabs { position: fixed; left: 0; right: 0; bottom: 0; display: flex; gap: 6px; padding: 6px max(10px, env(safe-area-inset-left)) max(6px, env(safe-area-inset-bottom)); background: rgba(7,11,20,.95); backdrop-filter: blur(8px); border-top: 1px solid var(--line); z-index: 5; }
+.tabs button { flex: 1; min-height: 38px; }
+.app[data-tab=radio] [data-pane=filters], .app[data-tab=radio] [data-pane=audio], .app[data-tab=radio] [data-pane=levels],
+.app[data-tab=filters] [data-pane=vfo], .app[data-tab=filters] [data-pane=levels], .app[data-tab=filters] [data-pane=audio],
+.app[data-tab=audio] [data-pane=vfo], .app[data-tab=audio] [data-pane=levels], .app[data-tab=audio] [data-pane=filters],
+.app[data-tab=levels] [data-pane=vfo], .app[data-tab=levels] [data-pane=filters], .app[data-tab=levels] [data-pane=audio] { display: none; }
+[data-pane=vfo] { order: -1; }
+[data-pane=ptt] { position: sticky; bottom: 56px; z-index: 4; background: var(--bg); border: 0; border-top: 1px solid var(--line); padding: 8px 0 6px; margin: 0 -2px; }
+[data-pane=ptt] .ptt { min-height: 66px; }
+
+@media (min-width: 700px) {
+  body { padding: max(10px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) 14px max(14px, env(safe-area-inset-left)); }
+  .tabs { display: none; }
+  .app { max-width: 1240px; margin: 0 auto; }
+  .layout { padding-bottom: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: "vfo vfo" "filters filters" "levels audio" "ptt ptt"; align-items: start; }
+  .app [data-pane] { display: block !important; order: 0; }
+  [data-pane=vfo] { grid-area: vfo; }
+  [data-pane=ptt] { grid-area: ptt; position: sticky; bottom: 10px; z-index: 4; padding: 10px 12px; background: var(--panel); border: 1px solid var(--line); box-shadow: 0 -8px 18px rgba(7,11,20,.7); }
+  [data-pane=ptt] .ptt { min-height: 78px; }
+  [data-pane=levels] { grid-area: levels; align-self: stretch; } [data-pane=filters] { grid-area: filters; } [data-pane=audio] { grid-area: audio; align-self: stretch; }
+}
+
+/* ---------- VFO block: A (+ meters), B as a smaller attached tab ---------- */
+.vfopanels { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.vfopanel { container-type: inline-size; background: #060a14; border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px 10px; }
+.vfopanel.a { border-color: var(--cyan); box-shadow: 0 0 0 1px rgba(34,211,238,.18); }
+.vfopanel.b.txvfo { border-color: var(--yellow); box-shadow: 0 0 0 1px rgba(251,191,36,.2); }
+.vfopanel.keyed { border-color: var(--red); box-shadow: 0 0 0 1px rgba(244,63,94,.45), 0 0 18px rgba(244,63,94,.22); }
+.vfopanel header { display: flex; align-items: center; gap: 6px; margin-bottom: 2px; }
+.vl { color: var(--cyan); font-weight: 700; letter-spacing: .05em; margin-right: 2px; }
+.vfopanel.b .vl { color: var(--purple); }
+.vbadge { font-size: .66rem; font-weight: 700; padding: 1px 7px; border-radius: 4px; background: #172138; color: #6f7f9f; border: 1px solid var(--line2); letter-spacing: .04em; }
+.vbadge.rxb.on { background: var(--blue); color: #fff; border-color: transparent; }
+.vbadge.txb.on { background: var(--red); color: #fff; border-color: transparent; animation: pulse 1s infinite; }
+.vbadge.split { background: var(--yellow); color: #1a1100; border-color: transparent; }
+.vbadge[hidden] { display: none; }
+.vband { margin-left: auto; color: var(--dim); font-size: .8rem; }
+.vmode { font-size: 1.05rem; font-weight: 600; letter-spacing: .04em; margin: 0 0 6px; }
+.nodata { font-size: .78rem; padding: 14px 0 4px; border-top: 1px dashed var(--line); margin-top: 8px; }
+@keyframes pulse { 50% { opacity: .75; } }
+@media (prefers-reduced-motion: reduce) { .vbadge.txb.on, .chip.tune.tuning { animation: none; } * { transition: none !important; } }
+
+.freq { font: 600 clamp(1.7rem, 10.5cqw, 3.5rem)/1.05 ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace; white-space: nowrap; user-select: none; font-variant-numeric: tabular-nums; color: #fff; padding: 2px 0 4px; }
+.freq .digit { cursor: pointer; padding: 0 .02em; border-radius: 4px; }
+.freq.ro .digit { cursor: default; }
+.freq .digit.lead { opacity: .18; }
+.freq .digit.cur { box-shadow: inset 0 -3px 0 var(--yellow); }
+.freq:not(.ro) .digit:hover { background-color: rgba(255,255,255,.08); }
+.freq .sep { opacity: .5; }
+.freq .unit { font-size: .3em; letter-spacing: .06em; margin-left: .4em; color: var(--dim); }
+.freq.pending { color: var(--cyan); }
+.vfopanel.keyed .freq { color: #ffd0d8; }
+
+/* ---------- blocks ---------- */
+.block { border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px 9px; margin-top: 8px; background: #0a101e; }
+.blabel { margin: 0 0 6px; font-size: .64rem; letter-spacing: .15em; text-transform: uppercase; color: var(--dim); font-weight: 600; display: block; }
+.moderow, .bandrow, .steprow { gap: 5px; }
+.moderow button, .bandrow button { min-width: 46px; }
+.bandwrap { display: flex; gap: 14px; align-items: flex-end; flex-wrap: wrap; }
+.bandrow { flex: 1 1 280px; }
+.setfreq { flex: 0 1 250px; min-width: 190px; }
+.setfreq .row { flex-wrap: nowrap; } .setfreq input { flex: 1; min-width: 0; }
+.vfob-read { display: none; text-align: left; margin-bottom: 4px; }
+.vfob-read b { font: 600 1.2rem/1.2 ui-monospace, "SF Mono", Consolas, monospace; margin: 0 4px; color: var(--purple); }
+.vfob-ctl { gap: 5px; }
+.bform { flex-wrap: nowrap; } .bform input { width: 6em; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.chip { min-height: 30px; padding: 2px 10px 2px 16px; font-size: .8rem; letter-spacing: .03em; }
+.chip.ro { display: inline-flex; align-items: center; padding-left: 10px; color: var(--dim); background: transparent; border-style: dashed; }
+.chip.tune.tuning { background: linear-gradient(180deg, #ff5a75, var(--red)); border-color: transparent; color: #fff; animation: pulse 1s infinite; }
+.chip.dg { color: var(--cyan); border-color: var(--cyan); }
+.chip.dg[hidden] { display: none; }
+
+/* ---------- sliding tuning strip (phones) ---------- */
+.strip { display: block; position: relative; height: 64px; margin: 8px 0 0; border-radius: 8px; border: 1px solid var(--line2); background: linear-gradient(180deg, #080d19, #0e1730); overflow: hidden; touch-action: pan-y; cursor: ew-resize; user-select: none; -webkit-user-select: none; }
+.strip-ruler { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.strip-needle { position: absolute; left: 50%; top: 0; bottom: 0; width: 3px; margin-left: -1px; background: var(--yellow); box-shadow: 0 0 10px rgba(251,191,36,.8); }
+.strip-info { position: absolute; left: 8px; top: 3px; font-size: .72rem; color: var(--dim); pointer-events: none; }
+.strip-coarse { position: absolute; right: 6px; top: 6px; min-height: 28px; padding: 0 10px; font-size: .8rem; }
+
+/* ---------- meters ---------- */
+.seg .seglbl { display: flex; justify-content: space-between; font-size: .68rem; letter-spacing: .1em; text-transform: uppercase; color: var(--dim); margin-bottom: 2px; }
+.seg .seglbl b { color: var(--text); font-weight: 700; letter-spacing: 0; text-transform: none; font-variant-numeric: tabular-nums; font-size: .8rem; }
+.seg .seglbl small { font-size: .62rem; text-transform: none; letter-spacing: 0; }
+.seg canvas { width: 100%; height: 34px; display: block; }
+.seg.big canvas { height: 46px; }
+.seg.small canvas { height: 34px; }
+.seg.dimmed { opacity: .4; }
+.txmeters { display: grid; gap: 6px 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.meters:not(.is-tx) .txmeters { opacity: .45; }
+
+/* ---------- PTT ---------- */
+.ptt { width: 100%; min-height: 78px; font-size: 1.2rem; font-weight: 800; letter-spacing: .07em; user-select: none; -webkit-user-select: none; touch-action: none; border-radius: 10px; border: 2px solid #7f1d3a; color: #ffd1da; background: linear-gradient(180deg, #2a1220, #190b14); }
+.ptt:hover { border-color: var(--red); }
+.ptt.keyed { background: linear-gradient(180deg, #ff5a75, var(--red)); border-color: #ff8da0; color: #fff; box-shadow: 0 0 0 4px rgba(244,63,94,.28), 0 0 22px rgba(244,63,94,.5); }
+.txtimer { margin-top: 6px; display: grid; gap: 3px; font-size: .75rem; color: var(--dim); }
+.bar { height: 8px; background: var(--seg-off); border-radius: 4px; overflow: hidden; }
+.bar > i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--green), var(--yellow) 65%, var(--red)); }
+
+/* ---------- sliders / controls ---------- */
+.levels { display: grid; gap: 6px 14px; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+.slider label { display: flex; justify-content: space-between; font-size: .8rem; color: var(--dim); }
+.slider.big input { min-height: 32px; }
+input[type=range] { width: 100%; min-height: 28px; padding: 0; background: transparent; border: 0; }
+.ctlgroup h3 { font-size: .64rem; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); margin: 0 0 6px; }
+.ctlgroup + .ctlgroup { margin-top: 12px; }
+.ctls { display: grid; gap: 6px 10px; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); align-items: end; }
+.ctls .tog { width: 100%; text-align: left; }
+.sel { display: grid; gap: 3px; font-size: .8rem; color: var(--dim); }
+.sel select { width: 100%; color: var(--text); }
+.subtabs { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 8px; }
+.subtabs button { min-height: 30px; padding: 2px 14px; font-size: .82rem; border-radius: 6px; }
+.subtabs button.active { background: linear-gradient(180deg, #243456, #19264a); border-color: #3a5083; color: #fff; box-shadow: inset 0 -2px 0 var(--yellow); font-weight: 600; }
+.filters.tabbed .ctlgroup h3 { display: none; }
+.filters.tabbed .ctlgroup { margin-top: 0; }
+.ctlgroup[hidden] { display: none; }
+@media (max-width: 699px) { .subtabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; } .subtabs button { flex: 0 0 auto; } }
+.audio-ctls { margin-top: 6px; } .audio-opts { margin-top: 6px; gap: 12px; font-size: .8rem; }
+[data-pane=audio] audio { display: none; }
+#a-txf.sending, [data-pane=audio] .sending { color: var(--green); font-weight: 600; }
+
+.toast { position: fixed; left: 50%; bottom: 76px; transform: translate(-50%, 20px); background: var(--panel3); border: 1px solid var(--line2); padding: 8px 14px; border-radius: 8px; opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; z-index: 20; max-width: 90vw; }
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+@media (min-width: 700px) { .toast { bottom: 16px; } }
+
+/* ---------- control lease ---------- */
+.ctlbar { display: flex; gap: 8px; align-items: center; justify-content: space-between; flex-wrap: wrap; padding: 4px 10px; margin-bottom: var(--gap); border-radius: 8px; border: 1px solid var(--line); background: var(--panel); font-size: .85rem; }
+.ctlbar.mine { border-color: #1f5f4a; background: #0b231d; }
+.ctlbar.watch { border-color: #7a5410; background: #241a07; }
+.ctlbar button { min-height: 28px; padding: 2px 10px; }
+button.danger { border-color: #7a1f36; color: #ffb3c0; }
+button.danger:hover { background: #3a1020; border-color: var(--red); }
+.no-control [data-pane=vfo] button, .no-control [data-pane=vfo] input, .no-control [data-pane=vfo] select,
+.no-control [data-pane=ptt], .no-control [data-pane=levels], .no-control [data-pane=filters],
+.no-control .freq .digit, .no-control .strip { opacity: .5; pointer-events: none; }
+.dialog { position: fixed; left: 50%; top: 12px; transform: translateX(-50%); z-index: 30; width: min(94vw, 460px); background: var(--panel3); border: 2px solid var(--cyan); border-radius: 10px; padding: 12px 14px; display: grid; gap: 8px; box-shadow: 0 10px 40px rgba(0,0,0,.6); }
+.dialog[hidden] { display: none; }
+.updbar { display: flex; gap: 8px; align-items: center; justify-content: space-between; flex-wrap: wrap; padding: 6px 10px; margin-bottom: var(--gap); border-radius: 8px; border: 1px solid var(--cyan); background: #0a2a3a; font-size: .85rem; }
+.updbar[hidden] { display: none; }
+
+/* ---------- admin sheet ---------- */
+.sheet { position: fixed; inset: 0; z-index: 40; background: rgba(0,0,0,.72); display: grid; place-items: start center; overflow: auto; padding: 4vh 10px; }
+.sheetbox { background: var(--panel); border: 1px solid var(--line2); border-radius: 12px; width: min(100%, 980px); padding: 14px; }
+.sheethead { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.sheettabs { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 12px; }
+.sheetbody table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+.sheetbody th { text-align: left; color: var(--dim); font-weight: 500; font-size: .72rem; letter-spacing: .06em; text-transform: uppercase; }
+.sheetbody th, .sheetbody td { padding: 6px 6px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.sheetbody td .row { gap: 6px; }
+.sheetbody td button, .sheetbody td select { min-height: 30px; padding: 2px 10px; }
+.note { min-height: 1.3em; margin-bottom: 6px; font-size: .9rem; }
+.note.ok { color: var(--green); } .note.bad { color: var(--red); }
+.cfg { display: grid; gap: 12px; }
+.cfg fieldset { border: 1px solid var(--line); border-radius: 8px; padding: 10px; display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); }
+.cfg legend { color: var(--dim); font-size: .66rem; letter-spacing: .14em; text-transform: uppercase; padding: 0 6px; }
+.cfg label { display: grid; gap: 3px; font-size: .82rem; color: var(--dim); }
+.cfg label.chk { display: flex; align-items: center; gap: 8px; color: var(--text); }
+.diag { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
+.card2 { background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 10px; font-size: .82rem; display: grid; gap: 2px; align-content: start; }
+.card2 h3 { margin: 0 0 4px; color: var(--cyan); } .card2 .dim { margin-right: 6px; }
+.log { background: #000; border: 1px solid var(--line); border-radius: 8px; padding: 8px; max-height: 320px; overflow: auto; font-size: .72rem; white-space: pre-wrap; word-break: break-all; }
+.txt { color: var(--red); }
+code { background: var(--panel2); padding: 1px 6px; border-radius: 6px; }
+
+/* ---------- phones: only the frequency in use, S-meter first, one line per control row ---------- */
+@media (max-width: 699px) {
+  body { padding-top: max(6px, env(safe-area-inset-top)); }
+  .topbar .row { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; max-width: 100%; }
+  #wake { display: none; }
+  .radiobar { padding: 4px 8px; margin-bottom: 6px; }
+  .mockbanner { margin-bottom: 6px; } .ctlbar { margin-bottom: 6px; }
+  .steprow, .vfob-ctl, .chips, .moderow, .bandrow { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; justify-content: flex-start; }
+  .steprow > *, .vfob-ctl > *, .chips > *, .moderow > *, .bandrow > * { flex: 0 0 auto; }
+  .bandwrap { display: block; } .setfreq { margin-top: 8px; }
+  .freq { font-size: clamp(1.8rem, 13.5cqw, 3.4rem); }
+}
+.vfob-read { display: none !important; }
+
+/* ---------- tablet / desktop: one VFO block. A on top (signal + TX meters under it), B as a smaller attached tab ---------- */
+.txmhost { min-width: 0; }
+.toolrow { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 8px; align-items: stretch; }
+.toolrow .block { margin-top: 8px; min-width: 0; }
+.vfopanel.b .nodata { display: none; }
+/* (all screen sizes) */
+@media all {
+  .vfopanels { display: block; border: 1px solid var(--cyan); border-radius: 8px; background: #060a14; box-shadow: 0 0 0 1px rgba(34,211,238,.18); overflow: hidden; }
+  .vfopanels .vfopanel { border: 0; box-shadow: none; border-radius: 0; background: transparent; }
+  .vfopanels .vfopanel.keyed { box-shadow: none; }                 /* no inner red frame: only the outer border turns red while transmitting */
+  .vfopanels:has(.vfopanel.keyed) { border-color: var(--red); box-shadow: 0 0 0 1px rgba(244,63,94,.5), 0 0 18px rgba(244,63,94,.25); }
+  .txmhost { padding: 0 12px 8px; background: #060a14; }
+  .txmhost .txmeters { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px 8px; }
+  .vfopanel.a .seg.big canvas { height: 38px; }                 /* slightly thinner signal meter */
+  .vfopanel.a .freq { font-size: clamp(1.6rem, 8.2cqw, 2.9rem); }  /* slightly smaller VFO A */
+  .txmhost { --seg-text: #c9d5ee; }
+  .txmhost .seg.small canvas { height: 28px; }
+  .txmhost .seg .seglbl { font-size: .74rem; font-weight: 600; color: #dbe5f8; margin-bottom: 1px; }
+  .txmhost .seg .seglbl b { font-size: .78rem; color: #fff; }
+  .vfopanel.b { padding: 4px 12px 6px; border-top: 1px solid var(--line) !important; background: #0a101e !important; }
+  .vfopanel.b.txvfo { border-top-color: var(--yellow) !important; }
+  .vfopanel.b header { margin-bottom: 0; }
+  .vfopanel.b .freq { font-size: clamp(1.1rem, 4.2cqw, 1.7rem); padding: 0; }
+  .vfopanel.b { display: flex; align-items: center; gap: 14px; container-type: inline-size; }
+  .vfopanel.b header { flex: 0 0 auto; }
+  .vfopanel.b .freqhost { flex: 0 0 auto; }
+  .vfopanel.b .vband { margin-left: 0; }
+}
+@media (max-width: 699px) {
+  .toolrow { grid-template-columns: minmax(0, 1fr); gap: 0; }
+}
+
+/* control status lives inside the radio bar (top tab) */
+.radiobar { flex-wrap: wrap; }
+.radiobar .ctlbar { margin: 0 0 0 auto; padding: 2px 8px; flex-wrap: nowrap; gap: 10px; font-size: .82rem; }
+.radiobar .ctlbar button { min-height: 26px; }
+@media (max-width: 699px) { .radiobar .ctlbar { margin-left: 0; width: 100%; flex-wrap: wrap; } }
+
+/* wide screens: band and mode buttons share the full row on one line each */
+@media (min-width: 1100px) {
+  .bandwrap { flex-wrap: nowrap; }
+  .bandrow, .moderow { flex-wrap: nowrap; }
+  .bandrow { flex: 1 1 0; min-width: 0; }
+  .bandrow button, .moderow button { flex: 1 1 0; min-width: 0; padding-left: 14px; padding-right: 6px; }
+  .setfreq { flex: 0 0 250px; }
+}
+/* TX mic input (radio menu 106) above the PTT button */
+.micsel { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.micsel .blabel { margin: 0; }
+.micsel .row { gap: 5px; flex-wrap: nowrap; }
+.micsel button { min-height: 30px; }
+.micwarn { color: var(--yellow); font-size: .8rem; }
+.micwarn[hidden] { display: none; }
+
+/* ---------- phone (about 360-430 px wide: Galaxy S, iPhone): compact top, smaller VFO, thinner strip ---------- */
+@media (max-width: 699px) {
+  /* top menu: one line, equal-size buttons, no brand text (the radio bar below names the radio) */
+  .topbar { display: block; margin-bottom: 4px; }
+  .brand { display: none; }
+  .topbar .row { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 4px; overflow: visible; max-width: none; }
+  .topbar button { min-height: 28px; padding: 2px 4px; font-size: .74rem; white-space: nowrap; width: 100%; }
+  /* radio bar: green dot + radio name, and the control status in the same tab */
+  .radiobar { flex-wrap: wrap; gap: 6px 8px; padding: 4px 8px; }
+  .radiobar .rlabel { display: none; }
+  .radiobar .rtab { padding: 3px 8px; font-size: .8rem; }
+  .radiobar .badge.ok { display: none; }
+  .radiobar .ctlbar { flex: 1 1 130px; width: auto; margin-left: auto; padding: 0; border: 0; background: none; justify-content: flex-end; flex-wrap: wrap; gap: 4px 8px; font-size: .74rem; }
+  .radiobar .ctlbar.mine { color: var(--green); }
+  .radiobar .ctlbar button { min-height: 24px; padding: 1px 8px; font-size: .74rem; }
+  /* VFO: smaller frequency, thinner meters, tighter panel */
+  .vfopanel { padding: 5px 10px 7px; }
+  .vfopanel header { margin-bottom: 0; }
+  .vfopanel .vl { font-size: .85rem; } .vfopanel .vband { font-size: .74rem; }
+  .vmode { font-size: .9rem; margin: 0 0 3px; }
+  .freq { font-size: clamp(1.5rem, 10.8cqw, 2.4rem); padding: 0 0 2px; }
+  .vfopanel .seg.big canvas { height: 34px; }
+  .seg .seglbl { font-size: .62rem; }
+  /* thinner tuning scale; the step text is shown in the Tuning step block anyway */
+  .strip { height: 38px; margin-top: 6px; }
+  .strip-info { display: none; }
+  .strip-coarse { min-height: 20px; top: 2px; padding: 0 8px; font-size: .7rem; }
+  /* same arrangement as large screens: A + signal + small TX meters, B as an attached tab; buttons smaller */
+  .vfopanel.a .freq { font-size: clamp(1.5rem, 10.2cqw, 2.3rem); }
+  .vfopanel.a .seg.big canvas { height: 32px; }
+  .txmhost { padding: 0 10px 6px; }
+  .txmhost .txmeters { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px 6px; }
+  .txmhost .seg.small canvas { height: 14px; }
+  .txmhost .seg .seglbl { font-size: .62rem; }
+  .txmhost .seg .seglbl b { font-size: .64rem; }
+  .vfopanel.b { padding: 3px 10px 4px; gap: 8px; }
+  .vfopanel.b .freq { font-size: clamp(1rem, 6cqw, 1.3rem); }
+  .vfopanel.b .vl { font-size: .74rem; } .vfopanel.b .vbadge { font-size: .58rem; padding: 0 5px; }
+  .block { padding: 5px 8px 7px; margin-top: 6px; }
+  .blabel { margin-bottom: 4px; font-size: .58rem; }
+  .block button, .block select, .block input { min-height: 28px; font-size: .76rem; }
+  .block button { padding: 2px 9px; } .block button.led { padding-left: 13px; }
+  .block button.led::before { left: 4px; }
+  /* band select, VFO tools and mode: thinner and smaller buttons */
+  .bandrow button, .moderow button, .vfob-ctl button, .setfreq button { min-height: 24px; padding: 1px 7px; font-size: .7rem; }
+  .bandrow button.led, .moderow button.led, .vfob-ctl button.led { padding-left: 11px; }
+  .bandrow button, .moderow button { min-width: 34px; }
+  .vfob-ctl input, .setfreq input { min-height: 24px; font-size: .72rem; padding: 1px 8px; }
+  .micsel { justify-content: center; text-align: center; }
+  .chip { min-height: 26px !important; font-size: .72rem; padding: 2px 8px 2px 13px; }
+  .steprow, .vfob-ctl, .chips, .moderow, .bandrow { gap: 4px; }
+}
+
+/* phone: Tuning step sits right under the tuning scale, centred */
+@media (max-width: 699px) {
+  [data-pane=vfo] { display: flex; flex-direction: column; }
+  [data-pane=vfo] > * { order: 3; }
+  [data-pane=vfo] > .vfopanels { order: 0; }
+  [data-pane=vfo] > .strip { order: 1; }
+  .toolrow { display: contents; }
+  .toolrow > .block { order: 3; }
+  .toolrow > .block.tuning { order: 2; }
+  .block.tuning { text-align: center; }
+  .block.tuning .steprow { justify-content: center; }
+}
+
+/* ---------- tablet mode (touch screens >= 700 px, e.g. iPad 10"): phone-style tabs, tablet-sized controls ---------- */
+html[data-tablet] .tabs { display: flex; }
+html[data-tablet] .tabs button { min-height: 44px; font-size: 1rem; }
+html[data-tablet] .layout { padding-bottom: 76px; grid-template-columns: minmax(0, 1fr); grid-template-areas: none; }
+html[data-tablet] [data-pane] { grid-area: auto; order: 0; }
+html[data-tablet] .app [data-pane] { display: block !important; }
+html[data-tablet] .app[data-tab=radio] [data-pane=filters], html[data-tablet] .app[data-tab=radio] [data-pane=audio], html[data-tablet] .app[data-tab=radio] [data-pane=levels],
+html[data-tablet] .app[data-tab=filters] [data-pane=vfo], html[data-tablet] .app[data-tab=filters] [data-pane=levels], html[data-tablet] .app[data-tab=filters] [data-pane=audio],
+html[data-tablet] .app[data-tab=audio] [data-pane=vfo], html[data-tablet] .app[data-tab=audio] [data-pane=levels], html[data-tablet] .app[data-tab=audio] [data-pane=filters],
+html[data-tablet] .app[data-tab=levels] [data-pane=vfo], html[data-tablet] .app[data-tab=levels] [data-pane=filters], html[data-tablet] .app[data-tab=levels] [data-pane=audio] { display: none !important; }
+html[data-tablet] [data-pane=ptt] { position: sticky; bottom: 62px; z-index: 4; background: var(--bg); border: 0; border-top: 1px solid var(--line); border-radius: 0; box-shadow: none; padding: 8px 0 6px; }
+html[data-tablet] [data-pane=ptt] .ptt { min-height: 74px; }
+html[data-tablet] .toast { bottom: 84px; }
+/* VFO area as on large screens ([VFO tools | Tuning step], Band select + Set frequency, Mode), but compact: smaller buttons, thin tuning scale */
+html[data-tablet] .strip { height: 38px; margin-top: 6px; }
+html[data-tablet] .strip-info { display: none; }
+html[data-tablet] .strip-coarse { min-height: 20px; top: 2px; padding: 0 8px; font-size: .7rem; }
+html[data-tablet] .block { padding: 5px 9px 7px; margin-top: 6px; }
+html[data-tablet] .blabel { margin-bottom: 4px; font-size: .6rem; }
+html[data-tablet] .bandrow button, html[data-tablet] .moderow button, html[data-tablet] .vfob-ctl button, html[data-tablet] .setfreq button,
+html[data-tablet] .block.tuning button { min-height: 26px; padding: 1px 6px 1px 11px; font-size: .72rem; }
+html[data-tablet] .bandrow button.led, html[data-tablet] .moderow button.led, html[data-tablet] .vfob-ctl button.led { padding-left: 11px; }
+html[data-tablet] .setfreq button, html[data-tablet] .vfob-ctl form button { padding-left: 10px; }
+html[data-tablet] .vfob-ctl input, html[data-tablet] .setfreq input, html[data-tablet] .block.tuning select { min-height: 26px; font-size: .74rem; padding: 1px 8px; }
+html[data-tablet] .bandwrap { flex-wrap: wrap; gap: 6px 10px; align-items: flex-end; }
+html[data-tablet] .bandrow, html[data-tablet] .moderow { flex-wrap: nowrap; gap: 4px; }
+html[data-tablet] .bandrow { flex: 1 1 520px; min-width: 0; }
+html[data-tablet] .setfreq { flex: 0 0 170px; min-width: 0; }
+html[data-tablet] .bandrow button, html[data-tablet] .moderow button { flex: 1 1 0; min-width: 0; padding-right: 3px; }
+html[data-tablet] .vfob-ctl { flex-wrap: wrap; gap: 4px; }
+html[data-tablet] .chip { min-height: 26px; font-size: .72rem; padding: 2px 8px 2px 13px; }html[data-tablet] .levels { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+html[data-tablet] .bandrow button { padding: 1px 1px 1px 9px; font-size: .68rem; letter-spacing: -.01em; }
+html[data-tablet] .bandrow button.led::before { left: 3px; }
+html[data-tablet] .setfreq { flex-basis: 150px; }
+html[data-tablet] .bandrow { flex-basis: 540px; }
+
+/* tablet: button text never wraps; rows that do not fit slide sideways, like on the phone */
+html[data-tablet] .vfob-ctl, html[data-tablet] .bandrow, html[data-tablet] .moderow, html[data-tablet] .chips, html[data-tablet] .steprow {
+  flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; justify-content: flex-start; }
+html[data-tablet] .vfob-ctl::-webkit-scrollbar, html[data-tablet] .bandrow::-webkit-scrollbar, html[data-tablet] .moderow::-webkit-scrollbar, html[data-tablet] .chips::-webkit-scrollbar { display: none; }
+html[data-tablet] .vfob-ctl > *, html[data-tablet] .bandrow > *, html[data-tablet] .moderow > *, html[data-tablet] .chips > *, html[data-tablet] .steprow > * { flex: 0 0 auto; }
+html[data-tablet] .bandrow button, html[data-tablet] .moderow button, html[data-tablet] .vfob-ctl button, html[data-tablet] .chip, html[data-tablet] .block.tuning button, html[data-tablet] .setfreq button { white-space: nowrap; }
+html[data-tablet] .bandrow button, html[data-tablet] .moderow button { padding: 1px 8px 1px 12px; font-size: .72rem; letter-spacing: normal; min-width: 0; }
+html[data-tablet] .bandrow button.led::before { left: 4px; }
+html[data-tablet] .bandrow { flex: 1 1 400px; }
+html[data-tablet] .block.tuning .steprow { justify-content: center; }
+html[data-tablet] .vfob-ctl form { flex: 0 0 auto; }
+
+/* tablet: band / mode buttons size to their text (never squeezed), slightly bigger */
+html[data-tablet] .bandrow button, html[data-tablet] .moderow button { flex: 0 0 auto; min-height: 30px; padding: 2px 10px 2px 15px; font-size: .78rem; }
+html[data-tablet] .bandrow button.led::before, html[data-tablet] .moderow button.led::before { left: 5px; }
+html[data-tablet] .vfob-ctl button, html[data-tablet] .block.tuning button { min-height: 30px; font-size: .78rem; }
+
+/* ---------- speaker / microphone switches in the VFO area (teal = on) ---------- */
+.audbtns { display: inline-flex; gap: 4px; margin-left: 8px; }
+.vband + .audbtns { margin-left: 8px; }
+button.aud { min-height: 28px; width: 32px; padding: 0; display: inline-grid; place-items: center; color: var(--dim); border-radius: 6px; }
+button.aud.on { background: linear-gradient(180deg, #1fc4b4, #139f93); border-color: transparent; color: #03211e; }
+button.aud.wait { animation: pulse 1s infinite; }
+button.aud:disabled { opacity: .35; }
+@media (max-width: 699px) { button.aud { min-height: 26px; width: 30px; } .audbtns { margin-left: 4px; } }
+
+/* ---------- Filters & DSP: on/off button + adjustment bar on one row ---------- */
+.ctls { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.pair { display: grid; grid-template-columns: minmax(104px, auto) minmax(0, 1fr); gap: 4px 10px; align-items: center; }
+.pair .tog { width: 100%; }
+.pair .slider label { margin-bottom: 0; }
+@media (max-width: 699px) { .ctls { grid-template-columns: minmax(0, 1fr); } }
+
+/* TUNE next to the tuning step */
+.tune.tuning { background: linear-gradient(180deg, #ff5a75, var(--red)); border-color: transparent; color: #fff; animation: pulse 1s infinite; }
+.tune.tuning::before { background: #fff; }
+.dghint { color: var(--cyan); font-size: .78rem; margin-left: 8px; }
+.dghint[hidden] { display: none; }
+
+/* big screens in tab mode: keep the tab bar in line with the centred page */
+html[data-tablet] .tabs { padding-left: max(10px, calc((100vw - 1240px) / 2)); padding-right: max(10px, calc((100vw - 1240px) / 2)); }
+
+/* ---------- aligned rows: Filters & DSP controls, Levels, Audio ---------- */
+.arow, .crow { display: grid; grid-template-columns: 170px minmax(0, 1fr) 86px; gap: 4px 12px; align-items: center; min-height: 36px; padding: 3px 0; border-bottom: 1px solid var(--line); }
+.arow:last-child, .crow:last-child { border-bottom: 0; }
+.crow[hidden] { display: none; }
+.alabel { font-size: .84rem; color: var(--text); }
+.aval { text-align: right; font-size: .8rem; color: var(--dim); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.aval.wide { grid-column: 2 / 4; text-align: left; }
+.crow .slider, .crow .sel { display: contents; }
+.crow .sel select { grid-column: 2 / 4; width: 100%; color: var(--text); }
+.crow > .tog { width: 100%; justify-content: flex-start; }
+.crow .twobtn { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.crow .twobtn .tog { width: 100%; padding-left: 14px; padding-right: 4px; }
+.arow input[type=range], .crow input[type=range] { min-height: 26px; }
+.arow .bar { height: 10px; }
+.ctls { display: grid; grid-template-columns: repeat(auto-fit, minmax(460px, 1fr)); gap: 0 36px; align-items: start; }
+.levels, .audiorows { display: grid; grid-template-columns: minmax(0, 1fr); max-width: 780px; }
+.audio-opts { margin-top: 8px; }
+@media (max-width: 699px) {
+  .arow, .crow { grid-template-columns: 124px minmax(0, 1fr) 62px; gap: 4px 8px; }
+  .ctls { grid-template-columns: minmax(0, 1fr); }
+  .crow .twobtn { gap: 4px; } .crow .twobtn .tog { padding-left: 11px; padding-right: 2px; }
+}
+html[data-tablet] .levels { grid-template-columns: minmax(0, 1fr); }
+.offline { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.offline[hidden] { display: none; }
+.offline button { min-height: 30px; }
+.micsel { justify-content: center; text-align: center; }
+.arow select { grid-column: 2 / 4; width: 100%; color: var(--text); min-height: 30px; }
+
+/* band text sits next to the mode under VFO A; VFO B: [VFO-B] [TX] [mode] [band] ......... frequency (right aligned) */
+.vmode { display: flex; align-items: baseline; gap: 14px; }
+.vmode .vband { margin-left: 0; font-size: .95rem; color: var(--dim); }
+.audbtns { margin-left: auto; }
+.vmodeb { font-weight: 600; letter-spacing: .04em; font-size: .9rem; }
+.vfopanel.b { justify-content: flex-start; }
+.vfopanel.b .freqhost { margin-left: auto; }
+.vfopanel.b .vband { margin-left: 0; }
+.vfopanel.b .freq { text-align: right; }
+/* more room between the tuning step buttons and Tune */
+.steprow .tune { margin-left: 22px; }
+
+/* VFO B: the whole row (VFO-B, TX, mode, band, frequency) is pushed to the right edge */
+.vfopanel.b { justify-content: flex-end; }
+.vfopanel.b .freqhost { margin-left: 0; }
+
+/* PTT is available on every tab, pinned at the bottom (above the tab bar) */
+[data-pane=ptt] { order: 9; }
+html[data-tablet] [data-pane=ptt] { order: 9; }
+/* the raw meter line wraps instead of pushing the page wider than the screen */
+.arow .rawm { grid-column: 2 / 4; display: flex; flex-wrap: wrap; gap: 2px 14px; color: var(--dim); font-size: .78rem; font-variant-numeric: tabular-nums; min-width: 0; }
+.arow .rawm span { white-space: nowrap; }
+@media (max-width: 699px) { .arow .rawm { grid-column: 1 / 4; } .arow:has(.rawm) { grid-template-columns: minmax(0, 1fr); } }
+.audiorows, .arow { min-width: 0; }
+.aval.wide { white-space: normal; min-width: 0; overflow-wrap: anywhere; }
+@media (max-width: 699px) {
+  .arow:has(#a-devnote) { grid-template-columns: minmax(0, 1fr); }
+  .arow:has(#a-devnote) .alabel { display: none; }
+  .arow:has(#a-devnote) .aval.wide { grid-column: 1; }
+}
+
+/* PTT pinned to the bottom of the screen on every tab, even when the tab's content is short */
+@media (max-width: 699px) { .layout { display: flex; flex-direction: column; min-height: calc(100dvh - 160px); } [data-pane=ptt] { margin-top: auto; } }
+html[data-tablet] .layout { display: flex; flex-direction: column; min-height: calc(100dvh - 190px); }
+html[data-tablet] [data-pane=ptt] { margin-top: auto; }
+html[data-tablet] .layout { align-items: stretch; }        /* flex column: every pane (and the PTT) is full width, not shrunk to its content */
+
+/* ---------- memory channels ---------- */
+.vbadge.memb { background: var(--purple); color: #130a2a; border-color: transparent; }
+.vbadge.memb[hidden] { display: none; }
+.memsheet .sheetbox { width: min(100%, 640px); }
+.memtools { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
+.memtools input { flex: 1 1 200px; min-width: 0; }
+.memnote { min-height: 1.3em; font-size: .82rem; margin-bottom: 6px; }
+.memlist { display: grid; gap: 4px; max-height: 62vh; overflow-y: auto; }
+.memrow { display: grid; grid-template-columns: 3.2em minmax(0, 1fr) auto 4.6em; gap: 10px; align-items: center; text-align: left; min-height: 38px; padding: 4px 10px; }
+.memrow .mch { color: var(--dim); font-variant-numeric: tabular-nums; }
+.memrow .mtag { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.memrow .mfq { font-family: ui-monospace, Consolas, monospace; font-variant-numeric: tabular-nums; }
+.memrow .mmode { color: var(--cyan); text-align: right; font-size: .85rem; }
+.memrow.cur { border-color: var(--purple); background: linear-gradient(180deg, #2a2050, #1b1438); }
+@media (max-width: 699px) { .memrow { grid-template-columns: 2.8em minmax(0, 1fr) auto; } .memrow .mmode { display: none; } }

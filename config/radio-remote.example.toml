@@ -1,0 +1,35 @@
+# Copy to config/radio-remote.toml (or /etc/radio-remote/config.toml on the Pi).
+[server]
+host = "127.0.0.1"       # keep loopback when using Caddy/Tailscale in front
+port = 8080
+allowed_origins = []     # extra https origins allowed for WebSocket, e.g. ["https://pi.tailnet.ts.net"]
+
+[radio]
+model = "mock"          # mock | ft991a | ftdx101d | ftdx101mp | ftdx10 | ft710 (real drivers: later phases)
+serial_port = "auto"
+baud = 38400
+hamlib_model = 0
+
+[safety]
+allow_ptt = false        # MUST be set true deliberately before any real transmitter can be keyed
+tx_timeout_s = 120
+ptt_heartbeat_timeout_s = 1.0
+
+[audio]
+enabled = true
+backend = "auto"         # auto (mock radio -> test tone, real radio -> alsa) | alsa | test
+input_device = ""        # e.g. "plughw:CARD=CODEC,DEV=0"; empty = auto-detect a single USB audio CODEC
+output_device = ""
+rx_gain_db = 0.0         # radio -> browser
+tx_gain_db = 0.0         # browser mic -> radio (a limiter always follows)
+opus_bitrate = 32000
+max_peers = 3            # simultaneous browser audio sessions (keep low on a Pi 3B+)
+
+[ui]
+tuning_steps_hz = [10, 100, 500, 1000, 5000, 10000]
+
+[logging]
+level = "INFO"
+
+[storage]
+data_dir = "data"

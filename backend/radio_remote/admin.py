@@ -1,0 +1,274 @@
+"""Admin and account REST endpoints. Every route here is behind the session + CSRF middleware."""
+from __future__ import annotations
+
+import asyncio
+import copy
+import logging
+import time
+
+from aiohttp import web
+
+from . import __version__, config, sysinfo
+from .common import (COOKIE, K_AUDIO, K_AUTH, K_CFG, K_CFGPATH, K_DRIVER, K_GUARD, K_HUB, K_RESTART, K_SESSION,
+                     K_STARTED, client_ip, read_json, require_admin)
+from .logs import RING, scrub
+
+log = logging.getLogger("admin")
+
+# What the web UI may change. Deliberately NOT here: safety.allow_ptt (must be edited in the file on the Pi),
+# server.* (a typo would lock you out of your own radio), storage.*.
+EDITABLE = {
+    "radio": {"model", "serial_port", "baud", "hamlib_model"},
+    "audio": {"enabled", "backend", "input_device", "output_device", "rx_gain_db", "tx_gain_db",
+              "opus_bitrate", "max_peers"},
+    "safety": {"tx_timeout_s", "ptt_heartbeat_timeout_s", "control_request_timeout_s"},
+    "ui": {"tuning_steps_hz", "meter_alc_full", "meter_comp_full"},
+    "logging": {"level"},
+}
+LOCKED = ["safety.allow_ptt", "server.host", "server.port", "server.allowed_origins", "storage.data_dir"]
+LIVE = {("logging", "level"), ("audio", "rx_gain_db"), ("audio", "tx_gain_db")}
+
+
+async def _run(fn, *a):
+    return await asyncio.get_running_loop().run_in_executor(None, fn, *a)
+
+
+# ----------------------------------------------------------------------- users
+async def list_users(request):
+    require_admin(request)
+    return web.json_response({"users": request.app[K_AUTH].list_users()})
+
+
+async def create_user(request):
+    admin = require_admin(request)
+    auth = request.app[K_AUTH]
+    b = await read_json(request)
+    u, p, role = b.get("username"), b.get("password"), b.get("role")
+    if not (isinstance(u, str) and isinstance(p, str) and isinstance(role, str)):
+        raise web.HTTPBadRequest(text="username, password and role required")
+    try:
+        uid = await _run(auth.create_user, u, p, role)
+        if b.get("trusted") is True:
+            auth.set_trusted(uid, True)
+    except ValueError as e:
+        raise web.HTTPBadRequest(text=str(e)) from None
+    except Exception as e:                      # sqlite3.IntegrityError (duplicate name)
+        if "UNIQUE" in str(e):
+            raise web.HTTPConflict(text="username already exists") from None
+        raise
+    auth.audit("user_created", admin.username, client_ip(request), f"{u} ({role})")
+    return web.json_response({"id": uid}, status=201)
+
+
+async def update_user(request):
+    admin = require_admin(request)
+    app, auth = request.app, request.app[K_AUTH]
+    uid = _uid(request)
+    target = auth.get_user(uid)
+    if not target:
+        raise web.HTTPNotFound(text="no such user")
+    b = await read_json(request)
+    changed = []
+    try:
+        if "role" in b:
+            if not isinstance(b["role"], str):
+                raise ValueError("bad role")
+            if uid == admin.user_id and b["role"] != "admin":
+                raise ValueError("you cannot demote yourself")
+            auth.set_role(uid, b["role"])
+            changed.append(f"role={b['role']}")
+        if "trusted" in b:
+            if not isinstance(b["trusted"], bool):
+                raise ValueError("trusted must be true or false")
+            auth.set_trusted(uid, b["trusted"])
+            changed.append(f"trusted={b['trusted']}")
+        if "password" in b:
+            if not isinstance(b["password"], str):
+                raise ValueError("bad password")
+            await _run(auth.set_password, uid, b["password"], None)
+            changed.append("password reset")
+    except ValueError as e:
+        raise web.HTTPBadRequest(text=str(e)) from None
+    if not changed:
+        raise web.HTTPBadRequest(text="nothing to change")
+    if any(c.startswith(("role", "password")) for c in changed):
+        await app[K_HUB].kick_user(uid, "account changed by administrator")   # reconnect picks up the new role
+    auth.audit("user_updated", admin.username, client_ip(request), f"{target['username']}: {', '.join(changed)}")
+    return web.json_response({"ok": True})
+
+
+async def delete_user(request):
+    admin = require_admin(request)
+    app, auth = request.app, request.app[K_AUTH]
+    uid = _uid(request)
+    if uid == admin.user_id:
+        raise web.HTTPBadRequest(text="you cannot delete yourself")
+    target = auth.get_user(uid)
+    if not target:
+        raise web.HTTPNotFound(text="no such user")
+    try:
+        auth.delete_user(uid)
+    except ValueError as e:
+        raise web.HTTPBadRequest(text=str(e)) from None
+    await app[K_HUB].kick_user(uid, "account deleted")
+    auth.audit("user_deleted", admin.username, client_ip(request), target["username"])
+    return web.json_response({"ok": True})
+
+
+def _uid(request) -> int:
+    try:
+        return int(request.match_info["uid"])
+    except ValueError:
+        raise web.HTTPBadRequest(text="bad user id") from None
+
+
+async def change_own_password(request):
+    s = request[K_SESSION]
+    auth = request.app[K_AUTH]
+    b = await read_json(request)
+    cur, new = b.get("current"), b.get("new")
+    if not (isinstance(cur, str) and isinstance(new, str)):
+        raise web.HTTPBadRequest(text="current and new password required")
+    if not await _run(auth.check_password, s.user_id, cur):
+        auth.audit("password_change_failed", s.username, client_ip(request))
+        raise web.HTTPForbidden(text="current password is wrong")
+    try:
+        await _run(auth.set_password, s.user_id, new, request.cookies.get(COOKIE))   # other sessions are revoked
+    except ValueError as e:
+        raise web.HTTPBadRequest(text=str(e)) from None
+    await request.app[K_HUB].kick_user(s.user_id, "password changed", except_sid=request.cookies.get(COOKIE))
+    auth.audit("password_changed", s.username, client_ip(request))
+    return web.json_response({"ok": True})
+
+
+# --------------------------------------------------------------------- clients
+async def list_clients(request):
+    require_admin(request)
+    hub = request.app[K_HUB]
+    return web.json_response({"clients": hub.clients_info(), "lease": hub.lease.state()})
+
+
+async def kick_client(request):
+    admin = require_admin(request)
+    hub = request.app[K_HUB]
+    conn = request.match_info["conn"]
+    if not await hub.kick_conn(conn, "disconnected by administrator"):
+        raise web.HTTPNotFound(text="no such client")
+    request.app[K_AUTH].audit("client_kicked", admin.username, client_ip(request), conn)
+    return web.json_response({"ok": True})
+
+
+# ------------------------------------------------------------------------ audit
+async def audit_log(request):
+    require_admin(request)
+    try:
+        limit = int(request.query.get("limit", "200"))
+    except ValueError:
+        raise web.HTTPBadRequest(text="bad limit") from None
+    return web.json_response({"events": request.app[K_AUTH].audit_tail(limit)})
+
+
+# ----------------------------------------------------------------------- config
+async def get_config(request):
+    require_admin(request)
+    app = request.app
+
+    def ports():
+        try:
+            from serial.tools import list_ports
+            return [{"device": p.device, "description": p.description} for p in list_ports.comports()]
+        except Exception:
+            return []
+
+    cfg = app[K_CFG]
+    return web.json_response({
+        "config": cfg, "editable": {k: sorted(v) for k, v in EDITABLE.items()}, "locked": LOCKED,
+        "models": sorted(config.KNOWN_MODELS), "serial_ports": await _run(ports),
+        "writable": app.get(K_CFGPATH) is not None,
+    })
+
+
+async def put_config(request):
+    admin = require_admin(request)
+    app = request.app
+    path = app.get(K_CFGPATH)
+    if path is None:
+        raise web.HTTPConflict(text="no config file is in use; start with --config to enable editing")
+    body = await read_json(request)
+    for section, values in body.items():
+        if not isinstance(values, dict) or section not in EDITABLE:
+            raise web.HTTPBadRequest(text=f"section '{section}' is not editable here")
+        for key in values:
+            if key not in EDITABLE[section]:
+                raise web.HTTPForbidden(text=f"{section}.{key} cannot be changed from the web UI")
+    try:
+        # Merge onto the *file's* values (not DEFAULTS) so unrelated settings are preserved.
+        new = config._merge(copy.deepcopy(config.DEFAULTS), _flatten_over(app[K_CFG], body))
+        config.validate(new)
+        config.save(new, path)
+    except config.ConfigError as e:
+        raise web.HTTPBadRequest(text=str(e)) from None
+    changed = [f"{s}.{k}" for s, v in body.items() for k in v if app[K_CFG][s][k] != new[s][k]]
+    live_only = all((s, k) in LIVE for s, v in body.items() for k in v)
+    if ("logging", "level") in {(s, k) for s, v in body.items() for k in v}:
+        logging.getLogger().setLevel(new["logging"]["level"].upper())
+    app[K_CFG].update(new)
+    if any(k in ("rx_gain_db", "tx_gain_db") for k in body.get("audio", {})) and app[K_AUDIO]:
+        app[K_AUDIO].set_gains(new["audio"]["rx_gain_db"], new["audio"]["tx_gain_db"])     # takes effect immediately
+    app[K_AUTH].audit("config_changed", admin.username, client_ip(request), ", ".join(changed) or "no change")
+    return web.json_response({"ok": True, "changed": changed, "restart_required": bool(changed) and not live_only})
+
+
+def _flatten_over(current: dict, body: dict) -> dict:
+    out = copy.deepcopy(current)
+    for s, v in body.items():
+        out[s].update(v)
+    return out
+
+
+async def restart(request):
+    admin = require_admin(request)
+    b = await read_json(request)
+    if b.get("confirm") is not True:
+        raise web.HTTPBadRequest(text="confirmation required")
+    hook = request.app.get(K_RESTART)
+    if hook is None:
+        raise web.HTTPNotImplemented(text="restart is only available when running as a service (systemd restarts it)")
+    request.app[K_AUTH].audit("restart", admin.username, client_ip(request))
+    hook()
+    return web.json_response({"ok": True})
+
+
+# ------------------------------------------------------------------ diagnostics
+async def diagnostics(request):
+    require_admin(request)
+    app = request.app
+    drv, guard, hub = app[K_DRIVER], app[K_GUARD], app[K_HUB]
+    sysd, vers = await _run(sysinfo.system), await _run(sysinfo.versions)
+    audio = app[K_AUDIO].status() if app[K_AUDIO] else None
+    return web.json_response({
+        "app": {"version": __version__, "uptime_s": int(time.monotonic() - app[K_STARTED])},
+        "system": sysd, "versions": vers,
+        "radio": {"model": drv.caps.data["model"]["name"], "connected": drv.state.get("connected"),
+                  "mock": drv.is_mock, **drv.diagnostics()},
+        "ptt": {"permitted": guard.permitted, "keyed": guard.keyed, "owner": guard.owner, "max_tx_s": guard.max_tx_s},
+        "audio": audio,
+        "clients": hub.clients_info(), "lease": hub.lease.state(),
+        "log": [scrub(l) for l in list(RING.lines)[-200:]],
+    })
+
+
+def add_routes(app: web.Application) -> None:
+    r = app.router
+    r.add_get("/api/users", list_users)
+    r.add_post("/api/users", create_user)
+    r.add_patch("/api/users/{uid}", update_user)
+    r.add_delete("/api/users/{uid}", delete_user)
+    r.add_post("/api/me/password", change_own_password)
+    r.add_get("/api/clients", list_clients)
+    r.add_post("/api/clients/{conn}/kick", kick_client)
+    r.add_get("/api/audit", audit_log)
+    r.add_get("/api/config", get_config)
+    r.add_put("/api/config", put_config)
+    r.add_post("/api/admin/restart", restart)
+    r.add_get("/api/diagnostics", diagnostics)

@@ -1,0 +1,11 @@
+[Unit]
+Description=Set the Radio Remote HTTPS site name from the hostname
+Before=caddy.service
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/radio-remote-caddy-host
+
+[Install]
+WantedBy=multi-user.target

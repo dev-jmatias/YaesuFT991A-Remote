@@ -1,0 +1,27 @@
+# Caddy in front of Radio Remote. The app itself listens on 127.0.0.1:8080 only; Caddy is what the network sees.
+# Why Caddy: browsers only allow the MICROPHONE on HTTPS pages. Without HTTPS you can listen but not talk.
+#
+# Caddy's reverse_proxy already forwards WebSockets and sets X-Forwarded-For / X-Forwarded-Proto, which the app
+# trusts ONLY because the connection comes from 127.0.0.1. Never bind the app to 0.0.0.0 behind a proxy.
+
+# --- Option A: LAN, Caddy's own certificate authority --------------------------------------------------------
+# Each device must trust Caddy's root certificate once (see docs/06-security-remote.md).
+raspberrypi.local {
+	tls internal
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:8080
+}
+
+# --- Option B: Tailscale name with a real, publicly trusted certificate ---------------------------------------
+# Needs HTTPS enabled in the Tailscale admin console and Caddy allowed to talk to tailscaled
+# (REQUIRES VERIFICATION on your install: Caddy's `get_certificate tailscale` support and permissions).
+#
+# raspberrypi.your-tailnet.ts.net {
+# 	tls {
+# 		get_certificate tailscale
+# 	}
+# 	reverse_proxy 127.0.0.1:8080
+# }
+#
+# If you add a hostname the app does not see in the Host header, list the browser origin in config:
+#   [server] allowed_origins = ["https://raspberrypi.your-tailnet.ts.net"]

@@ -1,0 +1,73 @@
+# Yaesu FTDX101MP capability profile. Values: true | false | "unverified" ("unverified" is treated as false by the UI).
+# EXPERIMENTAL: written from the CAT manual only (FTDX101MP_D_CAT_OM_ENG_2101-I); no Yaesu FTDX101MP has been available for testing,
+# so [model] bench_tested = false and the app shows an "experimental profile" banner. Everything marked true is documented in the manual.
+[model]
+id = "ftdx101mp"
+name = "Yaesu FTDX101MP"
+cat_id = "0682"                        # ID; -> ID0682;
+verified_source = "FTDX101MP_D_CAT_OM_ENG_2101-I"
+bench_tested = false
+is_mock = false
+
+[features]
+vhf = false
+uhf = false
+antenna_switching = false
+swr_meter = true                      # RM6
+alc_meter = true                      # RM4
+comp_meter = true                     # RM3
+ptt = true                            # TX1 / TX0
+power_off_cat = true                  # PS0
+power_on_cat = true                   # PS1 after dummy data (1-2 s)
+c4fm = false
+dnr = true                            # NR / RL
+noise_blanker = true                  # NB / NL
+auto_notch = true                     # BC
+manual_notch = true                   # BP
+contour = true                        # CO
+apf = "unverified"                    # CW-only audio peak filter: not offered (did nothing on the FT-991A)
+if_shift = true                       # IS (0..1200 Hz, 20 Hz steps)
+width = true                          # SH (Table 3)
+agc = true                            # GT: OFF / FAST / MID / SLOW / AUTO
+ipo = true                            # PA
+att = false
+att_levels = true                     # RA: OFF / 6 / 12 / 18 dB
+rit = true
+xit = true
+processor = "unverified"              # PR/PL: the manual says PR 1 = OFF / 2 = ON, which was wrong on the FT-991A: verify before enabling
+monitor = true                        # ML
+tuner = true                          # AC00x tuner on/off (does not transmit)
+tuner_tune = "unverified"             # KEYS the transmitter: enable only after a dummy-load test (p.4)
+mic_select = true                     # EX SSB mod source menu
+dgid = false
+memories = "unverified"               # MC / MT exist in the manual; not implemented for this radio yet
+split = "unverified"                          # ST
+quick_split = "unverified"                    # QS
+vfo_b = "unverified"                          # FB / OI / AB / BA / SV
+# FTDX101 has two receivers: FB is the SUB band, not a VFO B, so the VFO B / split features stay off until verified
+
+[frequency]
+ranges = [[30000, 75000000]]          # FA / FB (manual)
+
+[modes]
+list = ["LSB", "USB", "CW-U", "CW-L", "AM", "FM", "DATA-U", "DATA-L", "RTTY-L", "RTTY-U", "PSK", "AM-N", "FM-N", "DATA-FM"]
+
+[levels.af_gain]
+min = 0
+max = 255
+label = "AF Gain"
+[levels.rf_gain]
+min = 0
+max = 255
+label = "RF Gain"
+[levels.mic_gain]
+min = 0
+max = 100
+label = "Mic Gain"
+[levels.rf_power]
+min = 5
+max = 200
+label = "TX Power"
+
+[bands]
+list = ["160m", "80m", "60m", "40m", "30m", "20m", "17m", "15m", "12m", "10m", "6m"]

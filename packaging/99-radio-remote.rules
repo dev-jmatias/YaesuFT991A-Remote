@@ -1,0 +1,8 @@
+# Installed to /etc/udev/rules.d/99-radio-remote.rules
+#
+# Silicon Labs USB-to-UART bridges (vendor 10c4) are what Yaesu radios use for CAT. On desktop images,
+# ModemManager probes such ports and may send AT commands to them: not what a radio's CAT port wants.
+# This tells ModemManager to leave them alone. It does not change permissions: serial ports are already
+# group "dialout", which the service user belongs to.
+SUBSYSTEM=="tty", ATTRS{idVendor}=="10c4", ENV{ID_MM_DEVICE_IGNORE}="1", ENV{ID_MM_PORT_IGNORE}="1"
+SUBSYSTEM=="usb", ATTRS{idVendor}=="10c4", ENV{ID_MM_DEVICE_IGNORE}="1"

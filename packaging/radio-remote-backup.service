@@ -1,0 +1,6 @@
+[Unit]
+Description=Back up Radio Remote configuration and user database
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/radio-remote/current/scripts/rr_admin.py backup --config /etc/radio-remote/config.toml --data-dir /var/lib/radio-remote --dest /var/backups/radio-remote --keep 14

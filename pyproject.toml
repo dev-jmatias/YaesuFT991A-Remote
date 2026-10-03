@@ -1,0 +1,17 @@
+[project]
+name = "radio-remote"
+version = "1.0.0"
+description = "Web-based remote control for Yaesu transceivers on a Raspberry Pi"
+requires-python = ">=3.11"
+dependencies = ["aiohttp>=3.9", "pyserial>=3.5", "aiortc>=1.9,<2", "numpy>=1.26"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-asyncio>=0.23"]
+
+[tool.setuptools.packages.find]
+where = ["backend"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["backend"]
