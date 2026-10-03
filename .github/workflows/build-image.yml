@@ -16,10 +16,11 @@ on:
 
 jobs:
   image:
-    # private repositories have no free arm64 runners, so the default is the standard x86 runner (QEMU emulation);
-    # in a public repository choose ubuntu-24.04-arm when running by hand for a much faster native build
-    runs-on: ${{ inputs.runner || 'ubuntu-24.04' }}
+    # native arm64 runner (free for public repositories, no emulation). A private repository has none: pick ubuntu-24.04 by hand
+    runs-on: ${{ inputs.runner || 'ubuntu-24.04-arm' }}
     timeout-minutes: 240
+    permissions:
+      contents: write        # to create the release and attach the image
     steps:
       - uses: actions/checkout@v4
 
@@ -47,8 +48,8 @@ jobs:
           pi-gen-version: arm64
           hostname: radio
           username: pi
-          # no password is set (the account stays locked): the user sets name, password, Wi-Fi and hostname in
-          # Raspberry Pi Imager ("Edit settings") when writing the image. SSH is on so those settings can use it.
+          # no password is set (the account stays locked): the user sets name, password, Wi-Fi and hostname with
+          # image/first-boot-settings.ps1 (or Raspberry Pi Imager's "Edit settings" in versions that offer it for custom images).
           enable-ssh: 1
           locale: en_GB.UTF-8
           timezone: Europe/London
@@ -62,8 +63,20 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+      - name: Checksum
+        id: sum
+        run: |
+          cd "$(dirname "${{ steps.build.outputs.image-path }}")"
+          sha256sum "$(basename "${{ steps.build.outputs.image-path }}")" > SHA256SUMS
+          cat SHA256SUMS
+          echo "path=$(pwd)/SHA256SUMS" >> "$GITHUB_OUTPUT"
+
       - name: Attach to the release (tags only)
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ steps.build.outputs.image-path }}
+          name: Radio Remote ${{ github.ref_name }} - Raspberry Pi image
+          body_path: image/RELEASE-NOTES.md
+          files: |
+            ${{ steps.build.outputs.image-path }}
+            ${{ steps.sum.outputs.path }}
