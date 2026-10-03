@@ -6,7 +6,7 @@ Status: **draft for review**. Nothing in this document is implemented yet.
 
 | Source | Location | Used for | Authority |
 |---|---|---|---|
-| FT-991A CAT Operation Reference Manual (1711-D), 20 pp. | `C:\Users\Jorge\Documents\991A\FT-991A_CAT_OM_ENG_1711-D.pdf` | Every FT-991A CAT claim below | **Official, authoritative** |
+| FT-991A CAT Operation Reference Manual (1711-D), 20 pp. | `...\991A\FT-991A_CAT_OM_ENG_1711-D.pdf` | Every FT-991A CAT claim below | **Official, authoritative** |
 | SCU-LAN10 Operation Manual (2311-D) | `...\991A\SCU-LAN10_...pdf` | Which radios Yaesu's own network-remote unit supports; remote power-on behaviour | Official |
 | `AH067_V0112.dat` | `...\991A\` | Not inspected: opaque binary, looks like a firmware image. Not needed. Never flash anything from this project. | n/a |
 | `Yaesu_Web_Control-main` (YWC, C#/.NET, **GPL-3.0**) | `...\991A\Yaesu_Web_Control-main` | Cross-check only (model IDs, field reports). **No code is copied.** Our project is a clean-room design; GPL-3.0 would bind any derivative. Third-party claims are *never* marked Confirmed. | Secondary / hearsay |
