@@ -47,7 +47,8 @@ Raspberry Pi OS **Lite** (a desktop session's PipeWire can hold the device; chec
 
 ## PTT does not work
 
-1. The button says "PTT DISABLED IN CONFIG": set `allow_ptt = true` in `/etc/radio-remote/config.toml`, restart.
+1. The button says "PTT DISABLED IN CONFIG": an administrator enables it in **Admin > Config > Transmitting (PTT)** (password
+   required), or sets `allow_ptt = true` in `/etc/radio-remote/config.toml` and restarts.
 2. "Request control first" / "X has control": take control (control bar).
 3. Radio offline, or "radio did not key": check CAT first.
 4. Released too soon: PTT is hold-to-talk; it un-keys if the page loses focus, the tab is hidden, the network drops (heartbeat 1 s), or after `safety.tx_timeout_s`.

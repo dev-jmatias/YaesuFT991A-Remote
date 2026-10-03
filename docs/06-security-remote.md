@@ -39,8 +39,8 @@ a flaky network or a second user can never leave the transmitter keyed or in the
 | WebSocket | session cookie, `Origin` must match `Host` (or `allowed_origins`), session re-checked on every message, 4 KB message cap, max 24 clients | `app.py` |
 | Command flood | token bucket 40/s (burst 80) per connection; heartbeats exempt; persistent abuse closes the socket | `ratelimit.py` |
 | Input | every command is a typed intent validated against the radio's capabilities; no raw CAT, no shell, no paths from the browser | `app.py`, `radio/controls.py` |
-| PTT | allow flag in the config **file** only; single owner; heartbeat; hard time limit; un-key on disconnect / lease change / shutdown; retried until acknowledged | `safety.py`, `lease.py` |
-| Web-editable config | an allow-list. `safety.allow_ptt`, `server.*`, `storage.*` can only be changed by editing the file on the Pi | `admin.py` |
+| PTT | allow flag (off by default; an administrator turns it on with a password re-check, audited); single owner; heartbeat; hard time limit; un-key on disconnect / lease change / shutdown; retried until acknowledged | `safety.py`, `lease.py`, `admin.py` |
+| Web-editable config | an allow-list. `server.*` and `storage.*` can only be changed by editing the file on the Pi; `safety.allow_ptt` only through its own endpoint (administrator, password re-entered, throttled, audited) | `admin.py` |
 | Headers | CSP (no inline script/style), `X-Frame-Options: DENY`, `nosniff`, `Permissions-Policy` (mic for self only), HSTS over HTTPS, `no-store` on API | `app.py` |
 | Logs | passwords, cookies, CSRF tokens and `rr_session` values are scrubbed before any handler; the audit table records logins, failures, control changes, PTT, user/config changes, power-off, restarts | `logs.py`, `auth.py` |
 | Last-resort recovery | `python -m radio_remote.cli reset-password USER` on the Pi (needs filesystem access, prompts for the password) | `cli.py` |
@@ -97,7 +97,8 @@ WebRTC audio selects ports dynamically; with `deny incoming` allow UDP from your
 ## Operating notes
 
 - **First run**: the first visit creates the administrator. Do this on the LAN, not over a forwarded port.
-- **Enable PTT**: set `safety.allow_ptt = true` in the config file and restart. It cannot be turned on from the web UI.
+- **Enable PTT**: Admin > Config > *Transmitting (PTT)* (administrator password required), or set `safety.allow_ptt = true` in
+  the config file and restart. It is off by default and every change is in the audit log.
 - **Lost admin password**: `python -m radio_remote.cli reset-password <user>` on the Pi.
 - **Backup**: the config file and `data/radio-remote.db` (users, sessions, audit).
 - **Radio-side backstop**: set the radio's own TX time-out (menu 036 on the FT-991A) as the last line of defence.

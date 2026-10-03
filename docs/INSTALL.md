@@ -69,8 +69,10 @@ Use `bash install.sh` (not `./install.sh`) when the files came from a Windows PC
 3. **Admin > Config**: choose the radio model and the serial port (`auto` finds an FT-991A), *Save*, restart the service when asked.
 4. Check the radio shows *online* and the frequency follows the VFO knob.
 5. Set the radio's own menus for USB audio and CAT: [radio connection](radio-connection.md) (FT-991A: CAT rate, USB audio levels, mic source).
-6. **Transmitting is off.** When you are ready (with a dummy load first), edit `/etc/radio-remote/config.toml`, set `allow_ptt = true`
-   under `[safety]`, then `sudo systemctl restart radio-remote`. This can not be done from the web page, on purpose.
+6. **Transmitting is off.** When you are ready (with a dummy load first), sign in as the administrator, open **Admin > Config >
+   Transmitting (PTT)**, choose *Enable transmitting…* and type your password again. It takes effect at once and is kept after a
+   restart. (Alternatively edit `/etc/radio-remote/config.toml`, set `allow_ptt = true` under `[safety]`, then
+   `sudo systemctl restart radio-remote`.)
 
 ## 6. Remote access with Tailscale
 
@@ -79,8 +81,10 @@ follow [tailscale](tailscale.md) to publish the app on your tailnet over HTTPS. 
 
 ## 7. Updating, backup, removal
 
-* Update: copy the new pack or source folder to the Pi and run `sudo bash update.sh` (or, from the pack, `sudo bash install-everything.sh` again).
-  The old release is kept and the update rolls back by itself if the new one does not start.
+* Update: administrators are told in the web page when a newer release exists. Then run on the Pi
+  `sudo /opt/radio-remote/current/scripts/self_update.sh` (downloads and verifies the new release, makes a backup, installs it).
+  Without internet: copy the release's `radio-remote-vX.Y.Z.tar.gz` to the Pi, unpack it and run `sudo ./update.sh` in the folder.
+  The old release is kept and the update rolls back by itself if the new one does not start. Details: [operations](operations.md).
 * A daily backup runs automatically; see [operations](operations.md) for backup, restore and the configuration file.
 * Remove: `sudo bash scripts/uninstall.sh` (keeps configuration and backups) or `--purge` (deletes them too).
 

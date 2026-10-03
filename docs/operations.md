@@ -16,8 +16,10 @@
 ## Configuration
 
 Edit in the web UI (**Admin > Config**) or in the file. The file is the only place for the settings the UI refuses to
-change on purpose: `safety.allow_ptt`, `server.*`, `storage.*`. Changes need `sudo systemctl restart radio-remote`
-(the log level applies live). The UI's "Restart service now" button does the same.
+change on purpose: `server.*`, `storage.*`. The transmit permission (`safety.allow_ptt`) has its own switch in the same page
+(*Transmitting (PTT)*): enabling asks for the administrator's password, applies at once, is written to the file and is audited.
+Other changes need `sudo systemctl restart radio-remote` (the log level and audio gains apply live). The UI's
+"Restart service now" button does the same.
 
 | Key | Meaning | Default |
 |---|---|---|
@@ -26,7 +28,7 @@ change on purpose: `safety.allow_ptt`, `server.*`, `storage.*`. Changes need `su
 | `radio.model` | `mock` or `ft991a` | `mock` |
 | `radio.serial_port` / `baud` | CAT port (`auto` probes) and speed | `auto` / 38400 |
 | `radio.hamlib_model` | reserved (Hamlib backend is not implemented) | 0 |
-| `safety.allow_ptt` | **file only.** Must be `true` before a real radio can be keyed | `false` |
+| `safety.allow_ptt` | must be `true` before a real radio can be keyed. Set it with the *Transmitting (PTT)* switch in Admin > Config (password required) or in the file | `false` |
 | `safety.tx_timeout_s` | server-enforced maximum continuous transmission | 120 |
 | `safety.ptt_heartbeat_timeout_s` | un-key if the PTT holder is silent this long | 1.0 |
 | `safety.control_request_timeout_s` | an unanswered request for control passes after this long (trusted users skip the wait) | 10 |
@@ -35,7 +37,12 @@ change on purpose: `safety.allow_ptt`, `server.*`, `storage.*`. Changes need `su
 | `audio.rx_gain_db` / `tx_gain_db` | -30..30 dB; a limiter always follows TX gain | 0 |
 | `audio.opus_bitrate` / `max_peers` | codec rate; simultaneous listeners | 32000 / 3 |
 | `ui.tuning_steps_hz` | step choices in the UI | 10..10000 |
+| `ui.meter_alc_full` / `meter_comp_full` | raw ALC / COMP value at which the radio's own meter is full (provisional calibration) | 160 / 255 |
+| `ui.swr_warn` | SWR warning: while transmitting at or above this ratio the SWR bar turns red and a message appears; `0` = off, otherwise 1.2..10 | 3.0 |
+| `ui.swr_raw_at_3` | only for radios that report a raw SWR value (FT-991A): the raw reading (10..255) at which the radio's own meter shows 3:1; the ratio is estimated on a straight line from 1:1 = 0. **Provisional**: the CAT manual gives no calibration | 100 |
 | `logging.level` | DEBUG/INFO/WARNING/ERROR | INFO |
+| `updates.check` | once a day ask GitHub whether a newer release exists and tell the administrators (nothing is installed automatically); also a switch in Admin > Config > Updates | true |
+| `updates.repo` | the GitHub repository to ask (`owner/name`); file only | `dev-jmatias/YaesuFT991A-Remote` |
 | `storage.data_dir` | database location | `/var/lib/radio-remote` |
 
 ## Services
@@ -60,12 +67,32 @@ control holder and the recent log. `sudo scripts/doctor.sh` prints similar infor
 
 ## Updating
 
+**Update notice.** Once a day the server asks GitHub whether a newer release exists (one anonymous, read-only request to
+`api.github.com`; switch it off in *Admin > Config > Updates* or with `[updates] check = false`). When there is one,
+administrators see a bar at the top of the page ("Radio Remote v1.2.0 is available") with a link to the release notes. Nothing is
+downloaded or installed by the page.
+
+**Update from the Pi** (needs internet on the Pi):
+
 ```bash
-cd radio-remote
-git pull
+sudo /opt/radio-remote/current/scripts/self_update.sh --check     # is there a newer release? (no root needed)
+sudo /opt/radio-remote/current/scripts/self_update.sh             # download, verify the checksum, install
+```
+
+It downloads the release's update package (`radio-remote-vX.Y.Z.tar.gz`) and its `SHA256SUMS`, refuses the package if the checksum
+differs or it holds anything unexpected, then runs the package's own `update.sh`. `--force` reinstalls the newest release even if it is
+not newer.
+
+**Without internet on the Pi**, or from the source code:
+
+```bash
+# on a computer with internet: download radio-remote-vX.Y.Z.tar.gz from the Releases page, copy it to the Pi, then
+tar xzf radio-remote-vX.Y.Z.tar.gz && cd radio-remote
 sudo ./update.sh --dry-run        # optional preview
 sudo ./update.sh
 ```
+
+(From a git checkout: `git pull`, then `sudo ./update.sh`; build the manual first with `python scripts/build_docs.py` if you want it on the Pi.)
 
 `update.sh`: backs up config and users, installs the new version **beside** the old one (including Python packages,
 before anything is switched), switches, restarts, and checks health. If the new version is not healthy it switches back
@@ -89,6 +116,13 @@ What is backed up: **`/etc/radio-remote/config.toml`** and **`/var/lib/radio-rem
 snapshot even while running). That is everything worth keeping; the program itself is reproducible from git.
 Restore stops the service, keeps the replaced files as `*.before-restore`, restores, restarts and checks health.
 Copy backups off the Pi occasionally: they are on the same SD card.
+
+**Settings only, from the web page.** *Admin > Config > Settings backup* has **Download settings** (a small `.toml` file with the
+radio, audio, meter and limit settings: no accounts, no passwords) and **Restore from file…**. A restore takes only the settings the web page
+may change; the listener address, the storage folder and the transmit permission (`server.*`, `storage.*`, `safety.allow_ptt`) are never taken
+from a file, so an old backup or a file from another Pi cannot lock you out or switch transmitting on. The replaced config is kept as
+`config.toml.bak`, the change is audited (`config_backup`, `config_restored`) and a restart applies it. Use the daily archive above (or
+`restore.sh`) when you also need the user accounts.
 
 ## Forgot the admin password
 

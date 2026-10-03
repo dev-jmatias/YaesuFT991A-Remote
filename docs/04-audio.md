@@ -30,7 +30,7 @@ configurable with `audio.opus_bitrate`.
 
 ## NOT verified yet (needs your hardware)
 
-1. **Pi CPU**: run `python scripts/audio_spike.py` on the Pi 4 (and a 3B+ if you have one) and paste the output.
+1. **Pi CPU**: run `python tools/audio_spike.py` on the Pi 4 (and a 3B+ if you have one) and paste the output.
 2. **Real ALSA devices**: capture/playback through the radio's USB codec.
 3. **Browser microphone**: the preview pane blocks microphone access, so only a synthetic mic track has been tested.
    Needs HTTPS or localhost (see architecture doc, section 5.4). Phone/tablet over plain `http://raspberrypi.local` cannot use the mic.

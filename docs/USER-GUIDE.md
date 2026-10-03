@@ -41,6 +41,16 @@ from the Pi itself (no internet needed).
 * **VFO-A panel.** Big frequency (tap a digit to make it the tuning step; on a computer the mouse wheel over a digit tunes by that digit),
   mode and band, the **signal (S) meter**, and below it the small **power, SWR, ALC and COMP** meters. ALC and COMP are shown as 0-100 %,
   red above 50 %. A **TX** badge appears while transmitting. Top right: the **speaker** and **microphone** switches (see Audio).
+  Next to RX / TX / MEM, small **status lights** show the radio's receive path: one light for the **preamp** that names the setting in use
+  (**IPO**, **AMP1** or **AMP2**), **ATT** (attenuator), one light for the **AGC** that names its setting (**AGC FAST**, **AGC MID**,
+  **AGC SLOW** or **AGC AUTO**; it is dark and reads **AGC OFF** when the AGC is off) and **TUNER** (antenna tuner).
+  **Green = active, dark = inactive**; TUNER blinks amber while a tune runs. They
+  only show what the radio reports (change the settings in *Filters & DSP > Receiver* and *Transmit*). On a phone they sit on a row of
+  their own under VFO-A. A radio profile without one of these functions simply does not show that light. For a cleaner header, switch
+  off the lights you do not need in **Account > Display** (this device only).
+  **SWR warning:** while you transmit at or above the SWR limit (default 3:1, set by an administrator in Config > Meters, 0 = off) the
+  SWR bar turns red and a line under the meters says *High SWR: 3.4:1 - check the antenna and the cable*; it stays for 5 seconds after
+  the transmission. The FT-991A reports only a raw SWR value, so its ratio is an estimate ("about").
 * **VFO-B** is the attached row under VFO-A: its mode, band and frequency. In split operation the transmit VFO gets the red TX badge.
   A purple **MEM 005** badge means the radio is in memory mode.
 * **Tuning scale.** Swipe or drag sideways (a quick flick keeps gliding). The numbers on the scale follow the tuning step; **x10**
@@ -65,12 +75,15 @@ PTT stays at the bottom on every tab so you can adjust a level while transmittin
 
 **Memories** (VFO tools) lists the channels stored in the radio (001-099): number, name, frequency, mode. Type in the box to filter. Tap a
 channel to recall it. **Back to VFO** returns to the VFO. **Re-read** reads the list again after you changed memories on the radio.
-Memories are never created, changed or deleted from here; do that on the radio.
+Memories are never created, changed or deleted from here; do that on the radio. The list is read in the background a few seconds after the
+radio connects, so it opens at once; it is read again whenever the radio reconnects.
 
 ## 5. Transmitting
 
-**Transmitting is disabled until the owner enables it** in the configuration file on the Pi (`allow_ptt = true`); the button then says
-*Hold to transmit*. Rules that always apply:
+**Transmitting is disabled until the owner enables it**: an administrator opens **Admin > Config > Transmitting (PTT)**, chooses
+*Enable transmitting…* and types their password again (or sets `allow_ptt = true` in the configuration file on the Pi). The button then
+says *Hold to transmit*. An administrator can switch it off again at any time, which also stops a transmission in progress.
+Rules that always apply:
 
 * **Hold** the button to transmit; let go to stop. The server un-keys on any hiccup: lost connection, lost control, time limit, shutdown.
 * Only the client with control can transmit; microphone audio reaches the radio only while that client is keyed.
@@ -78,6 +91,11 @@ Memories are never created, changed or deleted from here; do that on the radio.
   microphone. If it is on MIC, a yellow note reminds you that remote audio is not transmitted. Switch it back to REAR when you finish
   operating at the radio.
 * **Tune** makes the radio transmit a carrier for a few seconds while the antenna tuner matches. Use an antenna or dummy load.
+* **Lock PTT** (button above *Hold to transmit*, next to the mic input choice) prevents accidental transmissions from **this device**:
+  while it is on (amber, "PTT locked") the PTT button and **Tune** cannot be used. A transmission that is already running can still be
+  released, and switching the lock on while holding PTT lets go at once. The choice is remembered in this browser; other devices have
+  their own switch. It is a convenience, not a security setting: the server's own safeguards (permission, control, heartbeat, time
+  limit) work as before.
 * A time limit (default 120 s) stops over-long transmissions.
 
 ## 6. Audio
@@ -102,7 +120,9 @@ Memories are never created, changed or deleted from here; do that on the radio.
 ## 8. Administrators
 
 **Admin** has these tabs: **Users** (create, roles, trusted, reset password), **Clients** (connected devices; disconnect one), **Config** (radio model,
-serial port, audio devices and gains, meter calibration, time limits; some changes need a restart), **Diagnostics** (system, radio link, audio and the recent log)
+serial port, audio devices and gains, meter calibration, SWR warning limit, time limits, the transmit switch and **Settings backup**:
+download the settings to a file and restore them later; **Updates**: whether a newer release exists and how to install it; some changes need a
+restart), **Diagnostics** (system, radio link, audio and the recent log)
 and **Audit** (who did what). *Power off* switches the radio to
 standby; when the radio is off, the offline banner shows **Power on radio**. Details: [operations](operations.md).
 
