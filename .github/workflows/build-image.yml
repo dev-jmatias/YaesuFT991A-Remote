@@ -8,14 +8,18 @@ on:
       release:
         description: "Debian release of the base image (Raspberry Pi OS current: trixie; older: bookworm)"
         default: "trixie"
+      runner:
+        description: "ubuntu-24.04 (works everywhere, builds under emulation: slower) or ubuntu-24.04-arm (fast, public repositories only)"
+        default: "ubuntu-24.04"
   push:
     tags: ["v*"]
 
 jobs:
   image:
-    # a native arm64 runner: no QEMU, much faster than emulating on x86
-    runs-on: ubuntu-24.04-arm
-    timeout-minutes: 120
+    # private repositories have no free arm64 runners, so the default is the standard x86 runner (QEMU emulation);
+    # in a public repository choose ubuntu-24.04-arm when running by hand for a much faster native build
+    runs-on: ${{ inputs.runner || 'ubuntu-24.04' }}
+    timeout-minutes: 240
     steps:
       - uses: actions/checkout@v4
 
