@@ -41,6 +41,16 @@ and goes back by itself if the new version does not start. Settings and accounts
 | `radio-remote-v….tar.gz` | the program only: used by `self_update.sh`, or by hand to update a running Pi |
 | `SHA256SUMS` | checksums of all of the above |
 
+### What is new in 1.1.1
+
+- **Remote access with Tailscale now works out of the box**: after `sudo tailscale up`, run
+  `sudo /opt/radio-remote/current/scripts/tailscale_setup.sh`. Until now the HTTPS front end answered only to `<hostname>.local`, so the
+  Tailscale name (`<pi>.<tailnet>.ts.net`), the `100.x` address and any port number gave no answer. The script adds the Tailscale name,
+  gets a real certificate for it, checks the configuration before using it, and keeps it across updates and reboots. Switch on *MagicDNS* and
+  *HTTPS Certificates* in the Tailscale admin console first. Guide: [docs/tailscale.md](https://github.com/dev-jmatias/YaesuFT991A-Remote/blob/main/docs/tailscale.md).
+- Raspberry Pi Imager's own screens (hostname, user, password, Wi-Fi) are confirmed to work with the image through the content repository
+  link above.
+
 ### What is new in 1.1.0
 
 - **Status lights** next to RX/TX: the preamp setting (IPO / AMP1 / AMP2), ATT, AGC (FAST / MID / SLOW / AUTO) and the antenna tuner; each can
@@ -58,7 +68,7 @@ and goes back by itself if the new version does not start. Settings and accounts
 ### Safe by default
 
 - **Transmitting is off** until an administrator switches it on. The image contains **no password, key or login**: the account stays locked
-  until you set one with the settings script (or Imager's settings for route B).
+  until you set one in Imager's screens (or with the settings script). Root login stays disabled; your user has `sudo`.
 - HTTPS uses a local certificate (Caddy): your browser asks you to trust it once.
 - Remote operation must be allowed by your licence; set the radio's own TX time-out as a last backstop.
 
