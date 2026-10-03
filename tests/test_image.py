@@ -30,6 +30,14 @@ def test_pi_gen_stage_scripts_are_executable_in_git():
             assert mode == "100755", f"{rel} must be committed executable (git update-index --chmod=+x {rel})"
 
 
+def test_settings_script_does_not_pipe_the_password_through_powershell():
+    # regression: `$pw | openssl passwd -6 -stdin` sends "\r\n" after the password from PowerShell, the stored hash then
+    # belonged to "password<CR>" and no typed password was ever accepted (SSH "Permission denied").
+    text = (ROOT / "image" / "first-boot-settings.ps1").read_text(encoding="utf-8")
+    assert "New-PasswordHash" in text and "StandardInput.BaseStream.Write" in text
+    assert "| & $openssl" not in text
+
+
 def test_stage_layout_matches_pi_gen():
     assert (STAGE / "EXPORT_IMAGE").read_text().strip().startswith("IMG_SUFFIX")
     assert "copy_previous" in (STAGE / "prerun.sh").read_text()

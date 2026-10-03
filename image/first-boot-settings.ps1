@@ -25,6 +25,26 @@ function Ask($prompt, $default = "") {
   $a = Read-Host ($(if ($default) { "$prompt [$default]" } else { $prompt }))
   if ([string]::IsNullOrWhiteSpace($a)) { $default } else { $a.Trim() }
 }
+# SHA-512 crypt hash of the password. The password goes to openssl's stdin as exact bytes WITHOUT a trailing newline:
+# piping a string from PowerShell appends "\r\n", which would silently become part of the password.
+function New-PasswordHash($password, $openssl, $salt = "") {
+  $psi = New-Object Diagnostics.ProcessStartInfo
+  $psi.FileName = $openssl
+  foreach ($a in @("passwd", "-6")) { $psi.ArgumentList.Add($a) }
+  if ($salt) { $psi.ArgumentList.Add("-salt"); $psi.ArgumentList.Add($salt) }
+  $psi.ArgumentList.Add("-stdin")
+  $psi.RedirectStandardInput = $true; $psi.RedirectStandardOutput = $true; $psi.RedirectStandardError = $true
+  $psi.UseShellExecute = $false
+  $p = [Diagnostics.Process]::Start($psi)
+  $bytes = (New-Object Text.UTF8Encoding($false)).GetBytes($password)
+  $p.StandardInput.BaseStream.Write($bytes, 0, $bytes.Length)
+  $p.StandardInput.BaseStream.Flush()
+  $p.StandardInput.Close()
+  $out = $p.StandardOutput.ReadToEnd().Trim()
+  $p.WaitForExit()
+  if ($p.ExitCode -ne 0 -or $out -notmatch '^\$6\$') { throw "could not create the password hash: $($p.StandardError.ReadToEnd())" }
+  $out
+}
 function YamlQuote($s) { '"' + ($s -replace '\\', '\\' -replace '"', '\"') + '"' }
 
 # ---- where to write
@@ -57,7 +77,7 @@ if (-not $PasswordHash) {
   $openssl = @("C:\Program Files\Git\usr\bin\openssl.exe", "C:\Program Files (x86)\Git\usr\bin\openssl.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
   if (-not $openssl) { $c = Get-Command openssl -ErrorAction SilentlyContinue; if ($c) { $openssl = $c.Source } }
   if (-not $openssl) { throw "openssl not found (it ships with Git for Windows)" }
-  $PasswordHash = ($p1 | & $openssl passwd -6 -stdin).Trim()
+  $PasswordHash = New-PasswordHash $p1 $openssl
   $p1 = $p2 = $null
   if ($PasswordHash -notmatch '^\$6\$') { throw "could not create the password hash" }
 }
