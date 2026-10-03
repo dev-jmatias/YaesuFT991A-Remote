@@ -116,6 +116,10 @@ network:
 "@
 }
 $enc = New-Object Text.UTF8Encoding($false)
+# a new instance id makes cloud-init treat the next boot as a first boot again, so running this script on a card that has
+# already booted (to fix the password, hostname or Wi-Fi) takes effect without re-flashing. Data in /var/lib/radio-remote
+# (the admin account and settings of the web app) is kept; the SSH host keys are regenerated.
+[IO.File]::WriteAllText($target + "meta-data", "instance_id: rr-$(Get-Date -Format 'yyyyMMddHHmmss')`n", $enc)
 [IO.File]::WriteAllText($target + "user-data", $userData.Replace("`r`n", "`n") + "`n", $enc)
 if ($net) { [IO.File]::WriteAllText($target + "network-config", $net.Replace("`r`n", "`n") + "`n", $enc) }
 
