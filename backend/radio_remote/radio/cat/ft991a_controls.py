@@ -219,7 +219,8 @@ def _p_ex(p):
             raise FrameError("bad EX106")
         return {"mic_select": "REAR" if p[3] == "1" else "MIC"}
     if p.startswith("153"):
-        if len(p) != 5 or not p[3:].isdigit():
+        # the manual says two digits (00..99) but a real FT-991A (seen on a Raspberry Pi bench run) answers 'EX153000;': accept both
+        if len(p) not in (5, 6) or not p[3:].isdigit():
             raise FrameError("bad EX153")
         n = int(p[3:])
         return {"dgid": "AUTO" if n == 0 else str(n)}

@@ -184,6 +184,8 @@ def test_dgid_frames():
     assert frame.decode("EX15300;") == {"dgid": "AUTO"}
     assert frame.decode("EX15312;") == {"dgid": "12"}
     assert frame.decode("EX15399;") == {"dgid": "99"}
+    assert frame.decode("EX153000;") == {"dgid": "AUTO"}       # a real radio answers with three digits (was logged as a bad frame)
+    assert frame.decode("EX153012;") == {"dgid": "12"}
     assert frame.decode("EX03100;") == {}                      # other menus are not interpreted
     with pytest.raises(frame.FrameError):
         frame.decode("EX1531;")
