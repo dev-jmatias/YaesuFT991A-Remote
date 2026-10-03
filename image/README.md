@@ -16,9 +16,13 @@ built or booted** - treat the first build as a test (see "First build" below).
 ## Using the image
 
 1. Download `radio-remote-*.img.xz` (GitHub Actions artifact or release).
-2. Open Raspberry Pi Imager > Choose OS > Use custom > select the file.
-3. Click **Edit settings**: set a hostname (for example `radio`), a user name and password, Wi-Fi if needed, and keep SSH enabled.
-4. Write the card, boot the Pi, wait about two minutes, then open `https://<hostname>.local` and create the administrator account.
+2. Open Raspberry Pi Imager > Choose OS > Use custom > select the file and write the card. (Imager 2.x shows its
+   "Edit settings" step only for official Raspberry Pi OS images, so it is not offered here.)
+3. Take the card out and put it back in the PC so Windows shows the small **bootfs** drive, then run
+   `pwsh image\first-boot-settings.ps1`. It asks for a hostname, user name, password, Wi-Fi and time zone and writes the
+   cloud-init files (`user-data`, `network-config`) onto the card. The password is stored only as a hash. (Older Imager
+   versions: use "Edit settings" instead.)
+4. Eject the card, boot the Pi, wait about two minutes, then open `https://<hostname>.local` and create the administrator account.
 5. Admin > Config: choose the radio model and the serial port. For remote access: `sudo tailscale up`.
 
 ## Building it
@@ -50,6 +54,7 @@ image/
       00-run.sh                        host side: copy the program and the first-boot helper into the image
       01-run-chroot.sh                 inside the image: run install.sh --image
       files/radio-remote-caddy-host.*  keeps the HTTPS name equal to <hostname>.local
+  first-boot-settings.ps1              writes hostname/user/password/Wi-Fi onto the flashed card (cloud-init files)
 ```
 
 ## First build - what to check
