@@ -5,7 +5,8 @@ set -u
 CADDYFILE=/etc/caddy/Caddyfile
 HOST="$(hostname).local"
 if grep -q "radio-remote managed" "$CADDYFILE" 2>/dev/null && grep -q "^$HOST {" "$CADDYFILE"; then
-  exit 0                                   # already right
+  exit 0                                   # already right (any Tailscale name added by tailscale_setup.sh is kept in the hosts file)
 fi
-/opt/radio-remote/venv/bin/python /opt/radio-remote/current/scripts/rr_admin.py render-caddy --host "$HOST" --out "$CADDYFILE" || true
+/opt/radio-remote/venv/bin/python /opt/radio-remote/current/scripts/rr_admin.py render-caddy --host "$HOST" \
+  --hosts-file /etc/radio-remote/caddy-extra-hosts --out "$CADDYFILE" || true
 exit 0

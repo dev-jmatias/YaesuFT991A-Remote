@@ -100,6 +100,77 @@ def test_render_caddy_respects_foreign_files_but_replaces_debian_default(tmp_pat
     assert list(tmp_path.glob("Caddyfile.bak-*"))            # ...after being backed up
 
 
+def test_render_caddy_with_a_tailscale_name(tmp_path):
+    # a *.ts.net site gets its certificate from Tailscale (no 'tls internal'), the LAN name keeps Caddy's own authority
+    rc, out = caddy(tmp_path, "pi.local", "--extra-host", "Pi.Tail1234.ts.net.")
+    text = out.read_text()
+    assert rc == 0 and "pi.local {\n\ttls internal" in text and "pi.tail1234.ts.net {\n\tencode zstd gzip" in text
+    ts_block = text.split("pi.tail1234.ts.net {")[1].split("}")[0]
+    assert "tls internal" not in ts_block and "reverse_proxy 127.0.0.1:8080" in ts_block
+
+
+def test_render_caddy_reads_extra_names_from_the_hosts_file(tmp_path):
+    hosts = tmp_path / "caddy-extra-hosts"
+    hosts.write_text("# written by tailscale_setup.sh\npi.tail1234.ts.net   # my Pi\n\nsecond.example.ts.net\npi.tail1234.ts.net\n")
+    rc, out = caddy(tmp_path, "pi.local", "--hosts-file", str(hosts))
+    text = out.read_text()
+    assert rc == 0 and text.count("pi.tail1234.ts.net {") == 1 and "second.example.ts.net {" in text    # duplicates dropped
+    rc, out = caddy(tmp_path, "pi.local", "--hosts-file", str(tmp_path / "does-not-exist"))              # a missing file is fine
+    assert rc == 0 and "ts.net" not in out.read_text()
+    assert out.read_text().startswith("# radio-remote managed")                                          # still recognised as ours
+
+
+@pytest.mark.parametrize("bad", ["evil.com {\nfile_server", "a b.ts.net", "x;y", "-bad.ts.net", "a/b", ""])
+def test_render_caddy_refuses_unusual_extra_names(tmp_path, bad):
+    out = tmp_path / "Caddyfile"
+    rc = rr_admin.main(["render-caddy", "--host", "pi.local", f"--extra-host={bad}", "--out", str(out)])
+    assert rc == 2 and not out.exists()
+
+
+# ------------------------------------------------------------------ tailscale
+def ts_status(tmp_path, **over):
+    status = {"BackendState": "Running", "Self": {"DNSName": "Pi.tail1234.ts.net."}, "CertDomains": ["pi.tail1234.ts.net"]}
+    status.update(over)
+    f = tmp_path / "status.json"
+    f.write_text(json.dumps(status))
+    return f
+
+
+def test_tailscale_name_prints_the_name_when_everything_is_ready(tmp_path, capsys):
+    assert rr_admin.main(["tailscale-name", "--status-file", str(ts_status(tmp_path))]) == 0
+    assert capsys.readouterr().out.strip() == "pi.tail1234.ts.net"
+
+
+@pytest.mark.parametrize("over, code, hint", [
+    ({"BackendState": "NeedsLogin"}, 2, "tailscale up"),
+    ({"Self": {"DNSName": ""}}, 3, "MagicDNS"),
+    ({"CertDomains": []}, 3, "HTTPS Certificates"),
+    ({"CertDomains": ["other.tail1234.ts.net"]}, 3, "HTTPS Certificates"),
+    ({"Self": {"DNSName": "pi.example.com."}, "CertDomains": ["pi.example.com"]}, 4, "unexpected"),
+])
+def test_tailscale_name_explains_what_is_missing(tmp_path, capsys, over, code, hint):
+    assert rr_admin.main(["tailscale-name", "--status-file", str(ts_status(tmp_path, **over))]) == code
+    assert hint in capsys.readouterr().err
+
+
+def test_tailscale_name_without_tailscale_or_with_garbage(tmp_path, capsys):
+    bad = tmp_path / "bad.json"
+    bad.write_text("not json")
+    assert rr_admin.main(["tailscale-name", "--status-file", str(bad)]) == 2
+    assert rr_admin.main(["tailscale-name", "--status-file", str(tmp_path / "missing.json")]) == 2
+
+
+def test_installer_and_boot_helper_keep_the_tailscale_name():
+    root = Path(__file__).resolve().parents[1]
+    assert '--hosts-file "$CONF_DIR/caddy-extra-hosts"' in (root / "install.sh").read_text()
+    helper = (root / "image" / "stage-radio-remote" / "00-radio-remote" / "files" / "radio-remote-caddy-host.sh").read_text()
+    assert "--hosts-file /etc/radio-remote/caddy-extra-hosts" in helper
+    script = (root / "scripts" / "tailscale_setup.sh").read_text()
+    for needle in ("TS_PERMIT_CERT_UID=caddy", "caddy validate", "tailscale-name", "caddy-extra-hosts", "--remove", "--dry-run"):
+        assert needle in script, needle
+    assert script.index("caddy validate") < script.index('install -m 0644 "$new" "$CADDYFILE"')    # checked before it replaces the file
+
+
 # ----------------------------------------------------------- backup / restore
 def make_state(tmp_path):
     data = tmp_path / "data"

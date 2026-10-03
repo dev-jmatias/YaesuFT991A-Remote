@@ -71,6 +71,8 @@ After a radio power cycle, the radio forgets auto-information; the app re-enable
 
 ## Tailscale connectivity
 
+- The Pi shows up in Tailscale but the page does not open (no answer, any port): the HTTPS front end does not know the Tailscale
+  name yet. Run `sudo /opt/radio-remote/current/scripts/tailscale_setup.sh` ([tailscale.md](tailscale.md)).
 - `tailscale status` on both ends; `tailscale ping <pi>` shows direct vs relayed (DERP) path.
 - HTTPS names need HTTPS certificates enabled in the Tailscale admin console.
 - Audio over a relayed path is laggy or fails (WebRTC uses UDP); a direct path is needed for good audio.

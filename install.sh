@@ -149,7 +149,7 @@ run systemctl enable $NOW radio-remote-backup.timer
 # ---- HTTPS ------------------------------------------------------------------------------------------------------
 if [ "$WITH_CADDY" = 1 ]; then
   echo "==> HTTPS (Caddy) for https://$HOST_NAME"
-  run python3 "$NEW_RELEASE/scripts/rr_admin.py" render-caddy --host "$HOST_NAME" --out /etc/caddy/Caddyfile
+  run python3 "$NEW_RELEASE/scripts/rr_admin.py" render-caddy --host "$HOST_NAME" --hosts-file "$CONF_DIR/caddy-extra-hosts" --out /etc/caddy/Caddyfile
   run systemctl enable $NOW caddy
   if [ "$IMAGE" != 1 ]; then run systemctl reload caddy || run systemctl restart caddy; fi
 fi

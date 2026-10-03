@@ -50,7 +50,8 @@ Full guide: [docs/INSTALL.md](docs/INSTALL.md).
 Open `https://<hostname>.local` (your browser asks once to trust the local certificate). The first visit creates the administrator:
 use your **callsign** and a password. Then **Admin > Config**: choose the radio model and the serial port, Save, Restart.
 **Transmitting is off** until an administrator switches it on in Admin > Config > *Transmitting (PTT)* (password required): test with
-a dummy load first. Remote access from outside your home: [Tailscale](docs/tailscale.md), no router ports to open.
+a dummy load first. Remote access from outside your home: [Tailscale](docs/tailscale.md) (`sudo tailscale up`, then
+`sudo /opt/radio-remote/current/scripts/tailscale_setup.sh`), no router ports to open.
 
 ## Updating
 

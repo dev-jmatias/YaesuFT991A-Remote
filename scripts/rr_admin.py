@@ -63,11 +63,43 @@ def cmd_render_config(a) -> int:
     return 0
 
 
+_HOSTNAME = re.compile(r"[A-Za-z0-9]([A-Za-z0-9.-]{0,251}[A-Za-z0-9])?")
+
+
+def _extra_hosts(a) -> list[str] | None:
+    """Additional site names from --extra-host and from --hosts-file (one per line, '#' comments). None = something unusable."""
+    names = list(a.extra_host or [])
+    if a.hosts_file and Path(a.hosts_file).exists():
+        for line in Path(a.hosts_file).read_text(encoding="utf-8", errors="replace").splitlines():
+            line = line.split("#", 1)[0].strip()
+            if line:
+                names.append(line)
+    out = []
+    for n in names:
+        n = n.strip().rstrip(".").lower()
+        if not _HOSTNAME.fullmatch(n):
+            print(f"refusing unusual hostname {n!r}", file=sys.stderr)
+            return None
+        if n not in out:
+            out.append(n)
+    return out
+
+
+def _site(host: str, port: int) -> str:
+    # a Tailscale name (*.ts.net) gets its publicly trusted certificate from the local tailscaled (Caddy does this by itself for such
+    # names, see scripts/tailscale_setup.sh); every other name uses Caddy's own certificate authority
+    tls = "" if host.endswith(".ts.net") else "\ttls internal\n"
+    return f"{host} {{\n{tls}\tencode zstd gzip\n\treverse_proxy 127.0.0.1:{port}\n}}\n"
+
+
 def cmd_render_caddy(a) -> int:
     out = Path(a.out)
     host = a.host.strip()
     if not host or any(c in host for c in " \t\n{}\"'\\;"):
         print(f"refusing unusual hostname {host!r}", file=sys.stderr)
+        return 2
+    extras = _extra_hosts(a)
+    if extras is None:
         return 2
     if out.exists():
         text = out.read_text(encoding="utf-8", errors="replace")
@@ -80,11 +112,50 @@ def cmd_render_caddy(a) -> int:
         else:
             out.rename(out.with_name(out.name + ".bak-" + datetime.now().strftime("%Y%m%d%H%M%S")))
     out.parent.mkdir(parents=True, exist_ok=True)
+    sites = [host] + [h for h in extras if h != host.lower()]
     out.write_text(
         "# radio-remote managed (safe to regenerate with install.sh). Edit config/Caddyfile.example for other layouts.\n"
-        f"{host} {{\n\ttls internal\n\tencode zstd gzip\n\treverse_proxy 127.0.0.1:{a.port}\n}}\n",
+        "# Extra names (Tailscale) are listed in /etc/radio-remote/caddy-extra-hosts; scripts/tailscale_setup.sh maintains that file.\n"
+        + "\n".join(_site(h, a.port) for h in sites),
         encoding="utf-8")
-    print(f"wrote {out} for https://{host}")
+    print(f"wrote {out} for " + ", ".join(f"https://{h}" for h in sites))
+    return 0
+
+
+# ------------------------------------------------------------------------ tailscale
+def cmd_tailscale_name(a) -> int:
+    """Print this machine's Tailscale DNS name (for example pi.tail1234.ts.net) when Tailscale is running and HTTPS certificates are
+    enabled for the tailnet. Exit codes: 2 not installed / not signed in, 3 MagicDNS or HTTPS certificates not enabled, 4 unusable answer."""
+    try:
+        if a.status_file:
+            raw = Path(a.status_file).read_text(encoding="utf-8")
+        else:
+            exe = shutil.which("tailscale")
+            if not exe:
+                print("Tailscale is not installed (see docs/tailscale.md)", file=sys.stderr)
+                return 2
+            raw = subprocess.run([exe, "status", "--json"], capture_output=True, text=True, timeout=15, check=True).stdout
+        st = json.loads(raw)
+    except (OSError, ValueError, subprocess.SubprocessError) as e:
+        print(f"could not read the Tailscale status: {e}", file=sys.stderr)
+        return 2
+    if st.get("BackendState") != "Running":
+        print(f"Tailscale is not signed in and running (state: {st.get('BackendState')}). Run: sudo tailscale up", file=sys.stderr)
+        return 2
+    name = str((st.get("Self") or {}).get("DNSName") or "").rstrip(".").lower()
+    if not name:
+        print("This machine has no Tailscale DNS name: enable MagicDNS in the Tailscale admin console (login.tailscale.com/admin/dns)",
+              file=sys.stderr)
+        return 3
+    domains = [str(d).rstrip(".").lower() for d in (st.get("CertDomains") or [])]
+    if name not in domains:
+        print("HTTPS certificates are not enabled for your tailnet: in login.tailscale.com/admin/dns turn on MagicDNS and "
+              "'HTTPS Certificates', then run this again", file=sys.stderr)
+        return 3
+    if not name.endswith(".ts.net") or not _HOSTNAME.fullmatch(name):
+        print(f"unexpected Tailscale name {name!r}", file=sys.stderr)
+        return 4
+    print(name)
     return 0
 
 
@@ -365,8 +436,14 @@ def main(argv=None) -> int:
     p.add_argument("--force", action="store_true")
     p.set_defaults(fn=cmd_render_config)
 
+    p = sub.add_parser("tailscale-name")
+    p.add_argument("--status-file", help=argparse.SUPPRESS)                              # tests: a saved 'tailscale status --json'
+    p.set_defaults(fn=cmd_tailscale_name)
+
     p = sub.add_parser("render-caddy")
     p.add_argument("--host", required=True)
+    p.add_argument("--extra-host", action="append", help="another site name (repeatable), e.g. a Tailscale name")
+    p.add_argument("--hosts-file", help="file with more site names, one per line (/etc/radio-remote/caddy-extra-hosts)")
     p.add_argument("--out", required=True)
     p.add_argument("--port", type=int, default=8080)
     p.add_argument("--force", action="store_true")
