@@ -9,13 +9,17 @@ export function createTuneButton(host, ctx) {
   const tune = el(`<button class="led tune" title="Start the antenna tuner. The radio transmits a carrier for a few seconds.">Tune</button>`);
   tune.onclick = () => {
     if (ctx.S.state.tuning) { ctx.send("tune_stop"); return; }
+    if (ctx.ui.pttLock) return;                                    // PTT lock is on: TUNE also transmits, so it is blocked too
     if (confirm("TUNE makes the radio TRANSMIT a carrier for a few seconds.\n\nIs an antenna or dummy load connected?")) ctx.send("tune");
   };
   host.append(tune);
   return {
     update() {
       const s = ctx.S.state;
+      const locked = !!ctx.ui.pttLock && !s.tuning;                  // a running tune can always be stopped
       tune.classList.toggle("tuning", !!s.tuning);
+      tune.disabled = locked;
+      tune.title = locked ? "Locked: switch off the PTT lock to use TUNE (it transmits a carrier)" : "Start the antenna tuner. The radio transmits a carrier for a few seconds.";
       tune.textContent = s.tuning ? "Tuning... (tap to stop)" : "Tune";
     },
   };

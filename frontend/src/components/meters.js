@@ -24,6 +24,13 @@ class SegBar {
     this.draw();
   }
 
+  setAlarm(on) {
+    if (this.alarm === on) return;
+    this.alarm = on;
+    this.root.classList.toggle("alarm", on);
+    this.draw();
+  }
+
   // frac: 0..1 position along the bar; text: readout
   set(frac, text) {
     this.target = Math.max(0, Math.min(1, frac));
@@ -56,7 +63,7 @@ class SegBar {
     const fontPx = Math.max(10, Math.round(h * 0.28)), barH = bare ? h : Math.max(8, h - fontPx - 6), gap = 2, sw = (w - gap * (segs - 1)) / segs;
     for (let i = 0; i < segs; i++) {
       const f = (i + 0.5) / segs, lit = i / segs < this.cur;
-      c.fillStyle = lit ? this.colorAt(f) : off;
+      c.fillStyle = lit ? (this.alarm ? "#f43f5e" : this.colorAt(f)) : off;       // alarm: the whole lit bar turns red
       c.globalAlpha = lit ? 1 : 0.85;
       c.fillRect(i * (sw + gap), 0, sw, barH);
     }
@@ -103,17 +110,37 @@ export function createTxMeters(host, ctx) {
   if (!f.alc_meter) alc.root.hidden = true;
   if (!f.comp_meter) comp.root.hidden = true;
 
-  return {
-    update() {
-      const st = ctx.S.state;
-      root.classList.toggle("is-tx", !!st.tx);
-      if (st.rf_power_out !== undefined) po.set(st.rf_power_out / 100, st.rf_power_out + " W");
-      else po.set((st.po_raw || 0) / 255, "");
-      if (st.swr !== undefined) swr.set((st.swr - 1) / 2, Number(st.swr).toFixed(2) + ":1");
-      else swr.set(((st.swr_raw || 0) / 255) * 0.5, "");
-      const a = pct(st.alc || 0, cal.alc_full), cp = pct(st.comp || 0, cal.comp_full);
-      alc.set(a / 100, Math.round(a) + " %");
-      comp.set(cp / 100, Math.round(cp) + " %");
-    },
+  // SWR warning (Admin > Config > Meters): while transmitting at or above the limit the SWR bar turns red and a message names the
+  // ratio. Radios that report a ratio are compared directly; for the others (FT-991A: raw 0..255) the ratio is ESTIMATED with a line
+  // through 1:1 = 0 and 3:1 = swr_raw_at_3 (provisional calibration). The message stays 5 s after the transmission so it is not missed.
+  const warnAt = Number(cal.swr_warn) || 0, rawAt3 = Number(cal.swr_raw_at_3) || 100;
+  const warn = el(`<div class="swrwarn" role="alert" hidden></div>`);
+  root.append(warn);
+  let latchUntil = 0, worst = 0, wasTx = false, timer = 0;
+  const swrNow = (st) => (st.swr !== undefined ? Number(st.swr) : st.swr_raw > 0 ? 1 + (2 * st.swr_raw) / rawAt3 : null);
+
+  const update = () => {
+    const st = ctx.S.state, now = performance.now();
+    root.classList.toggle("is-tx", !!st.tx);
+    if (st.tx && !wasTx) { worst = 0; latchUntil = 0; }                // a new transmission starts a new reading
+    wasTx = !!st.tx;
+    const ratio = swrNow(st);
+    const over = warnAt > 0 && !!st.tx && ratio !== null && ratio >= warnAt;
+    if (over) { worst = Math.max(worst, ratio); latchUntil = now + 5000; }
+    const show = over || now < latchUntil;
+    swr.setAlarm(show);
+    warn.hidden = !show;
+    if (show) warn.textContent = `High SWR: ${st.swr !== undefined ? "" : "about "}${worst.toFixed(1)}:1 - check the antenna and the cable`;
+    clearTimeout(timer);
+    if (show && !over) timer = setTimeout(update, latchUntil - now + 50);   // hide it again when the 5 s are over
+    if (st.rf_power_out !== undefined) po.set(st.rf_power_out / 100, st.rf_power_out + " W");
+    else po.set((st.po_raw || 0) / 255, "");
+    if (st.swr !== undefined) swr.set((st.swr - 1) / 2, Number(st.swr).toFixed(2) + ":1");
+    else swr.set(((st.swr_raw || 0) / 255) * 0.5, "");
+    const a = pct(st.alc || 0, cal.alc_full), cp = pct(st.comp || 0, cal.comp_full);
+    alc.set(a / 100, Math.round(a) + " %");
+    comp.set(cp / 100, Math.round(cp) + " %");
   };
+
+  return { update };
 }

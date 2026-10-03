@@ -1,6 +1,7 @@
 import { el } from "../util.js";
 import { createFreqDisplay } from "./freq-display.js";
 import { createSMeter, createTxMeters } from "./meters.js";
+import { getLights } from "../prefs.js";
 
 // One VFO block: VFO A (main, receiving) with the signal meter and the TX meters, and VFO B as a smaller tab attached below.
 // VFO B shows its frequency and whether it is the transmit VFO (split). The CAT commands of this radio give no signal strength
@@ -13,7 +14,7 @@ export function createVfoPanels(host, ctx) {
   const hasB = !!ctx.S.caps.features.vfo_b;
   const root = el(`<div class="vfopanels">
     <section class="vfopanel a" aria-label="VFO A">
-      <header><span class="vl">VFO-A</span><span class="vbadge rxb on" data-rx>RX</span><span class="vbadge txb" data-atx>TX</span><span class="vbadge memb" data-memb hidden></span><span class="audbtns">
+      <header><span class="vl">VFO-A</span><span class="vbadge rxb on" data-rx>RX</span><span class="vbadge txb" data-atx>TX</span><span class="vbadge memb" data-memb hidden></span><span class="rxchips" data-chips></span><span class="audbtns">
           <button class="aud" data-aud="listen" aria-pressed="false">${ICON_SPK}</button>
           <button class="aud" data-aud="mic" aria-pressed="false">${ICON_MIC}</button>
         </span></header>
@@ -36,6 +37,50 @@ export function createVfoPanels(host, ctx) {
   ];
   if (hasB) parts.push(createFreqDisplay(root.querySelector("[data-fb]"), ctx, { vfo: "B" }));
   const q = (s) => root.querySelector(s);
+
+  // Receive-path status lights next to RX/TX/MEM: ONE light for the preamp that shows which setting is in use (IPO, AMP1 or AMP2),
+  // then ATT, ONE for the AGC naming its setting (AGC FAST / MID / SLOW / AUTO; dark when OFF) and the antenna tuner. Green = active,
+  // dark = inactive; the tuner light blinks amber while a tune is running. They only show what the radio reports (the buttons that
+  // change these settings are in the Receiver block).
+  const feat = ctx.S.caps.features;
+  const CHIPS = [
+    ...(feat.ipo ? [["ipo", "IPO", "Preamp (IPO = off, direct path; AMP1; AMP2)"]] : []),
+    ...(feat.att || feat.att_levels ? [["att", "ATT", "ATT: attenuator"]] : []),
+    ...(feat.agc ? [["agc", "AGC", "AGC: automatic gain control (OFF, FAST, MID, SLOW, AUTO)"]] : []),
+    ...(feat.tuner ? [["tuner", "TUNER", "Antenna tuner"]] : []),
+  ];
+  const chipHost = q("[data-chips]");
+  const chipEls = CHIPS.map(([key, label, title]) => {
+    const c = el(`<span class="schip" role="img" aria-label="${label}: inactive" title="${title}: inactive">${label}</span>`);
+    chipHost.append(c);
+    return { key, label, title, c };
+  });
+  // which lights are shown is a per-device choice (Account > Display); hidden lights cost nothing and the gap closes
+  const showLights = () => {
+    const want = getLights();
+    for (const { key, c } of chipEls) c.hidden = want[key] === false;
+    chipHost.hidden = chipEls.every(({ c }) => c.hidden);
+  };
+  showLights();
+  window.addEventListener("rr-lights", showLights, { signal: ctx.signal });
+  const chipOn = (key, s) => key === "ipo" ? !!s.ipo
+    : key === "att" ? (s.att === true || (typeof s.att_level === "string" && s.att_level !== "OFF"))
+    : key === "agc" ? (!!s.agc && s.agc !== "OFF")                    // AGC OFF is a setting too: shown, but dark
+    : !!s.tuner;
+  const paintChips = (s) => {
+    for (const { key, label, title, c } of chipEls) {
+      const on = chipOn(key, s), tuning = key === "tuner" && !!s.tuning;
+      // the preamp and AGC lights name the setting that is in use
+      const text = key === "ipo" ? (s.ipo || "IPO") : key === "agc" ? (s.agc ? `AGC ${s.agc}` : "AGC") : label;
+      if (c.textContent !== text) c.textContent = text;
+      c.classList.toggle("on", on && !tuning);
+      c.classList.toggle("tuning", tuning);
+      const value = key === "ipo" ? s.ipo : key === "agc" ? s.agc : null;
+      const st = value !== null ? (value ? `${value}${on ? " (active)" : ""}` : "unknown") : tuning ? "tuning" : on ? "active" : "inactive";
+      c.setAttribute("aria-label", `${key === "ipo" ? "Preamp" : label}: ${st}`);
+      c.title = `${title}: ${st}`;
+    }
+  };
 
   // Speaker / microphone switches (top right of the VFO area). Teal = on. Only the user switches them.
   const au = ctx.audio();
@@ -65,6 +110,7 @@ export function createVfoPanels(host, ctx) {
       const memb = q("[data-memb]"), inMem = s.vfo_memory === "memory";
       memb.hidden = !inMem;
       if (inMem) memb.textContent = `MEM ${String(s.memory_channel ?? "").padStart(3, "0")}`;
+      paintChips(s);
       q("[data-rx]").classList.toggle("on", !aTx);
       q("[data-atx]").classList.toggle("on", aTx);
       panelA.classList.toggle("keyed", aTx);

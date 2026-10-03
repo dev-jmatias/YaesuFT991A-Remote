@@ -1,5 +1,6 @@
 import { api } from "../api.js";
 import { el } from "../util.js";
+import { LIGHTS, getLights, setLight } from "../prefs.js";
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const when = (ts) => (ts ? new Date(ts * 1000).toLocaleString() : "");
@@ -77,6 +78,7 @@ export function openSheet(root, { user, tab, sock }) {
 
     async config() {
       const info = await api("/api/config");
+      const upd = await api("/api/admin/update").catch(() => null);
       const c = info.config, ed = info.editable;
       const opt = (list, v) => list.map((x) => `<option ${String(x) === String(v) ? "selected" : ""}>${x}</option>`).join("");
       body.innerHTML = `<div class="note"></div>
@@ -104,12 +106,94 @@ export function openSheet(root, { user, tab, sock }) {
             <label>Log level<select name="logging.level">${opt(["DEBUG", "INFO", "WARNING", "ERROR"], c.logging.level)}</select></label></fieldset>
           <fieldset><legend>Meters (calibration, provisional)</legend>
             <label>ALC full-scale (raw 10-255)<input name="ui.meter_alc_full" type="number" min="10" max="255" value="${c.ui.meter_alc_full}" title="Raw ALC value at which the radio's own ALC meter is full"></label>
-            <label>COMP full-scale (raw 10-255)<input name="ui.meter_comp_full" type="number" min="10" max="255" value="${c.ui.meter_comp_full}" title="Raw compression value at which the radio's own meter is full"></label></fieldset>
+            <label>COMP full-scale (raw 10-255)<input name="ui.meter_comp_full" type="number" min="10" max="255" value="${c.ui.meter_comp_full}" title="Raw compression value at which the radio's own meter is full"></label>
+            <label>SWR warning at ratio (0 = off)<input name="ui.swr_warn" type="number" min="0" max="10" step="0.1" value="${c.ui.swr_warn}" title="While transmitting at or above this SWR the SWR bar turns red and a warning appears. Typical: 3"></label>
+            <label>SWR raw value at 3:1 (10-255)<input name="ui.swr_raw_at_3" type="number" min="10" max="255" value="${c.ui.swr_raw_at_3}" title="Only for radios that report a raw SWR value (FT-991A): the raw reading at which the radio's own meter shows 3:1. The ratio is estimated on a straight line from 1:1. Provisional."></label></fieldset>
           <button class="active" ${info.writable ? "" : "disabled"}>Save</button>
         </form>
-        <p class="dim"><b>Not editable here, on purpose:</b> ${info.locked.map(esc).join(", ")}.
-        PTT can only be enabled by editing <code>safety.allow_ptt</code> in the config file on the Pi.</p>
+        <div class="card2 pttcard"><h3>Transmitting (PTT)</h3>
+          ${info.ptt.enabled
+            ? `<p><b class="txt">Enabled</b>: operators can key the transmitter from the web page.</p><button id="ptt-off" class="danger" ${info.writable ? "" : "disabled"}>Disable transmitting</button>`
+            : `<p><b>Disabled</b>: nobody can transmit.${info.ptt.mock ? " (Test radio: the PTT button works anyway.)" : ""}</p>
+               <button id="ptt-ask" ${info.writable ? "" : "disabled"}>Enable transmitting…</button>
+               <form id="ptt-form" class="row" hidden>
+                 <span class="dim">This lets operators key your transmitter from this page. Test with a dummy load first, and check that remote operation is allowed on your licence.</span>
+                 <input name="password" type="password" placeholder="Your password" autocomplete="current-password" required>
+                 <button class="danger">Enable now</button></form>`}
+        </div>
+        <div class="card2 backupcard"><h3>Settings backup</h3>
+          <p class="dim">Save the settings (radio, audio, meters, limits) to a file and restore them later, for example after changing the SD card.
+            User accounts are not in it; the Pi also keeps daily backups of accounts and settings in <code>/var/backups/radio-remote</code>.
+            A restore never changes the listener address, the storage folder or the transmit permission.</p>
+          <div class="row"><button type="button" id="bk-dl">Download settings</button>
+            <button type="button" id="bk-up" ${info.writable ? "" : "disabled"}>Restore from file…</button>
+            <input type="file" id="bk-file" accept=".toml,text/plain" hidden></div>
+        </div>
+        <div class="card2 updcard"><h3>Updates</h3>
+          <p data-updline></p>
+          <label class="chk"><input type="checkbox" id="upd-on" ${c.updates?.check ? "checked" : ""} ${info.writable ? "" : "disabled"}> Check for updates once a day
+            <span class="dim">(asks GitHub if a newer release exists; nothing is downloaded or installed automatically)</span></label>
+          <div class="row"><button type="button" id="upd-now">Check now</button></div>
+          <p class="dim" data-updhow hidden></p>
+        </div>
+        <p class="dim"><b>Not editable here, on purpose:</b> ${info.locked.filter((k) => k !== "safety.allow_ptt").map(esc).join(", ")}.</p>
         <div id="restart"></div>`;
+      const paintUpd = (u) => {
+        const line = body.querySelector("[data-updline]"), how = body.querySelector("[data-updhow]");
+        if (!u) { line.textContent = "The update status is not available."; how.hidden = true; return; }
+        const when = u.checked_at ? ` Last checked ${when_(u.checked_at)}.` : " Not checked yet.";
+        if (!u.enabled) line.textContent = `Update check is off. This is version ${u.current}.`;
+        else if (u.newer) { line.replaceChildren(`Version `, Object.assign(document.createElement("b"), { textContent: u.latest }), ` is available (this is ${u.current}). `,
+          ...(u.url ? [Object.assign(document.createElement("a"), { href: u.url, target: "_blank", rel: "noopener", textContent: "What's new" })] : [])); }
+        else line.textContent = u.latest ? `You have the latest version (${u.current}).${when}` : `This is version ${u.current}.${when}`;
+        if (u.enabled && u.error) line.append(` The last check could not reach GitHub (${u.error}).`);
+        how.hidden = !u.newer;
+        how.textContent = "To update, sign in to the Pi (SSH) and run:  sudo /opt/radio-remote/current/scripts/self_update.sh   (it makes a backup first and goes back by itself if the new version does not start).";
+      };
+      const when_ = (ts) => new Date(ts * 1000).toLocaleString();
+      paintUpd(upd);
+      body.querySelector("#upd-now").onclick = guard(async () => {
+        const b = body.querySelector("#upd-now"); b.disabled = true;
+        try { paintUpd(await api("/api/admin/update/check", "POST", {})); } finally { b.disabled = false; }
+      });
+      body.querySelector("#upd-on").onchange = guard(async (e) => {
+        await api("/api/config", "PUT", { updates: { check: e.target.checked } });
+        c.updates.check = e.target.checked;
+        paintUpd(await api("/api/admin/update"));
+        note(e.target.checked ? "Update check is on." : "Update check is off.");
+      });
+      const showRestart = () => {
+        const b = el(`<button class="danger">Restart service now</button>`);
+        b.onclick = guard(async () => { if (confirm("Restart now? The radio connection and audio drop for a few seconds.")) { await api("/api/admin/restart", "POST", { confirm: true }); note("Restarting…"); } });
+        body.querySelector("#restart").replaceChildren(b);
+      };
+      body.querySelector("#bk-dl").onclick = () => { const a = el(`<a href="/api/admin/backup" download></a>`); document.body.append(a); a.click(); a.remove(); };
+      const bkFile = body.querySelector("#bk-file");
+      body.querySelector("#bk-up").onclick = () => { bkFile.value = ""; bkFile.click(); };
+      bkFile.onchange = guard(async () => {
+        const file = bkFile.files[0];
+        if (!file) return;
+        if (file.size > 65536) throw new Error("that file is too big to be a settings backup");
+        if (!confirm(`Restore the settings from "${file.name}"?\n\nThe current settings are replaced (a copy is kept as config.toml.bak on the Pi). A restart is needed afterwards.`)) return;
+        const r = await api("/api/admin/restore", "POST", { toml: await file.text() });
+        await views.config();                                  // show the restored values in the form
+        note(`Restored ${r.changed.length} changed setting${r.changed.length === 1 ? "" : "s"}${r.ignored.length ? `; ${r.ignored.length} left alone on purpose (server, storage, transmit permission)` : ""}.${r.restart_required ? " Restart the service to apply." : ""}`);
+        if (r.restart_required) showRestart();
+      });
+      const askBtn = body.querySelector("#ptt-ask"), pttForm = body.querySelector("#ptt-form"), offBtn = body.querySelector("#ptt-off");
+      if (askBtn) askBtn.onclick = () => { pttForm.hidden = false; askBtn.hidden = true; pttForm.password.focus(); };
+      if (pttForm) pttForm.onsubmit = guard(async (e) => {
+        e.preventDefault();
+        await api("/api/admin/ptt", "POST", { enabled: true, password: pttForm.password.value, confirm: true });
+        await views.config();
+        note("Transmitting is enabled. Open pages update by themselves.");
+      });
+      if (offBtn) offBtn.onclick = guard(async () => {
+        if (!confirm("Disable transmitting? A transmission in progress is stopped.")) return;
+        await api("/api/admin/ptt", "POST", { enabled: false, confirm: true });
+        await views.config();
+        note("Transmitting is disabled.");
+      });
       body.querySelector("#cfg").onsubmit = guard(async (e) => {
         e.preventDefault();
         const out = {};
@@ -125,11 +209,7 @@ export function openSheet(root, { user, tab, sock }) {
         const r = await api("/api/config", "PUT", out);
         for (const [s, ks] of Object.entries(out)) Object.assign(c[s], ks);
         note(r.restart_required ? "Saved. Restart the service to apply." : "Saved and applied.");
-        if (r.restart_required) {
-          const b = el(`<button class="danger">Restart service now</button>`);
-          b.onclick = guard(async () => { if (confirm("Restart now? The radio connection and audio drop for a few seconds.")) { await api("/api/admin/restart", "POST", { confirm: true }); note("Restarting…"); } });
-          body.querySelector("#restart").replaceChildren(b);
-        }
+        if (r.restart_required) showRestart();
       });
     },
 
@@ -159,7 +239,11 @@ export function openSheet(root, { user, tab, sock }) {
           <label>Current password<input name="current" type="password" autocomplete="current-password" required></label>
           <label>New password (min 10)<input name="new" type="password" autocomplete="new-password" required></label></fieldset>
           <button class="active">Change password</button></form>
-        <p class="dim">Your other signed-in devices are signed out when you change it.</p>`;
+        <p class="dim">Your other signed-in devices are signed out when you change it.</p>
+        <form id="disp" class="cfg"><fieldset><legend>Display: status lights in the VFO A header</legend>
+          ${(() => { const on = getLights(); return LIGHTS.map(([k, label]) => `<label class="chk"><input type="checkbox" name="${k}" ${on[k] ? "checked" : ""}> ${label}</label>`).join(""); })()}
+        </fieldset><p class="dim">Switch off the lights you do not need for a cleaner header. This applies to this device only.</p></form>`;
+      body.querySelector("#disp").onchange = (e) => { if (e.target.name) setLight(e.target.name, e.target.checked); };
       body.querySelector("#pw").onsubmit = guard(async (e) => {
         e.preventDefault();
         await api("/api/me/password", "POST", { current: e.target.current.value, new: e.target.new.value });

@@ -1,4 +1,4 @@
-import { RadioSocket } from "../api.js";
+import { RadioSocket, api } from "../api.js";
 import { createAudioPanel } from "../audio.js";
 import { createVfoPanels } from "../components/vfo-panels.js";
 import { createVfoB } from "../components/vfo-b.js";
@@ -14,7 +14,10 @@ const TABS = [["radio", "Radio"], ["filters", "Filters"], ["levels", "Levels"], 
 export function renderRadio(root, { onLogout, onAuthLost }) {
   const S = { state: {}, caps: null, user: null, safety: {}, ui: { steps: [100, 1000, 10000] }, audio: null, conn: "",
               lease: { holder: null, pending: null } };
-  const ui = { step: 1000, tab: "radio", coarse: false };
+  // pttLock: "lock PTT" switch (this device only, remembered): blocks the PTT button and TUNE so a stray touch cannot transmit
+  let savedLock = false;
+  try { savedLock = localStorage.getItem("rr.pttLock") === "1"; } catch { /* storage blocked: unlocked */ }
+  const ui = { step: 1000, tab: "radio", coarse: false, pttLock: savedLock };
   let parts = [], audio = null, abort = null, wake = null;
   const view = el(`<div class="app" data-tab="radio">
       <header class="topbar">
@@ -34,6 +37,7 @@ export function renderRadio(root, { onLogout, onAuthLost }) {
       <div id="exp" class="mockbanner" hidden></div>
       <div id="offline" class="offline" hidden><span>Radio offline - waiting for it to come back. Controls are paused.</span><button class="active" id="poweron" hidden title="Wake the radio from standby (PS1). It needs a few seconds to start.">Power on radio</button></div>
       <div id="updbar" class="updbar" role="status" hidden><span>A new version was installed on the radio server.</span><button class="active" id="reload">Reload now</button></div>
+      <div id="newver" class="updbar" role="status" hidden></div>
       <div id="lreq" class="dialog" role="alertdialog" aria-live="assertive" hidden></div>
       <main class="layout" id="layout"></main>
       <nav class="tabs" aria-label="Sections"></nav>
@@ -55,6 +59,11 @@ export function renderRadio(root, { onLogout, onAuthLost }) {
     freq: () => tuner.target ?? S.state.frequency ?? 0,
     tune: (d) => tuner.nudge(d),
     setStep: (hz) => { ui.step = hz; repaint(); },
+    setPttLock: (on) => {
+      ui.pttLock = !!on;
+      try { localStorage.setItem("rr.pttLock", on ? "1" : "0"); } catch { /* not remembered */ }
+      repaint();
+    },
     audio: () => audio,
   };
 
@@ -75,6 +84,30 @@ export function renderRadio(root, { onLogout, onAuthLost }) {
     const st = view.querySelector("#stepsel");
     if (st && +st.value !== ui.step) st.value = ui.step;
     paintLease();
+  }
+
+  // ---- new release notice (administrators only; the server asks GitHub once a day, see Admin > Config > Updates). Shown once per
+  // version: "Dismiss" remembers it in this browser. Nothing is installed from here.
+  let verChecked = false;
+  async function checkNewVersion() {
+    if (verChecked || S.user?.role !== "admin") return;
+    verChecked = true;
+    try {
+      const u = await api("/api/admin/update");
+      let seen = "";
+      try { seen = localStorage.getItem("rr.updateSeen") || ""; } catch { /* no storage: shown every time */ }
+      if (!u.enabled || !u.newer || seen === u.latest) return;
+      const bar = $("newver");
+      const msg = el(`<span></span>`);
+      msg.append(`Radio Remote `, Object.assign(document.createElement("b"), { textContent: u.latest }),
+        ` is available (this one is ${u.current}). `);
+      if (u.url) msg.append(Object.assign(document.createElement("a"), { href: u.url, target: "_blank", rel: "noopener", textContent: "What's new" }));
+      const how = el(`<button class="active">How to update</button>`), skip = el(`<button>Dismiss</button>`);
+      how.onclick = () => openSheet(root, { user: S.user, tab: "config", sock });
+      skip.onclick = () => { bar.hidden = true; try { localStorage.setItem("rr.updateSeen", u.latest); } catch { /* not remembered */ } };
+      bar.replaceChildren(msg, how, skip);
+      bar.hidden = false;
+    } catch { /* no answer is fine: the notice is a convenience */ }
   }
 
   // ---- control lease: many can watch, one controls
@@ -263,6 +296,7 @@ export function renderRadio(root, { onLogout, onAuthLost }) {
         Object.assign(S, { caps: m.caps, user: m.user, safety: m.safety, state: m.state, ui: m.ui, audio: m.audio, conn: m.conn, lease: m.lease });
         build();
         audio.resume();                                   // reconnected: bring the audio back if Listen is on
+        checkNewVersion();
       } else if (m.t === "lease") {
         S.lease = m.d;
         paintLease();
@@ -273,6 +307,9 @@ export function renderRadio(root, { onLogout, onAuthLost }) {
         toast(`${m.by} took control (trusted user).`);
       } else if (m.t === "lease_denied") {
         toast(`${m.by} kept control.`);
+      } else if (m.t === "safety") {
+        S.safety = { ...S.safety, ...m.d };                  // the administrator switched transmitting on or off
+        build();
       } else if (m.t === "patch" || m.t === "meters") {
         Object.assign(S.state, m.d);
         repaint();

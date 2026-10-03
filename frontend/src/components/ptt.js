@@ -16,9 +16,20 @@ export function createPtt(host, ctx) {
   host.append(root);
   const btn = root.querySelector(".ptt"), tt = root.querySelector(".txtimer"), bar = tt.querySelector("i"), lbl = tt.querySelector("span");
   const canPtt = S.user.role !== "viewer" && S.caps.features.ptt;
-  btn.disabled = !canPtt || !S.safety.ptt_permitted;
+  const blocked = !canPtt || !S.safety.ptt_permitted;            // viewers / PTT disabled in the config: nothing to lock
+  btn.disabled = blocked;
   if (S.user.role === "viewer") btn.textContent = "VIEW ONLY";
   else if (!S.safety.ptt_permitted) btn.textContent = "PTT DISABLED IN CONFIG";
+
+  // PTT lock: a switch above the button, next to the mic input choice. While it is on the PTT button (and TUNE) cannot be used, so a
+  // stray touch or click does not transmit. It is a convenience of THIS device (remembered in the browser); the server's own TX
+  // safeguards (permission, control, heartbeat, time limit) are unchanged.
+  const ICON_LOCK = `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2" fill="currentColor" stroke="none"/><path class="shackle" d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>`;
+  const lockBtn = el(`<button class="lockbtn" aria-pressed="false">${ICON_LOCK}<span>Lock PTT</span></button>`);
+  lockBtn.hidden = blocked;
+  const micsel = root.querySelector(".micsel");
+  if (micsel) micsel.append(lockBtn); else root.insertBefore(el(`<div class="lockrow"></div>`), btn).append(lockBtn);
+  lockBtn.onclick = () => { ctx.setPttLock(!ctx.ui.pttLock); if (ctx.ui.pttLock) release(); };
 
   const micBtns = [...root.querySelectorAll("[data-mic]")], micWarn = root.querySelector(".micwarn");
   micBtns.forEach((b) => (b.onclick = () => send("set_control", { name: "mic_select", value: b.dataset.mic })));
@@ -52,11 +63,17 @@ export function createPtt(host, ctx) {
 
   return {
     update() {
-      const s = S.state, tx = !!s.tx;
+      const s = S.state, tx = !!s.tx, locked = !!ctx.ui.pttLock;
       btn.classList.toggle("keyed", tx);
+      btn.classList.toggle("locked", locked && !blocked);
+      btn.disabled = blocked || (locked && !tx);                     // a transmission that is already running can still be released
+      lockBtn.classList.toggle("on", locked);
+      lockBtn.setAttribute("aria-pressed", String(locked));
+      lockBtn.querySelector("span").textContent = locked ? "PTT locked" : "Lock PTT";
+      lockBtn.title = locked ? "PTT and TUNE are locked on this device. Tap to unlock." : "Lock PTT and TUNE on this device so a stray touch cannot transmit";
       for (const b of micBtns) { b.classList.toggle("on", b.dataset.mic === s.mic_select); b.disabled = tx; }
       if (micWarn) micWarn.hidden = s.mic_select !== "MIC";
-      if (!btn.disabled) btn.textContent = tx ? (s.tx_source === "radio" ? "TX (radio keyed)" : "TRANSMITTING") : "HOLD TO TRANSMIT";
+      if (!blocked) btn.textContent = tx ? (s.tx_source === "radio" ? "TX (radio keyed)" : "TRANSMITTING") : locked ? "PTT LOCKED" : "HOLD TO TRANSMIT";
       if (tx && !tick) {
         txStart = performance.now();
         tick = setInterval(() => {

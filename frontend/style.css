@@ -42,6 +42,8 @@ input, select { background: #0e1729; border: 1px solid var(--line2); border-radi
 /* ---------- login ---------- */
 .login { max-width: 380px; margin: 12vh auto 0; display: grid; gap: 12px; }
 .login h1 { margin: 0 0 4px; font-size: 1.4rem; color: var(--cyan); }
+.login .showpw { display: flex; align-items: center; gap: 8px; color: var(--dim); font-size: .9rem; cursor: pointer; }
+.login .showpw input { width: auto; min-height: 0; margin: 0; }
 
 /* ---------- top bar + radio tab ---------- */
 .topbar { display: flex; gap: 8px; align-items: center; justify-content: space-between; flex-wrap: wrap; margin-bottom: 6px; }
@@ -211,6 +213,10 @@ button.danger:hover { background: #3a1020; border-color: var(--red); }
 .sheetbody th { text-align: left; color: var(--dim); font-weight: 500; font-size: .72rem; letter-spacing: .06em; text-transform: uppercase; }
 .sheetbody th, .sheetbody td { padding: 6px 6px; border-bottom: 1px solid var(--line); vertical-align: middle; }
 .sheetbody td .row { gap: 6px; }
+.pttcard { margin: 12px 0; padding: 10px 12px; border: 1px solid var(--line2); border-radius: 10px; }
+.pttcard h3 { margin: 0 0 6px; } .pttcard p { margin: 4px 0 8px; }
+.pttcard form[hidden], .pttcard button[hidden] { display: none; }
+.pttcard form { margin-top: 8px; } .pttcard form input { flex: 1; min-width: 12ch; }
 .sheetbody td button, .sheetbody td select { min-height: 30px; padding: 2px 10px; }
 .note { min-height: 1.3em; margin-bottom: 6px; font-size: .9rem; }
 .note.ok { color: var(--green); } .note.bad { color: var(--red); }
@@ -505,6 +511,25 @@ html[data-tablet] [data-pane=ptt] { margin-top: auto; }
 html[data-tablet] .layout { align-items: stretch; }        /* flex column: every pane (and the PTT) is full width, not shrunk to its content */
 
 /* ---------- memory channels ---------- */
+/* receive-path status lights in the VFO A header: IPO / AMP1 / AMP2 / ATT / TUNER (green = active, dark = inactive) */
+.vfopanel.a header { flex-wrap: wrap; row-gap: 3px; }
+.rxchips { display: inline-flex; gap: 4px; margin-left: 14px; flex-wrap: wrap; }
+.rxchips:empty, .rxchips[hidden], .schip[hidden] { display: none; }
+.schip { font-size: .62rem; font-weight: 700; padding: 1px 6px; border-radius: 4px; background: #0f1627; color: #4a5878; border: 1px solid var(--line); letter-spacing: .04em; cursor: default; }
+.schip.on { background: var(--green); color: #04210f; border-color: transparent; box-shadow: 0 0 8px rgba(52,211,153,.35); }
+.schip.tuning { background: var(--yellow); color: #1a1100; border-color: transparent; animation: pulse 1s infinite; }
+@media (max-width: 699px) { .rxchips { order: 9; flex-basis: 100%; margin-left: 0; } }
+/* SWR warning: the SWR bar turns red (canvas) and this line appears while transmitting above the limit */
+.swrwarn { margin-top: 6px; padding: 4px 10px; border-radius: 6px; background: #3a0f1c; color: #ffd1da; border: 1px solid var(--red); font-size: .8rem; font-weight: 700; }
+.swrwarn[hidden] { display: none; }
+.seg.alarm .seglbl b { color: var(--red); }
+/* PTT lock (next to the mic input choice, above HOLD TO TRANSMIT) */
+.lockbtn { display: inline-flex; align-items: center; gap: 6px; min-height: 30px; margin-left: auto; padding: 2px 10px; }
+.lockbtn[hidden] { display: none; }
+button.lockbtn.on { background: var(--yellow); color: #1a1100; border-color: transparent; font-weight: 700; }
+.lockbtn.on .shackle { transform: none; } .lockbtn:not(.on) .shackle { transform: translateY(-2px) rotate(-18deg); transform-origin: 16px 11px; }
+.lockrow { display: flex; justify-content: flex-end; margin-bottom: 8px; }
+.ptt.locked, .ptt.locked:disabled { opacity: .6; border-color: #6b4b0a; color: #fde7a7; background: linear-gradient(180deg, #2a2108, #19140a); }
 .vbadge.memb { background: var(--purple); color: #130a2a; border-color: transparent; }
 .vbadge.memb[hidden] { display: none; }
 .memsheet .sheetbox { width: min(100%, 640px); }
