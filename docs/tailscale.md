@@ -27,9 +27,8 @@ recommended way to operate away from home. The app's own logins stay on: Tailsca
 names it is configured for (by default `<hostname>.local`) on the standard HTTPS port 443. Under any other name it has no site
 and gives no answer. Step 4 adds the Tailscale name. The `100.x.y.z` address cannot get a certificate: use the `.ts.net` name.
 
-Alternative without Caddy: `sudo tailscale serve --bg --https=443 http://127.0.0.1:8080`. **Requires verification:** whether your
-Tailscale version forwards `X-Forwarded-Proto: https`; without it the session cookie lacks `Secure`. Check in the browser
-dev tools; prefer the script above if it is missing.
+`tailscale serve` is not used here: the script above (Caddy) is the tested way, and Caddy forwards `X-Forwarded-Proto: https`, which the
+session cookie's `Secure` flag depends on.
 
 **If the script stops with a message:** "not signed in" means run `sudo tailscale up`; "MagicDNS" or "HTTPS Certificates" means
 switch them on in the admin console and run the script again; a timeout at the end means the certificate could not be issued yet:

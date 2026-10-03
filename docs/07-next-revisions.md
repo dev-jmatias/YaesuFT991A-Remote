@@ -1,39 +1,40 @@
-# Next revisions
+# Status and roadmap
 
-## UI feedback (from the first review)
+What is finished, what is verified on a real radio, and what is still open. For the details of each test see [bench results](bench-results.md);
+for what each radio supports see the [capability matrix](01-capability-matrix.md).
 
-- **The tuning dial is too large.** Reduce its footprint (smaller default size, cap on tablets/desktop, maybe a compact
-  strip variant), and give the freed space to meters and controls.
-- **Colours are too basic; make it more colourful.** The current palette is dark with a single teal accent. Planned: a richer
-  but still readable theme (distinct colours per function group: RX / TX / filters / audio / status), colour-graded meters,
-  clearer TX state, optional theme choices. Needs a design pass with you before coding.
+## Done and verified on a real FT-991A (Raspberry Pi 4)
 
-## Requested during testing
+- Frequency, mode, band, VFO B (A=B, B=A, swap, set frequency, mode), split, RIT/XIT, memory channels (list and recall).
+- Receive filters and DSP: width, IF shift, contour, notches, noise reduction, noise blanker, IPO / preamp, ATT, AGC.
+- Meters: S-meter, power, SWR (with a warning limit), ALC and COMP (ALC scale calibrated from one point).
+- PTT with the server-side safeguards, the transmit switch in Admin > Config, Lock PTT, TUNE, the REAR / MIC input switch.
+- Remote audio both ways, Bluetooth headsets, background listening on phones; power off and power on over USB.
+- Accounts, roles, the control lease, trusted users, the audit log, settings backup and restore.
+- Installation: the ready-made image (also through Raspberry Pi Imager's own screens), the installer pack, in-app update notice and `self_update.sh`
+  with automatic rollback, Tailscale access (`tailscale_setup.sh`).
 
-- **VFO B** (done, needs a bench check): B readout, swap (`SV`), A=B (`AB`), B=A (`BA`), set B's frequency (`FB`). There is no
-  select-VFO command on the FT-991A, so "switch" means swap.
-- **Split** (pending): TX on VFO B while receiving on A (`FT`, `TS`, `QS`). The manual's `FT` set values (2/3) and read values
-  (0/1) disagree, as the speech-processor ones did, so the radio's real replies are needed before any code is written.
-- **Trusted users** (done): admins can mark users who take control without being asked.
-- **TUNE button, C4FM DG-ID** (done, TUNE needs a dummy-load bench).
+## Done, but only against the simulator
 
-## Not done yet (honest list)
+- **FTDX10, FTDX101D/MP and FT-710**: profiles written from their CAT manuals and marked experimental. They need someone with the radio to run the
+  first-contact checklist in [other radios](08-other-radios.md).
+- Quick split (`QS;`) on the FT-991A.
+
+## Decided for the next release
+
+- **Logbook link**: a Hamlib "NET rigctl" server on the Pi (port 4532, home network only, off by default) so a logbook on another computer can
+  follow the radio and change frequency and mode. PTT and power are blocked for it. WSJT-X transmitting through the Pi is out of scope.
+
+## Open
 
 | Item | Why it is open |
 |---|---|
-| **FTDX101D/MP, FTDX10, FT-710 drivers** | CAT manuals are available and converted, but nothing is implemented. Each needs its own capability file and driver verified against its manual (dual receivers, different opcodes), then bench testing. Selecting these models is refused today |
-| Hamlib backend / rigctld compatibility | optional; native CAT was chosen as primary. Not written |
-| Meter calibration (S-units, watts, SWR) | raw values only; needs bench measurements |
-| CAT power-ON | `PS1;` documented but unproven in standby |
-| AGC control | manual's parameter mapping is inconsistent; needs bench |
-| Tuner start (`AC002`) | keys the transmitter; stop semantics unclear |
-| WebSocket audio fallback | for networks where WebRTC UDP fails |
-| Audio in its own process | in-process for now; decide after Pi CPU numbers |
-| Installer run on a real Pi | scripts untested on Linux; logic tested in Python |
-| Real-device UI testing | iPad/iPhone/Android touch, PWA install, wake lock |
-| Bench results | `bench1_readonly.py`, `audio_spike.py`, `arecord -l` / `aplay -l` still to be supplied |
-| Antenna switching | FT-991A has no CAT command; optional external relay interface not designed |
-| TLS/Tailscale integration tests | recipes documented, not exercised |
-
-- **Other radios** (FTDX10, FTDX101D/MP, FT-710): profiles and a shared protocol object are written from the manuals, tested only against a
-  simulator, and marked experimental: see `docs/08-other-radios.md`. AGC control added for all radios.
+| WebSocket audio fallback | for networks where WebRTC (UDP) is blocked; not built |
+| Meter calibration | S-meter, power and SWR are shown from raw values (SWR ratio is an estimate on the FT-991A); ALC has one calibration point |
+| Audio latency | not measured |
+| Antenna switching | the FT-991A has no CAT command for it |
+| C4FM RX/TX DG-ID | not reachable over CAT (checked on the radio); only the WIRES DG-ID menu value is read |
+| Writing memories from the page | deliberately not built: the program never changes a memory |
+| Automatic rollback test, `restore.sh`, `uninstall.sh` | scripts exist; a full real-Pi run of each is still to be recorded |
+| Real-device UI testing | tablets, iPhone/iPad and PWA install have had little testing |
+| Colour themes / colour-blind mode | the dark theme is the only one |

@@ -1,6 +1,29 @@
-# Phase 2 — Architecture
+# Architecture
 
-Status: **proposal for approval**. Decisions marked **[DECISION]** are the ones I'd like you to confirm or overrule before Phase 3.
+## As built (version 1.1)
+
+The design below was written before the program existed. This is how it turned out; where the two differ, **this section is right**.
+
+* **One process.** The audio service runs inside the core process (the design proposed a separate `radio-audio` process). It is a self-contained
+  class with a narrow interface, and the measured CPU cost on a Pi 4 (see [audio](04-audio.md)) made a second process unnecessary.
+* **Native Yaesu CAT only.** Every radio is driven through a Yaesu CAT protocol object (`Ft991aProto` for the FT-991A, `HfProto` for the FTDX10,
+  FTDX101D/MP and FT-710) and one `YaesuCatDriver`. Hamlib is not used. A Hamlib "NET rigctl" *server* (so a logbook can follow the radio) is planned.
+* **Frontend: plain ES modules, no framework and no build step** (the design proposed Preact + htm). The page is a PWA with a service worker.
+* **Python 3.11+, aiohttp, pyserial, aiortc, numpy, sqlite3 (accounts and audit), scrypt for passwords, TOML for the configuration.**
+* **Capability files** (`backend/radio_remote/radio/capabilities/*.toml`) describe each radio; the page's controls are generated from them.
+  [What each radio supports](01-capability-matrix.md) is generated from the same files.
+* **Safety:** `TxGuard` (the only thing that can key the transmitter: permission, one owner, heartbeat, time limit, un-key on disconnect or lease
+  change) and `ControlLease` (who controls the radio). The transmit permission is off by default and is switched on by an administrator.
+* **Added since the design:** roles and trusted users, the audit log, remote audio with a server-side gate, Bluetooth device choice, memory channels, status
+  lights, Lock PTT, the SWR warning, settings backup and restore, the update notice and `self_update.sh`, `tailscale_setup.sh`, the installer pack,
+  and the ready-made Raspberry Pi image with its Imager repository.
+* **Not built:** the WebSocket-Opus audio fallback, a separate audio process, Hamlib as a backend.
+
+---
+
+# Original design (kept for the reasoning behind the decisions)
+
+Written as a proposal; the **[DECISION]** marks were the points confirmed before building.
 
 ## 1. System overview
 

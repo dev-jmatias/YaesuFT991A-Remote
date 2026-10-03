@@ -11,7 +11,7 @@ transmit with server-side safety, and remote audio. It runs on a Raspberry Pi ne
 
 ## Get it: two ways
 
-Download the files from the **[latest release](../../releases/latest)**.
+Download the files from the **[latest release](https://github.com/dev-jmatias/YaesuFT991A-Remote/releases/latest)**.
 
 ### A. Ready-made image (easiest)
 

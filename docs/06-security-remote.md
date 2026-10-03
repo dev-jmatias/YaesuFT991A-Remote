@@ -67,16 +67,16 @@ LAN / Tailscale ---> Caddy :443 (TLS) ---> app 127.0.0.1:8080 ---> radio (USB)
 
 1. `sudo apt install caddy`, copy `config/Caddyfile.example` to `/etc/caddy/Caddyfile` (Option A), `sudo systemctl reload caddy`.
 2. Each phone/tablet/PC must trust Caddy's root certificate once. The root is at
-   `/var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt` on the Pi (path may differ by install;
-   REQUIRES VERIFICATION). iOS additionally needs it enabled under Settings > General > About > Certificate Trust Settings.
+   `/var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt` on the Pi (the path can differ between Caddy installs; the
+   installer pack and the image also publish it for download). iOS additionally needs it enabled under Settings > General > About >
+   Certificate Trust Settings.
 3. Browse to `https://raspberrypi.local`.
 
 ### Recipe B - Tailscale (preferred for remote use)
 
-1. Install Tailscale on the Pi and on your devices, `tailscale up`. Enable HTTPS certificates in the admin console.
-2. Use Caddy Option B, or `tailscale serve`. **REQUIRES VERIFICATION:** whether your `tailscale serve` build forwards
-   `X-Forwarded-Proto: https`. If it does not, the session cookie will not get the `Secure` flag and HSTS will be absent; use
-   the Caddy variant, which does forward it.
+1. Install Tailscale on the Pi and on your devices, `sudo tailscale up`. Enable MagicDNS and HTTPS certificates in the admin console.
+2. Run `sudo /opt/radio-remote/current/scripts/tailscale_setup.sh`: it adds the Tailscale name to Caddy (verified on a real Pi). Step by step in
+   [tailscale](tailscale.md). `tailscale serve` is not used: Caddy forwards `X-Forwarded-Proto: https`, which the session cookie's `Secure` flag needs.
 3. Keep application logins on. Tailscale is the outer wall, not a replacement for accounts.
 4. WebRTC audio uses UDP; over a direct tailnet path it is fine, over a relayed (DERP) path latency rises. The UI will
    tell you if audio cannot connect; a WebSocket-audio fallback is not built yet.

@@ -1,7 +1,8 @@
 # FT-991A capability profile. Values: true | false | "unverified".
 # "unverified" is treated as false by the UI.
 # Source: FT-991A CAT Operation Reference Manual 1711-D (page numbers are the manual's).
-# Not yet bench-tested; the driver itself arrives in Phase 4.
+# Comment markers are read by tools/gen_capability_doc.py (docs/01-capability-matrix.md): "BENCH-VERIFIED" = confirmed on a real radio,
+# "NOT bench-verified" = implemented from the manual but never tried on a real radio; no marker = used on the real radio without problems.
 [model]
 id = "ft991a"
 name = "Yaesu FT-991A"
@@ -17,7 +18,7 @@ antenna_switching = false             # no antenna-select opcode in command list
 swr_meter = true                      # RM6 (p.15)
 alc_meter = true                      # RM4
 comp_meter = true                     # RM3
-ptt = true                            # TX0/TX1 (p.17)
+ptt = true                            # TX0/TX1 (p.17). BENCH-VERIFIED (operator: PTT works on the Pi image, 2026-10-03)
 power_off_cat = true                  # PS0 (p.14)
 power_on_cat = true                   # PS1 (p.15): dummy data, then PS1 after 1-2 s. BENCH-VERIFIED (power on and off both work over USB from standby)
 c4fm = true                           # MD0E (p.11), mode select only
@@ -37,10 +38,10 @@ xit = true                            # XT
 processor = true                      # PR/PL
 monitor = true                        # ML
 tuner = true                          # AC00x tuner on/off (does not transmit)
-tuner_tune = true                     # AC002 start/stop tune: KEYS the transmitter; goes through TxGuard. NOT bench-verified yet
-mic_select = true                    # EX106 (menu 106 SSB MIC SELECT: 0 MIC / 1 REAR, manual p.9). Read at connect; NOT bench-verified
-memories = true                       # MC select + MT read (p.11): list and recall stored channels; never written. BENCH-VERIFIED
-dgid = true                         # EX153 (menu 153 WIRES DG-ID, p.9); one value, no separate TX/RX item in the CAT manual
+tuner_tune = true                     # AC002 start/stop tune: KEYS the transmitter; goes through TxGuard. BENCH-VERIFIED (operator: "tuning works")
+mic_select = true                    # EX106 (menu 106 SSB MIC SELECT: 0 MIC / 1 REAR, manual p.9). Read at connect. BENCH-VERIFIED (REAR/MIC switch works)
+memories = true                       # MC select + MT read (p.11): list and recall stored channels; never written. BENCH-VERIFIED (the radio answers every MT with channel 001: handled)
+dgid = true                         # EX153 (menu 153 WIRES DG-ID, p.9); one value, no separate TX/RX item in the CAT manual. Read only: the C4FM RX/TX DG-ID is not reachable over CAT
 split = true                          # FT (p.9): FT3; TX on B (split), FT2; TX on A. BENCH-VERIFIED (FT; -> FT0;, FT3; -> FT1;, FT2; -> FT0;)
 quick_split = true                    # QS; (p.15): sets B from A with the menu-035 offset and turns split on. NOT bench-verified
 vfo_b = true                          # FB read/set (p.9), AB A->B (p.3), BA B->A, SV swap (p.17); no select-VFO command exists

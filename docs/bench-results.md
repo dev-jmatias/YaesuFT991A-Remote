@@ -1,9 +1,41 @@
 # Bench results (real FT-991A)
 
-Date: 2026-10-01. Hardware: Raspberry Pi (hostname FT991A), FT-991A over USB, app v0.1.0.
-Method: `bench1_readonly.py` (sends read commands only).
+## Summary (as of version 1.1.1, 2026-10-03)
+
+Everything below was tried on a real **FT-991A** with a **Raspberry Pi 4** (Raspberry Pi OS Trixie, Python 3.13).
+
+| Area | Result |
+|---|---|
+| CAT link, auto-detection of the port, reconnect after unplug / power cycle | works |
+| Frequency, mode, bands, VFO B (frequency and mode), split, A=B / B=A / swap | works |
+| RIT / XIT, filters and DSP (width, IF shift, contour, notches, DNR, NB), IPO / ATT / AGC | works |
+| Memory channels: list and recall | works (the radio answers every `MT` read with channel 001: handled; see below) |
+| Meters: S, power, SWR (warning limit), ALC and COMP | work; ALC calibrated from one point, SWR ratio is an estimate from the raw value |
+| PTT, TUNE, REAR / MIC switch, transmit switch in Admin, Lock PTT | work |
+| Remote audio both ways, Bluetooth headset, background listening on a phone | works |
+| Power off and power on over USB from standby | works |
+| Installer pack, ready-made image, Imager's own customisation screens, in-app update (`self_update.sh`), Tailscale (`tailscale_setup.sh`) | work |
+| Settings backup and restore, update notice | work |
+| C4FM RX/TX DG-ID | **not reachable over CAT** (no menu value changes) |
+| Quick split (`QS;`) | implemented, not yet tried |
+| Automatic rollback of a failed update, `restore.sh`, `uninstall.sh` | scripts exist; a full real-Pi run of each is not recorded yet |
+
+Radio behaviour that differs from the CAT manual (all handled in the code):
+- `PR` (speech processor): the radio uses 0 = off, 1 = on, not 1 / 2 as printed.
+- `FT` (TX VFO): set 2 / 3 (TX on A / B), read 0 / 1.
+- `MT` (memory read with tag): the answer to `MT005;` carries the data of channel 5 but **always says channel `001`**; empty channels answer `?;`.
+  The server matches the answer on `MT` alone and takes the channel number from its own request. A channel that stays silent is retried and
+  then read with `MR` (no tag).
+- `EX153` (WIRES DG-ID): the radio answers with three digits (`EX153000;`), the manual shows two.
+- The radio answers a read taken immediately after a VFO command with the **old** value: reads after VFO operations wait 0.35 s and repeat.
+- The radio does not announce VFO B changes: VFO B is polled every second.
+
+The sections below are the log of the tests in the order they were done (some notes at the time said "to be tested": the summary above is current).
 
 ## Bench 1 - read-only: PASSED
+
+Date: 2026-10-01. Hardware: Raspberry Pi (hostname FT991A), FT-991A over USB, app v0.1.0.
+Method: `bench1_readonly.py` (sends read commands only).
 
 | Command | Reply | Meaning / status |
 |---|---|---|
@@ -127,27 +159,27 @@ Reading: real server-side cost is below these figures because the loopback also 
 for the default `audio.max_peers = 3`; a separate audio process is not needed there. A Pi 3B+ is expected (estimate, not
 measured) to be 2-3x slower per core: use `max_peers` 1-2.
 
-Still unverified (not exercised by these benches): every *set* command, the controls panel, PTT, audio, `NA`/`GT` quirks,
-`PS0;`/`PS1;`, meter calibration against real signals.
+At that point still unverified (all of it was verified later, see the summary at the top): every *set* command, the controls panel, PTT,
+audio, `NA`/`GT` quirks, `PS0;`/`PS1;`. Meter calibration against real signals is still open.
 
 - DG-ID follow-up (bench): `scripts/ex_dump.py` dumped EX001..EX160 (153 readable) before and after changing the DG-ID on the radio
   (GM long press, C4FM). **No EX value changed**, so the C4FM RX/TX DG-ID is not reachable over CAT. The web selector was replaced by
   a hint "DG-ID: set on the radio (hold GM)"; the backend `dgid` control (menu 153) remains but is not offered in the UI.
 
 - Mic input (menu 106 SSB MIC SELECT, manual p.9: 0 = MIC, 1 = REAR): added as a control `mic_select` (`EX106`), shown as a "Mic: REAR/MIC"
-  button in the Receiver & tools block, refused while transmitting. NOT bench-verified yet: check that the button flips menu 106 on the radio.
+  button in the Receiver & tools block, refused while transmitting. Verified later: the button flips menu 106 on the radio (now the REAR / MIC buttons above PTT).
 
 - Power on (PS1): the CAT manual (p.15) says the command needs dummy data first and PS1; one to two seconds later. Implemented in the
   driver supervisor (`power_on`, `wake_gap_s` = 1.4 s): while the radio is not connected an admin gets a "Power on radio" button in the
   offline banner; the server opens the serial port, sends `;`, waits, sends `PS1;`, closes it and keeps retrying the normal connection.
-  **Bench to do:** radio in standby with the DC supply on, USB cable connected: does the USB serial port stay present and answer? If the
+  *Bench to do at the time (done, see below):* radio in standby with the DC supply on, USB cable connected: does the USB serial port stay present and answer? If the
   port disappears in standby this cannot work over USB (the Pi would need a relay on the radio's power input instead).
 
 - **Power on / off VERIFIED on the real FT-991A** (operator report): "Power off" (PS0) and "Power on radio" (dummy data, 1.4 s, PS1) both
   work over USB with the radio in standby; the USB serial port stays available in standby.
 
 - VFO B mode: added `OI;` (manual p.14) to the sync and the 1 s backstop poll; the answer is decoded like `IF` and only `mode_b` is used.
-  **Bench to do:** check that VFO B shows the right mode, also after A<->B / A=B / B=A.
+  *Bench to do at the time (done, see below):* check that VFO B shows the right mode, also after A<->B / A=B / B=A.
 
 - **RX audio level (operator report):** the browser audio was too quiet with menu 107 SSB OUT LEVEL at its default (50). Setting menu 107 to
   **90** fixed it, with `audio.rx_gain_db` left at 0. So the radio's USB output level menus (107 SSB, 073 DATA, 046 AM, 075 FM, 054 CW,
@@ -164,7 +196,7 @@ Still unverified (not exercised by these benches): every *set* command, the cont
 
 - **Background audio VERIFIED** (operator report, phone): Listen keeps playing with the app in the background.
 
-- **Memory channels (to bench-test):** `Memories` button, list read with `MT001;`..`MT099;`, recall with `MC005;`, back with `VM;`.
+- **Memory channels (to be tested at the time; verified below):** `Memories` button, list read with `MT001;`..`MT099;`, recall with `MC005;`, back with `VM;`.
   Check: do the tags and frequencies match the radio's own memory list, are empty channels skipped (`?;`), does the MEM badge follow the
   radio, and does Back to VFO return to the previous VFO frequency? If an empty channel is answered with frequency 000000000 instead
   of `?;` it is skipped as well.
@@ -178,4 +210,10 @@ Still unverified (not exercised by these benches): every *set* command, the cont
 
 - **Installer pack, static checks (development PC, Debian under WSL1):** every shell script passes `bash -n`; `install-everything.sh --dry-run`
   prints the expected sequence (packages, user, release copy, offline pip from the bundled wheels, config, udev, systemd, Caddy, docs URL);
-  `--model ftdx10` prints the experimental note, a bad model and a non-root run are refused. **Not yet run for real on a Pi.**
+  `--model ftdx10` prints the experimental note, a bad model and a non-root run are refused. (Run for real on a Pi 4 afterwards: it found one
+  bug, the program folders were copied with private permissions so the service user could not read them; fixed and covered by a test.)
+
+- **Ready-made image, Imager and updates (2026-10-03):** the image built by GitHub Actions booted on a Pi 4 and ran. Raspberry Pi Imager 2.x
+  shows its own hostname / user / Wi-Fi screens for it through the content repository (`os-list.json`); the settings script was needed before.
+  The in-app update (`self_update.sh`: checksum, backup, install, health check) installed a newer release. `tailscale_setup.sh` made the Pi
+  reachable over its `.ts.net` name with a real certificate. The memory list read failed until the "answer says channel 001" behaviour was handled.

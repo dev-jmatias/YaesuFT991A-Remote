@@ -4,32 +4,40 @@ RADIO REMOTE - installer pack
 Web remote control for Yaesu radios on a Raspberry Pi (frequency, mode, filters, meters, memories,
 PTT with server-side safety, remote audio, several users). No cloud, no app store.
 
+This pack is for installing on top of the official Raspberry Pi OS Lite (64-bit). If you would rather write
+one ready-made image to the SD card, use the "Radio Remote for Yaesu" image from the release page instead
+(see README.md or docs/INSTALL.md, "Route A").
+
 WHAT IS IN THIS FOLDER
   START-HERE.txt           this page
   install-everything.sh    the installer you run on the Raspberry Pi
   radio-remote/            the program
   wheels/                  the Python libraries for the Pi (so nothing has to be compiled or downloaded from PyPI)
-  docs/                    the manual: open docs/index.html in any browser (PDF versions are included too)
+  docs/                    the manual: open docs/index.html in any browser
 
 INSTALL IN FOUR STEPS
-  1. On your PC flash "Raspberry Pi OS Lite (64-bit)" to the SD card with Raspberry Pi Imager.
-     In "Edit settings" set the hostname (for example: radio), a user and password, Wi-Fi if you need it,
-     and enable SSH. Boot the Pi and wait two minutes.
+  1. On your PC write "Raspberry Pi OS Lite (64-bit)" to the SD card with Raspberry Pi Imager.
+     In its customisation screens set the hostname (for example: radio), a user and password, Wi-Fi if you
+     need it, and enable SSH. Boot the Pi and wait two minutes.
 
   2. Copy this whole folder to the Pi. In a Windows PowerShell opened next to the folder:
-         scp -r radio-remote-installer <user>@radio.local:~
+         scp -r radio-remote-installer <user>@<hostname>.local:~
 
   3. Connect to the Pi and run the installer:
-         ssh <user>@radio.local
+         ssh <user>@<hostname>.local
          cd radio-remote-installer
          sudo bash install-everything.sh
 
-  4. Open the address it prints (for example https://radio.local), create the administrator account,
-     then Admin > Config: choose the radio model and the serial port.
+  4. Open the address it prints (for example https://radio.local), create the administrator account
+     (use your callsign as the user name), then Admin > Config: choose the radio model and the serial port.
 
 Transmitting is DISABLED until you enable it: Admin > Config > "Transmitting (PTT)" in the web page (it asks for your
-password), or allow_ptt = true in /etc/radio-remote/config.toml.
-Use a dummy load for the first tests.
+password), or allow_ptt = true in /etc/radio-remote/config.toml. Use a dummy load for the first tests.
 
-The step-by-step guide with pictures of every option is docs/INSTALL.html (or INSTALL.md). Read the
-section "First run" before you transmit. If anything fails: docs/troubleshooting.html.
+Remote access from outside your home: sudo tailscale up, then
+sudo /opt/radio-remote/current/scripts/tailscale_setup.sh   (see docs/tailscale.html).
+Updates: the web page tells administrators when a newer release exists; then run
+sudo /opt/radio-remote/current/scripts/self_update.sh
+
+The step-by-step guide is docs/INSTALL.html (or INSTALL.md). Read the section "First run" before you transmit.
+If anything fails: docs/troubleshooting.html.

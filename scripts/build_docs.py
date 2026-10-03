@@ -33,21 +33,21 @@ SECTIONS = [
     ("Running the system", [
         ("operations", "Operations", "Configuration, services, logs, updating, backup and restore"),
         ("radio-connection", "Radio connection", "USB CAT and audio, the radio's own menu settings"),
-        ("04-audio", "Audio", "Remote audio, levels, devices, troubleshooting"),
+        ("04-audio", "Remote audio", "Listening, microphone, levels, troubleshooting"),
         ("tailscale", "Remote access with Tailscale", "Reach the radio from anywhere without opening router ports"),
         ("06-security-remote", "Security and remote access", "Accounts, HTTPS, the safety design"),
         ("troubleshooting", "Troubleshooting", "Symptom by symptom"),
     ]),
     ("Radios", [
         ("08-other-radios", "Other radios", "FTDX10, FTDX101D/MP, FT-710 (experimental)"),
-        ("01-capability-matrix", "Capability matrix", "What each radio's CAT manual documents"),
+        ("01-capability-matrix", "What each radio supports", "Generated from the radio profiles"),
     ]),
-    ("Reference", [
+    ("Developer notes", [
         ("05-ui", "User interface notes", "Layouts, meters, behaviour details"),
         ("02-architecture", "Architecture", "How the program is built"),
         ("03-bench-checklist", "Bench checklist", "Tests to run with a real radio"),
         ("bench-results", "Bench results", "What was verified on a real FT-991A"),
-        ("07-next-revisions", "Open items", "What is not done yet"),
+        ("07-next-revisions", "Status and roadmap", "What is verified, decided and still open"),
     ]),
 ]
 FLAT = [(s, t, d) for _, items in SECTIONS for (s, t, d) in items]
