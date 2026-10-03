@@ -36,6 +36,7 @@ class Timings:
     healthy_after_s: float = 5.0
     settle_s: float = 0.35       # the radio needs a moment after VFO operations before its answers are current
     wake_gap_s: float = 1.4      # PS1: dummy data first, then the command "after one second and before two seconds" (manual p.15)
+    prefetch_s: float = 4.0      # read the memory list this long after connecting, so the first tap on Memories is instant (0 = never)
 
 
 class YaesuCatDriver(RadioDriver):
@@ -158,6 +159,12 @@ class YaesuCatDriver(RadioDriver):
         self._update(connected=True)
         self.last_error = None
         log.info("%s connected", self.proto.NAME)
+        if self.caps.has("memories") and self.MODEL == "ft991a":
+            self._mem_cache = None                          # a new connection: the memories may have been changed while the radio was off
+            if self.t.prefetch_s > 0:
+                t = asyncio.create_task(self._prefetch_memories())
+                self._bg.add(t)
+                t.add_done_callback(self._bg.discard)
         tasks = [asyncio.create_task(f()) for f in (self._poll_meters, self._poll_backstop, self._poll_slow)]
         waiter = asyncio.create_task(c.closed.wait())
         try:
@@ -411,30 +418,72 @@ class YaesuCatDriver(RadioDriver):
             if self._mem_cache is not None and not refresh:
                 return self._mem_cache
             c = self._need_client()
-            out, timeouts = [], 0
+            out, consecutive, rejected, silent = [], 0, 0, []
             for ch in range(1, 100):
                 if self.state.get("tx") or self.state.get("tuning"):
                     raise RadioError("not while transmitting")
-                try:
-                    ans = await c.request(frame.memory_read(ch), prio=PRIO_POLL)
-                    timeouts = 0
-                except CatRejected:
-                    continue                                    # an empty channel is answered with ?;
-                except CatTimeout:
-                    timeouts += 1
-                    if timeouts >= self.t.max_timeouts:
-                        raise RadioError("the radio stopped answering while reading the memories") from None
+                ans, answered = None, False
+                for attempt in (1, 2):                           # one retry: a single missed answer must not lose the whole list
+                    try:
+                        # BENCH-FOUND on a real FT-991A: the answer to MT00N; always says channel 001 in its P1 field, with the data of
+                        # channel N. So the answer is matched on "MT" alone (one command is in flight at a time) and the channel
+                        # number is taken from the request, never from the answer.
+                        ans, answered = await c.request(frame.memory_read(ch), prio=PRIO_POLL, expect="MT"), True
+                        break
+                    except CatRejected:
+                        rejected, answered = rejected + 1, True   # an empty channel is answered with ?;
+                        break
+                    except CatTimeout:
+                        log.warning("memory list: no answer to %s (attempt %d)", frame.memory_read(ch), attempt)
+                notag = False
+                if not answered:
+                    # MT (with tag) is silent for this channel: try the MR read, which has no tag (frequency and mode only)
+                    try:
+                        ans, answered, notag = await c.request(frame.memory_read_notag(ch), prio=PRIO_POLL, expect="MR"), True, True
+                        log.info("memory list: no answer to MT%03d; but MR%03d; -> %s", ch, ch, ans)
+                    except CatRejected:
+                        answered = True
+                        rejected += 1
+                        log.info("memory list: no answer to MT%03d;, MR%03d; answered '?;'", ch, ch)
+                    except CatTimeout:
+                        log.warning("memory list: no answer to MR%03d; either", ch)
+                if not answered:
+                    silent.append(ch)
+                    consecutive += 1
+                    if consecutive >= self.t.max_timeouts + 1:
+                        raise RadioError(f"the radio stopped answering while reading the memories (no answer for channels {silent[-consecutive:]})") from None
+                    continue
+                consecutive = 0
+                if ans is None:
                     continue
                 try:
-                    item = frame.decode_memory(ans)
+                    item = frame.decode_memory_notag(ans) if notag else frame.decode_memory(ans)
                 except frame.FrameError as e:
                     log.warning("unreadable memory answer %r: %s", ans, e)
                     continue
+                log.info("memory list: %s -> %s", frame.memory_read(ch), ans)                  # stored channels are few: log them all
                 if item:
+                    item["channel"] = ch                                                        # from the request (see above)
                     item["band"] = band_for(item["frequency"])
                     out.append(item)
             self._mem_cache = out
+            log.info("memory list: %d stored channel(s): %s; %d channel(s) answered '?;'; no answer for channels %s",
+                     len(out), [m["channel"] for m in out][:30], rejected, silent or "none")
             return out
+
+    async def _prefetch_memories(self) -> None:
+        """Read the memory list in the background a few seconds after connecting (the live display keeps priority), so the Memories
+        list opens at once. Failure is harmless: the list is simply read on first use as before."""
+        try:
+            await asyncio.sleep(self.t.prefetch_s)
+            if self.state.get("tx") or self.state.get("tuning") or self._mem_cache is not None:
+                return
+            items = await self.memory_channels()
+            log.info("memory list pre-read: %d stored channel(s)", len(items))
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            log.info("memory list pre-read skipped: %s", e)
 
     async def memory_select(self, channel: int) -> None:
         """MC P1P1P1; (manual p.11): recall a stored channel, like turning to it with the radio's memory knob."""
@@ -449,6 +498,10 @@ class YaesuCatDriver(RadioDriver):
         if self._mem_cache is not None and not any(m["channel"] == channel for m in self._mem_cache):
             raise RadioError("that memory channel is empty")
         await self._guard_cat(c.send(cmd))
+        # Logged on purpose (INFO, only when a channel is recalled): what was sent and what the radio says it is on now, so a
+        # recall that does not take effect can be diagnosed from the service log.
+        await asyncio.sleep(self.t.settle_s)
+        log.info("memory recall: sent %s, radio answers IF with %s", cmd, await self._guard_cat(c.request("IF;")))
         await self._settled_reads(["IF;", "MD0;"])               # IF carries frequency, mode and the memory channel
 
     async def memory_to_vfo(self) -> None:
@@ -460,6 +513,8 @@ class YaesuCatDriver(RadioDriver):
         if self.state.get("tx") or self.state.get("tuning"):
             raise RadioError("cannot change while transmitting")
         await self._guard_cat(c.send("VM;"))
+        await asyncio.sleep(self.t.settle_s)
+        log.info("back to VFO: sent VM;, radio answers IF with %s", await self._guard_cat(c.request("IF;")))
         await self._settled_reads(["IF;", "FA;", "MD0;"])
 
     async def power_on(self) -> None:

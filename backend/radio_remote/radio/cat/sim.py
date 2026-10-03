@@ -28,6 +28,7 @@ class SimulatedFT991A:
         self.mode_b = "LSB"
         self.memories = {5: (14_200_000, "USB", "20m DX"), 6: (7_100_000, "LSB", "40m net"), 11: (145_500_000, "FM", "2m calling"),
                          99: (28_400_000, "USB", "")}
+        self.label_001 = False     # True: MT/MR answers always carry channel 001 (what a real FT-991A was seen to do)
         self.mem_ch = 0            # 0 = VFO mode, else the recalled memory channel
         self.vfo_freq = None       # the VFO frequency while a memory is recalled
         self.levels = {"AG0": 80, "RG0": 255, "MG": 50, "PC": 50}
@@ -190,7 +191,15 @@ class SimulatedFT991A:
             if ch not in self.memories:
                 return await self._send("?;")
             hz, md, tag = self.memories[ch]
-            return await self._send(f"MT{ch:03d}{hz:09d}+000000{MODE_CODES[md]}100000{tag.ljust(12)};")
+            label = 1 if self.label_001 else ch               # a real FT-991A writes 001 in the answer whatever channel was asked
+            return await self._send(f"MT{label:03d}{hz:09d}+000000{MODE_CODES[md]}100000{tag.ljust(12)};")
+        if name == "MR" and len(p) == 3 and p.isdigit():             # memory read without the tag (read form only)
+            ch = int(p)
+            if ch not in self.memories:
+                return await self._send("?;")
+            hz, md, _tag = self.memories[ch]
+            label = 1 if self.label_001 else ch
+            return await self._send(f"MR{label:03d}{hz:09d}+000000{MODE_CODES[md]}10000;")
         if name == "MC" and len(p) == 3 and p.isdigit():
             ch = int(p)
             if ch not in self.memories:
