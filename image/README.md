@@ -18,7 +18,8 @@ built or booted** - treat the first build as a test (see "First build" below).
 1. Download `radio-remote-*.img.xz` (GitHub Actions artifact or release).
 2. Open Raspberry Pi Imager > Choose OS > Use custom > select the file and write the card. (Imager 2.x shows its
    "Edit settings" step only for official Raspberry Pi OS images, so it is not offered here.)
-3. Take the card out and put it back in the PC so Windows shows the small **bootfs** drive, then run
+3. Take the card out and put it back in the PC so Windows shows the small **bootfs** drive (do this right after writing, **before
+   the card has ever booted**: the settings are read on the first boot only; to change them later, write the card again), then run
    `pwsh image\first-boot-settings.ps1`. It asks for a hostname, user name, password, Wi-Fi and time zone and writes the
    cloud-init files (`user-data`, `network-config`) onto the card. The password is stored only as a hash. (Older Imager
    versions: use "Edit settings" instead.)

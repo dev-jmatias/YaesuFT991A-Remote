@@ -30,6 +30,7 @@ Full steps and background: [image/README.md](https://github.com/dev-jmatias/Yaes
 
 - The image was built and booted on a real Raspberry Pi and the web app runs, but it has had little testing across Pi models.
   Prefer the tested installer route (Raspberry Pi OS Lite + `install-everything.sh`, see the manual) if you hit a problem.
-- Setting the SSH password through the settings script is still being verified. If SSH password login is refused, rewrite the
-  settings with the script again (it forces a fresh first boot) or reflash.
+- Run `first-boot-settings.ps1` on a **freshly written** card, before its first boot. The settings are applied only on the first
+  boot: to change them later (password, hostname, Wi-Fi) write the card again. Use the script from the `v1.0.1` tag or newer
+  (the `v1.0.0` copy had a bug that stored a wrong password hash).
 - Not signed or reproducible bit-for-bit; check the SHA-256 in `SHA256SUMS`.
