@@ -89,6 +89,12 @@ users:
     lock_passwd: false
     passwd: $PasswordHash
     sudo: ALL=(ALL) NOPASSWD:ALL
+chpasswd:
+  expire: false
+  users:
+    - name: $UserName
+      password: $PasswordHash
+      type: hash
 enable_ssh: true
 ssh_pwauth: true
 timezone: $tz
