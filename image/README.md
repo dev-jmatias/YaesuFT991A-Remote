@@ -36,7 +36,6 @@ RELEASE=trixie
 TARGET_HOSTNAME=radio
 FIRST_USER_NAME=pi
 ENABLE_SSH=1
-DISABLE_FIRST_BOOT_USER_RENAME=1
 STAGE_LIST="stage0 stage1 stage2 /path/to/radio-remote/image/stage-radio-remote"
 ```
 

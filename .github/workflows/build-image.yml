@@ -50,7 +50,6 @@ jobs:
           # no password is set (the account stays locked): the user sets name, password, Wi-Fi and hostname in
           # Raspberry Pi Imager ("Edit settings") when writing the image. SSH is on so those settings can use it.
           enable-ssh: 1
-          disable-first-boot-user-rename: 1
           locale: en_GB.UTF-8
           timezone: Europe/London
           compression: xz
