@@ -28,12 +28,17 @@ function Ask($prompt, $default = "") {
 function YamlQuote($s) { '"' + ($s -replace '\\', '\\' -replace '"', '\"') + '"' }
 
 # ---- where to write
-if ($OutDir) { $target = $OutDir; New-Item -ItemType Directory -Force $target | Out-Null }
+if ($OutDir) { New-Item -ItemType Directory -Force $OutDir | Out-Null; $target = ([IO.Path]::GetFullPath($OutDir)).TrimEnd('\') + "\" }
 else {
-  if (-not $Drive) { $v = Get-Volume | Where-Object FileSystemLabel -eq "bootfs" | Select-Object -First 1; if ($v) { $Drive = "$($v.DriveLetter):" } }
-  if (-not $Drive) { throw "The 'bootfs' drive was not found. Re-insert the card after flashing, or pass -Drive E:" }
-  $target = "$($Drive.TrimEnd('\'))\"
-  if (-not (Test-Path (Join-Path $target "cmdline.txt"))) { throw "$target does not look like the Raspberry Pi boot partition (no cmdline.txt)" }
+  if ($Drive) { $target = $Drive.TrimEnd('\') + "\" }
+  else {
+    # the volume labelled bootfs; works even when Windows gave it no drive letter (then its \\?\Volume{...}\ path is used)
+    $v = Get-Volume | Where-Object FileSystemLabel -eq "bootfs" | Select-Object -First 1
+    if (-not $v) { throw "The 'bootfs' volume was not found. Re-insert the card after flashing, or pass -Drive E:" }
+    $target = if ($v.DriveLetter) { "$($v.DriveLetter):\" } else { $v.Path }
+  }
+  # .NET calls only: PowerShell's Test-Path/Join-Path do not cope with \\?\Volume{...} paths
+  if (-not [IO.File]::Exists($target + "cmdline.txt")) { throw "$target does not look like the Raspberry Pi boot partition (no cmdline.txt)" }
 }
 
 # ---- questions
@@ -105,8 +110,8 @@ network:
 "@
 }
 $enc = New-Object Text.UTF8Encoding($false)
-[IO.File]::WriteAllText((Join-Path $target "user-data"), $userData.Replace("`r`n", "`n") + "`n", $enc)
-if ($net) { [IO.File]::WriteAllText((Join-Path $target "network-config"), $net.Replace("`r`n", "`n") + "`n", $enc) }
+[IO.File]::WriteAllText($target + "user-data", $userData.Replace("`r`n", "`n") + "`n", $enc)
+if ($net) { [IO.File]::WriteAllText($target + "network-config", $net.Replace("`r`n", "`n") + "`n", $enc) }
 
 Write-Host ""
 Write-Host "Written to ${target}:  user-data$(if ($net) { '  network-config' })"
