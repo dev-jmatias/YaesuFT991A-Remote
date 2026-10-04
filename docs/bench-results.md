@@ -1,6 +1,6 @@
 # Bench results (real FT-991A)
 
-## Summary (as of version 1.1.3, 2026-10-04)
+## Summary (as of version 1.1.5, 2026-10-04)
 
 Everything below was tried on a real **FT-991A** with a **Raspberry Pi 4** (Raspberry Pi OS Trixie, Python 3.13).
 

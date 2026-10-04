@@ -76,6 +76,25 @@ def available() -> tuple[bool, str]:
     return (True, "") if _load() else (False, _ERR)
 
 
+class _QuietStderr:
+    """The RADE library prints two status lines to stderr every time a modem is opened; keep them out of the log."""
+
+    def __enter__(self):
+        try:
+            self._saved = os.dup(2)
+            fd = os.open(os.devnull, os.O_WRONLY)
+            os.dup2(fd, 2)
+            os.close(fd)
+        except OSError:
+            self._saved = None
+        return self
+
+    def __exit__(self, *exc):
+        if self._saved is not None:
+            os.dup2(self._saved, 2)
+            os.close(self._saved)
+
+
 class RadeCore:
     """One RADE modem context (receive and transmit state). Same shape as freedv.FreeDV: rx(), tx(), sync, snr."""
 
@@ -86,7 +105,8 @@ class RadeCore:
         if lib is None:
             raise RadeUnavailable(_ERR)
         self.lib = lib
-        self.g = lib.rg_open()
+        with _QuietStderr():
+            self.g = lib.rg_open()
         if not self.g:
             raise RadeUnavailable("the RADE library could not open a modem")
         self.sync, self.snr = 0, 0.0

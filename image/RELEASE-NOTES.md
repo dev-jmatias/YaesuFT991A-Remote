@@ -39,7 +39,19 @@ and goes back by itself if the new version does not start. Settings and accounts
 | `first-boot-settings.ps1` | sets hostname, user, password and Wi-Fi on a freshly written card (route A, without the repository) |
 | `radio-remote-installer-….zip` | installer pack with the program, the manual and offline libraries (route B) |
 | `radio-remote-v….tar.gz` | the program only: used by `self_update.sh`, or by hand to update a running Pi |
+| `radio-remote-rade-linux-aarch64.tar.xz` | the optional RADE library (FreeDV neural mode), installed with `install_rade.sh` |
 | `SHA256SUMS` | checksums of all of the above |
+
+### What is new in 1.1.5
+
+- **FreeDV RADE** (the newest, neural FreeDV mode) as an optional extra, verified receiving and transmitting on a real radio. It is a separate 24 MB library
+  that is not part of normal updates: install it on the Pi with `sudo /opt/radio-remote/current/scripts/install_rade.sh` (it downloads the matching
+  `radio-remote-rade-linux-aarch64.tar.xz` from this page, checks its checksum and restarts the service), then choose **RADE** in the FreeDV tab.
+  On a Raspberry Pi 4 it needs about 20% of one core to receive and 8% to transmit. Built from the open-source `rade_c` (BSD licence).
+- **FreeDV 1600** joins 700D and 700E in the mode list.
+- A **FreeDV indicator** under the frequency (before the MEM tag): dark while FreeDV is on, green while it is locked on a signal.
+- **Phones**: the channel cards are all the same size, and the channel editor no longer cuts off text.
+- New tool: `scripts/freedv_probe.py` measures the CPU each FreeDV mode needs on your Pi.
 
 ### What is new in 1.1.4
 
