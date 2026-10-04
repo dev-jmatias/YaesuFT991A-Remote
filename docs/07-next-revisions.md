@@ -20,10 +20,11 @@ for what each radio supports see the [capability matrix](01-capability-matrix.md
   first-contact checklist in [other radios](08-other-radios.md).
 - Quick split (`QS;`) on the FT-991A.
 
-## Decided for the next release
+## Built, not yet released (simulator and real Hamlib `rigctl` only)
 
-- **Logbook link**: a Hamlib "NET rigctl" server on the Pi (port 4532, home network only, off by default) so a logbook on another computer can
-  follow the radio and change frequency and mode. PTT and power are blocked for it. WSJT-X transmitting through the Pi is out of scope.
+- **Logbook link** ([logbook](logbook.md)): a Hamlib "NET rigctl" server on the Pi (port 4532, home network only, off by default) so a logbook
+  such as Log4OM can follow the radio and change frequency and mode. PTT and power are blocked for it. Tested against Hamlib 4.6.2 `rigctl`;
+  a test with Log4OM itself on the real radio is still to do. WSJT-X transmitting through the Pi is out of scope.
 
 ## Open
 

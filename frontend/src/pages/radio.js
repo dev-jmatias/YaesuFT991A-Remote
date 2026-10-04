@@ -9,7 +9,19 @@ import { createTuner } from "../tuner.js";
 import { el, fmtStep } from "../util.js";
 import { openSheet } from "./admin.js";
 
-const TABS = [["radio", "Radio"], ["filters", "Filters"], ["levels", "Levels"], ["audio", "Audio"]];
+// top-bar icons (phones show these instead of the words)
+const svg = (d) => `<svg class="ti" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const TI = {
+  wake: svg(`<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>`),
+  full: svg(`<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>`),
+  help: svg(`<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7M12 17h.01"/>`),
+  power: svg(`<path d="M12 3v9"/><path d="M6.3 6.3a8 8 0 1 0 11.4 0"/>`),
+  admin: svg(`<path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z"/>`),
+  user: svg(`<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"/>`),
+  out: svg(`<path d="M9 4H5v16h4M16 8l4 4-4 4M20 12H9"/>`),
+};
+
+const TABS =[["radio", "Radio"], ["filters", "Filters"], ["levels", "Levels"], ["audio", "Audio"]];
 
 export function renderRadio(root, { onLogout, onAuthLost }) {
   const S = { state: {}, caps: null, user: null, safety: {}, ui: { steps: [100, 1000, 10000] }, audio: null, conn: "",
@@ -23,16 +35,16 @@ export function renderRadio(root, { onLogout, onAuthLost }) {
       <header class="topbar">
         <strong class="brand">Radio Remote</strong>
         <span class="row">
-          <button class="icon wide" id="wake" title="Keep the screen on" aria-pressed="false">Awake</button>
-          <button class="icon wide" id="full" title="Full screen">Full</button>
-          <button class="icon wide" id="help" title="The manual (works offline, from this Pi)">Help</button>
-          <button id="pwr" hidden title="Switch the radio off (standby)">Power off</button>
-          <button id="adm" hidden>Admin</button>
-          <button id="acct">Account</button>
-          <button id="logout">Sign out</button>
+          <button class="icon wide" id="wake" title="Keep the screen on" aria-label="Keep the screen on" aria-pressed="false">${TI.wake}<span class="tl">Awake</span></button>
+          <button class="icon wide" id="full" title="Full screen" aria-label="Full screen">${TI.full}<span class="tl">Full</span></button>
+          <button class="icon wide" id="help" title="The manual (works offline, from this Pi)" aria-label="Help">${TI.help}<span class="tl">Help</span></button>
+          <button id="pwr" hidden title="Switch the radio off (standby)" aria-label="Power off">${TI.power}<span class="tl">Power off</span></button>
+          <button id="adm" hidden title="Administration" aria-label="Admin">${TI.admin}<span class="tl">Admin</span></button>
+          <button id="acct" title="Your account" aria-label="Account">${TI.user}<span class="tl">Account</span></button>
+          <button id="logout" title="Sign out" aria-label="Sign out">${TI.out}<span class="tl">Sign out</span></button>
         </span>
       </header>
-      <div class="radiobar"><span class="rlabel">RADIO</span><span class="rtab"><i class="dot" id="dot"></i><span id="model"></span><small class="badge" id="conn">connecting…</small></span><div id="ctlbar" class="ctlbar"></div></div>
+      <div class="radiobar"><span class="rtab"><i class="dot" id="dot" role="img" aria-label="connecting"></i><span id="model"></span></span><div id="ctlbar" class="ctlbar"></div></div>
       <div id="mock" class="mockbanner" hidden>SIMULATED RADIO - nothing is connected or transmitting.</div>
       <div id="exp" class="mockbanner" hidden></div>
       <div id="offline" class="offline" hidden><span>Radio offline - waiting for it to come back. Controls are paused.</span><button class="active" id="poweron" hidden title="Wake the radio from standby (PS1). It needs a few seconds to start.">Power on radio</button></div>
@@ -71,10 +83,10 @@ export function renderRadio(root, { onLogout, onAuthLost }) {
 
   function paintChrome() {
     const s = S.state;
-    const c = $("conn");
-    c.textContent = s.connected ? "radio online" : "radio offline";
-    c.className = "badge " + (s.connected ? "ok" : "bad");
-    $("dot").className = "dot " + (s.connected ? "ok" : "bad");
+    // the dot alone shows the link: green = radio online, red = radio offline, yellow = (re)connecting to the server
+    const d = $("dot"), up = s.connected === true;
+    d.className = "dot " + (up ? "ok" : s.connected === false ? "bad" : "warn");
+    d.title = d.ariaLabel = up ? "Radio online" : s.connected === false ? "Radio offline" : "Connecting…";
     $("offline").hidden = s.connected !== false;
     $("poweron").hidden = !(S.caps?.features.power_on_cat && S.user?.role === "admin");
     view.classList.toggle("is-tx", !!s.tx);
@@ -287,9 +299,9 @@ export function renderRadio(root, { onLogout, onAuthLost }) {
   if (!document.documentElement.requestFullscreen) $("full").hidden = true;
 
   const sock = new RadioSocket({
-    onStatus: (up) => { if (!up) { const c = $("conn"); c.textContent = "reconnecting…"; c.className = "badge warn"; } },
+    onStatus: (up) => { if (!up) { const d = $("dot"); d.className = "dot warn"; d.title = d.ariaLabel = "Reconnecting…"; } },
     onAuthLost,
-    onKicked: (why) => { const c = $("conn"); c.textContent = why || "disconnected by administrator"; c.className = "badge bad"; view.classList.add("is-offline"); },
+    onKicked: (why) => { const d = $("dot"); d.className = "dot bad"; d.title = d.ariaLabel = why || "Disconnected by administrator"; toast(d.title); view.classList.add("is-offline"); },
     onMessage: (m) => {
       if (m.t === "hello") {
         if (m.build && window.__loadedBuild && m.build !== window.__loadedBuild) $("updbar").hidden = false;   // an update was installed under this open page

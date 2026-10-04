@@ -54,7 +54,9 @@ button.icon { width: 34px; padding: 0; } button.icon.wide { width: auto; padding
 .rlabel { font-size: .66rem; letter-spacing: .14em; color: var(--dim); font-weight: 600; }
 .rtab { display: inline-flex; align-items: center; gap: 8px; padding: 4px 12px; border-radius: 6px; background: var(--panel3); border-left: 3px solid var(--cyan); font-size: .85rem; }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: #4b587a; display: inline-block; }
-.dot.ok { background: var(--green); box-shadow: 0 0 6px rgba(52,211,153,.8); } .dot.bad { background: var(--red); }
+.dot.ok { background: var(--green); box-shadow: 0 0 6px rgba(52,211,153,.8); } .dot.bad { background: var(--red); } .dot.warn { background: var(--yellow); box-shadow: 0 0 6px rgba(250,204,21,.7); animation: dotpulse 1.2s ease-in-out infinite; }
+@keyframes dotpulse { 50% { opacity: .35; } }
+.rtab .dot { width: 10px; height: 10px; }
 .badge { padding: 1px 8px; border-radius: 999px; font-size: .72rem; border: 1px solid var(--line2); white-space: nowrap; color: var(--dim); }
 .badge.ok { color: var(--green); border-color: #1f5f4a; } .badge.bad { color: var(--red); border-color: #6b1a30; } .badge.warn { color: var(--yellow); }
 .mockbanner { background: #2a1f08; color: var(--yellow); border: 1px solid #6b4b0a; border-radius: 8px; padding: 3px 10px; font-size: .75rem; margin-bottom: var(--gap); }
@@ -523,12 +525,14 @@ html[data-tablet] .layout { align-items: stretch; }        /* flex column: every
 .swrwarn { margin-top: 6px; padding: 4px 10px; border-radius: 6px; background: #3a0f1c; color: #ffd1da; border: 1px solid var(--red); font-size: .8rem; font-weight: 700; }
 .swrwarn[hidden] { display: none; }
 .seg.alarm .seglbl b { color: var(--red); }
-/* PTT lock (next to the mic input choice, above HOLD TO TRANSMIT) */
-.lockbtn { display: inline-flex; align-items: center; gap: 6px; min-height: 30px; margin-left: auto; padding: 2px 10px; }
+/* PTT lock: round button beside HOLD TO TRANSMIT */
+.pttrow { display: flex; align-items: stretch; gap: 10px; }
+.pttrow .ptt { flex: 1 1 auto; width: auto; min-width: 0; }
+.lockbtn { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 56px; min-height: 56px; align-self: center; padding: 0; border-radius: 50%; }
+.lockbtn svg { width: 24px; height: 24px; }
 .lockbtn[hidden] { display: none; }
-button.lockbtn.on { background: var(--yellow); color: #1a1100; border-color: transparent; font-weight: 700; }
+button.lockbtn.on { background: var(--yellow); color: #1a1100; border-color: transparent; }
 .lockbtn.on .shackle { transform: none; } .lockbtn:not(.on) .shackle { transform: translateY(-2px) rotate(-18deg); transform-origin: 16px 11px; }
-.lockrow { display: flex; justify-content: flex-end; margin-bottom: 8px; }
 .ptt.locked, .ptt.locked:disabled { opacity: .6; border-color: #6b4b0a; color: #fde7a7; background: linear-gradient(180deg, #2a2108, #19140a); }
 .vbadge.memb { background: var(--purple); color: #130a2a; border-color: transparent; }
 .vbadge.memb[hidden] { display: none; }
@@ -544,3 +548,30 @@ button.lockbtn.on { background: var(--yellow); color: #1a1100; border-color: tra
 .memrow .mmode { color: var(--cyan); text-align: right; font-size: .85rem; }
 .memrow.cur { border-color: var(--purple); background: linear-gradient(180deg, #2a2050, #1b1438); }
 @media (max-width: 699px) { .memrow { grid-template-columns: 2.8em minmax(0, 1fr) auto; } .memrow .mmode { display: none; } }
+
+/* top bar: an icon next to the words on wide screens, icons only on phones */
+.topbar .ti { display: none; }
+@media (max-width: 699px) {
+  .topbar .tl { display: none; }
+  .topbar .ti { display: block; margin: 0 auto; }
+  #wake { display: inline-flex; } #wake[hidden], .topbar button[hidden] { display: none; }
+  .topbar button { min-height: 34px; }
+  .topbar button.on { color: var(--cyan); }
+}
+
+/* phone: header = RX / TX / MEM + the status lights + speaker/mic on ONE line; the VFO-A name moves to the frequency line (right) */
+.freqrow { display: block; } .vl2 { display: none; }
+@media (max-width: 699px) {
+  .freqrow { display: flex; align-items: center; gap: 6px; }
+  .freqrow .freqhost { flex: 1 1 auto; min-width: 0; }
+  .vfopanel.a .vl2 { display: inline; flex: 0 0 auto; margin-left: auto; font-size: .78rem; }
+  .vfopanel.a header .vl { display: none; }
+  .vfopanel.a header { flex-wrap: nowrap; gap: 4px; min-width: 0; }
+  .vfopanel.a header .vbadge { font-size: .56rem; padding: 0 4px; }
+  .vfopanel.a .rxchips { order: 0; flex: 0 1 auto; flex-basis: auto; flex-wrap: nowrap; gap: 3px; margin-left: 2px; min-width: 0; overflow: hidden; }
+  .vfopanel.a .schip { font-size: .54rem; padding: 0 4px; line-height: 1.5; white-space: nowrap; }
+  .vfopanel.a .audbtns { margin-left: auto; flex: 0 0 auto; }
+}
+
+/* MEM channel tag sits on the mode / band line under the frequency (all screens) */
+.vmode { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; } .vmode .vbadge.memb { margin-left: 4px; white-space: nowrap; }

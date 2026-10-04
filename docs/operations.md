@@ -42,6 +42,7 @@ Other changes need `sudo systemctl restart radio-remote` (the log level and audi
 | `ui.swr_raw_at_3` | only for radios that report a raw SWR value (FT-991A): the raw reading (10..255) at which the radio's own meter shows 3:1; the ratio is estimated on a straight line from 1:1 = 0. **Provisional**: the CAT manual gives no calibration | 100 |
 | `logging.level` | DEBUG/INFO/WARNING/ERROR | INFO |
 | `updates.check` | once a day ask GitHub whether a newer release exists and tell the administrators (nothing is installed automatically); also a switch in Admin > Config > Updates | true |
+| `rigctl.enabled` / `port` / `allow` / `set` | the logbook link ([logbook](logbook.md)): off by default; port 4532; `allow` = `private` or a list of addresses/networks; `set = false` makes it read-only. Also a card in Admin > Config; applies at once | false / 4532 / private / true |
 | `updates.repo` | the GitHub repository to ask (`owner/name`); file only | `dev-jmatias/YaesuFT991A-Remote` |
 | `storage.data_dir` | database location | `/var/lib/radio-remote` |
 

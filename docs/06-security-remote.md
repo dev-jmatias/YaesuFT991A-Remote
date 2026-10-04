@@ -88,6 +88,7 @@ sudo ufw default deny incoming
 sudo ufw allow in on tailscale0
 sudo ufw allow from 192.168.0.0/16 to any port 443 proto tcp   # your LAN range
 sudo ufw allow from 192.168.0.0/16 to any port 22 proto tcp
+sudo ufw allow from 192.168.0.0/16 to any port 4532 proto tcp  # only if you use the logbook link (docs/logbook.md)
 sudo ufw enable
 ```
 

@@ -18,12 +18,13 @@ from . import __version__, admin, logs, sdnotify, updates
 from .audio.service import AudioService, AudioUnavailable
 from .auth import AuthStore, Session
 from .common import (COOKIE, K_AUDIO, K_AUTH, K_CFG, K_CFGPATH, K_DRIVER, K_GUARD, K_HUB, K_RESTART, K_SESSION,
-                     K_STARTED, K_UPDATES, CommandError, client_ip, is_https, read_json)
+                     K_RIGCTL, K_STARTED, K_UPDATES, CommandError, client_ip, is_https, read_json)
 from .lease import ControlLease, LeaseError
 from .radio import controls
 from .radio.base import METER_FIELDS, RadioDriver, RadioError
 from .radio.registry import create_driver
 from .ratelimit import TokenBucket
+from .rigctl import RigctlServer
 from .safety import TxGuard, TxRefused
 
 log = logging.getLogger("web")
@@ -551,6 +552,8 @@ def create_app(cfg: dict, driver: RadioDriver | None = None, auth: AuthStore | N
     app[K_STARTED] = time.monotonic()
     app[K_UPDATES] = updates.UpdateChecker(lambda: app[K_CFG]["updates"])        # reads the live config: Admin > Config applies at once
 
+    app[K_RIGCTL] = rigctl = RigctlServer(driver, lambda: app[K_CFG], lambda ev, detail: auth.audit(ev, None, None, detail))
+
     watchdog = sdnotify.Watchdog(lambda: guard._task is not None and not guard._task.done())
 
     async def on_start(app):
@@ -562,11 +565,13 @@ def create_app(cfg: dict, driver: RadioDriver | None = None, auth: AuthStore | N
             log.exception("audio failed to start; continuing without audio")
         log.info("started: radio=%s allow_ptt=%s", driver.caps.data["model"]["name"], guard.allow_ptt)
         watchdog.start()
+        await rigctl.apply()
         if not driver.is_mock and not os.environ.get("RADIO_REMOTE_TESTING"):        # a simulated radio / the tests never phone home
             app[K_UPDATES].start()
 
     async def on_stop(app):
         await app[K_UPDATES].stop()
+        await rigctl.stop()
         await watchdog.stop()
         await guard.stop()          # un-keys first
         await audio.stop()

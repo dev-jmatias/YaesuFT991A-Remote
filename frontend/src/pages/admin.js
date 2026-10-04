@@ -79,6 +79,7 @@ export function openSheet(root, { user, tab, sock }) {
     async config() {
       const info = await api("/api/config");
       const upd = await api("/api/admin/update").catch(() => null);
+      const rig = await api("/api/admin/rigctl").catch(() => null);
       const c = info.config, ed = info.editable;
       const opt = (list, v) => list.map((x) => `<option ${String(x) === String(v) ? "selected" : ""}>${x}</option>`).join("");
       body.innerHTML = `<div class="note"></div>
@@ -136,6 +137,15 @@ export function openSheet(root, { user, tab, sock }) {
           <div class="row"><button type="button" id="upd-now">Check now</button></div>
           <p class="dim" data-updhow hidden></p>
         </div>
+        <div class="card2 rigcard"><h3>Logbook link (Hamlib rigctl)</h3>
+          <p class="dim">Lets a logbook program on your home network (Log4OM, for example) follow the radio and change its frequency and mode. It can never transmit or switch the radio off. It has no password, so keep the port closed on your router.</p>
+          <label class="chk"><input type="checkbox" id="rig-on" ${c.rigctl?.enabled ? "checked" : ""} ${info.writable ? "" : "disabled"}> Switch the logbook link on</label>
+          <label class="chk"><input type="checkbox" id="rig-set" ${c.rigctl?.set ? "checked" : ""} ${info.writable ? "" : "disabled"}> Let the logbook change frequency and mode <span class="dim">(off = it can only read)</span></label>
+          <div class="row"><label>Port <input id="rig-port" type="number" min="1024" max="65535" value="${esc(c.rigctl?.port ?? 4532)}" style="width:6em"></label>
+            <label>Allowed addresses <input id="rig-allow" value="${esc(c.rigctl?.allow ?? "private")}" size="26" title="private = this Pi and home-network ranges, or a list such as 192.168.1.0/24, 100.64.0.0/10"></label>
+            <button type="button" id="rig-save" ${info.writable ? "" : "disabled"}>Apply</button></div>
+          <p data-rigline></p>
+        </div>
         <p class="dim"><b>Not editable here, on purpose:</b> ${info.locked.filter((k) => k !== "safety.allow_ptt").map(esc).join(", ")}.</p>
         <div id="restart"></div>`;
       const paintUpd = (u) => {
@@ -150,6 +160,23 @@ export function openSheet(root, { user, tab, sock }) {
         how.hidden = !u.newer;
         how.textContent = "To update, sign in to the Pi (SSH) and run:  sudo /opt/radio-remote/current/scripts/self_update.sh   (it makes a backup first and goes back by itself if the new version does not start).";
       };
+      const paintRig = (s) => {
+        const l = body.querySelector("[data-rigline]");
+        if (!s) { l.textContent = "The status is not available."; return; }
+        l.textContent = s.error ? `Problem: ${s.error}` : !s.enabled ? "Switched off." : s.listening
+          ? `Listening on port ${s.port}. In the logbook choose Hamlib "NET rigctl" with host ${location.hostname} and port ${s.port}. ` +
+            (s.clients.length ? `Connected: ${s.clients.map((x) => x.ip).join(", ")}. ` : "No logbook connected right now. ") + (s.refused ? `${s.refused} refused (address not allowed).` : "")
+          : "Enabled, but not listening yet.";
+      };
+      paintRig(rig);
+      body.querySelector("#rig-save").onclick = guard(async () => {
+        const v = { enabled: body.querySelector("#rig-on").checked, set: body.querySelector("#rig-set").checked,
+                    port: +body.querySelector("#rig-port").value, allow: body.querySelector("#rig-allow").value.trim() };
+        await api("/api/config", "PUT", { rigctl: v });
+        Object.assign(c.rigctl, v);
+        paintRig(await api("/api/admin/rigctl"));
+        note("Logbook link settings applied.");
+      });
       const when_ = (ts) => new Date(ts * 1000).toLocaleString();
       paintUpd(upd);
       body.querySelector("#upd-now").onclick = guard(async () => {

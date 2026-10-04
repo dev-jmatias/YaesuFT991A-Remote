@@ -34,6 +34,7 @@ SECTIONS = [
         ("operations", "Operations", "Configuration, services, logs, updating, backup and restore"),
         ("radio-connection", "Radio connection", "USB CAT and audio, the radio's own menu settings"),
         ("04-audio", "Remote audio", "Listening, microphone, levels, troubleshooting"),
+        ("logbook", "Logbook link", "Let Log4OM and other logbooks follow and tune the radio (Hamlib rigctl)"),
         ("tailscale", "Remote access with Tailscale", "Reach the radio from anywhere without opening router ports"),
         ("06-security-remote", "Security and remote access", "Accounts, HTTPS, the safety design"),
         ("troubleshooting", "Troubleshooting", "Symptom by symptom"),

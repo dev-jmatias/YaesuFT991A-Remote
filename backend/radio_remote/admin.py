@@ -10,7 +10,7 @@ from aiohttp import web
 
 from . import __version__, config, sysinfo
 from .common import (COOKIE, K_AUDIO, K_AUTH, K_CFG, K_CFGPATH, K_DRIVER, K_GUARD, K_HUB, K_RESTART, K_SESSION,
-                     K_STARTED, K_UPDATES, client_ip, read_json, require_admin)
+                     K_RIGCTL, K_STARTED, K_UPDATES, client_ip, read_json, require_admin)
 from .logs import RING, scrub
 
 log = logging.getLogger("admin")
@@ -25,9 +25,10 @@ EDITABLE = {
     "ui": {"tuning_steps_hz", "meter_alc_full", "meter_comp_full", "swr_warn", "swr_raw_at_3"},
     "logging": {"level"},
     "updates": {"check"},
+    "rigctl": {"enabled", "port", "allow", "set"},
 }
 LOCKED = ["safety.allow_ptt", "server.host", "server.port", "server.allowed_origins", "storage.data_dir", "updates.repo"]
-LIVE = {("logging", "level"), ("audio", "rx_gain_db"), ("audio", "tx_gain_db"), ("updates", "check")}
+LIVE = {("logging", "level"), ("audio", "rx_gain_db"), ("audio", "tx_gain_db"), ("updates", "check"), ("rigctl", "enabled"), ("rigctl", "port"), ("rigctl", "allow"), ("rigctl", "set")}
 
 
 async def _run(fn, *a):
@@ -262,6 +263,8 @@ async def put_config(request):
     if ("logging", "level") in {(s, k) for s, v in body.items() for k in v}:
         logging.getLogger().setLevel(new["logging"]["level"].upper())
     app[K_CFG].update(new)
+    if "rigctl" in body and app.get(K_RIGCTL):
+        await app[K_RIGCTL].apply()                     # start, stop or move the logbook link at once
     if any(k in ("rx_gain_db", "tx_gain_db") for k in body.get("audio", {})) and app[K_AUDIO]:
         app[K_AUDIO].set_gains(new["audio"]["rx_gain_db"], new["audio"]["tx_gain_db"])     # takes effect immediately
     app[K_AUTH].audit("config_changed", admin.username, client_ip(request), ", ".join(changed) or "no change")
@@ -269,6 +272,11 @@ async def put_config(request):
 
 
 MAX_RESTORE_BYTES = 16 * 1024            # the server refuses larger request bodies anyway (client_max_size); a settings file is ~1 KB
+
+
+async def rigctl_state(request):
+    require_admin(request)
+    return web.json_response(request.app[K_RIGCTL].status())
 
 
 async def update_state(request):
@@ -342,6 +350,8 @@ async def restore_config(request):
         raise web.HTTPConflict(text=f"could not write the config file: {e}") from None
     changed = [f"{s}.{k}" for s, v in applied.items() for k in v if app[K_CFG][s][k] != new[s][k]]
     app[K_CFG].update(new)
+    if "rigctl" in applied and app.get(K_RIGCTL):
+        await app[K_RIGCTL].apply()
     app[K_AUTH].audit("config_restored", admin.username, client_ip(request), ", ".join(changed) or "no change")
     return web.json_response({"ok": True, "changed": changed, "ignored": ignored, "restart_required": bool(changed)})
 
@@ -399,6 +409,7 @@ def add_routes(app: web.Application) -> None:
     r.add_put("/api/config", put_config)
     r.add_post("/api/admin/ptt", set_ptt_permission)
     r.add_get("/api/admin/update", update_state)
+    r.add_get("/api/admin/rigctl", rigctl_state)
     r.add_post("/api/admin/update/check", update_check_now)
     r.add_get("/api/admin/backup", backup_config)
     r.add_post("/api/admin/restore", restore_config)

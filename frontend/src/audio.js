@@ -25,7 +25,11 @@ export function createAudioPanel({ conn, info: initialInfo, model = "Radio" }) {
   let retry = 0, retryTimer = 0, busy = false, micAck = false;       // micAck: the server accepted our microphone track
   const A = { listening: false, mic: false, state: "" };
   const listeners = new Set();
-  const notify = () => listeners.forEach((f) => { try { f(); } catch { /* a stale listener must not break audio */ } });
+  let micHook = null, lastMic = false;
+  const notify = () => {
+    listeners.forEach((f) => { try { f(); } catch { /* a stale listener must not break audio */ } });
+    if (A.mic !== lastMic) { lastMic = A.mic; try { micHook?.(A.mic); } catch { /* the radio link is gone: nothing to switch */ } }
+  };
 
   const root = document.createElement("div");
   root.className = "audiopanel";
@@ -247,6 +251,9 @@ export function createAudioPanel({ conn, info: initialInfo, model = "Radio" }) {
     get state() { return A.state; },
     toggleListen: api_toggleListen,
     toggleMic() { A.mic = !A.mic; sync(true); },
+    // the page that owns the radio link registers here; it is told whenever the mic is armed or disarmed, however that happened
+    // (button, logout, server refusal), so the radio's input menu follows: armed = REAR (USB audio), disarmed = MIC
+    onMicChange(fn) { micHook = fn; },
     // after the websocket came back: start again if the user has Listen on but the audio link is gone
     resume() { if (wanted && !pc && !busy) { retry = 0; start(); } },
     update(state) {

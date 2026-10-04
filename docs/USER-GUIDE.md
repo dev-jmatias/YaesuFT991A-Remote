@@ -59,7 +59,7 @@ from the Pi itself (no internet needed).
 * **VFO tools:** *A -> B*, *B -> A*, *A <-> B* (swap), *Split* (receive on A, transmit on B), *Quick split*, **Set B** (type a frequency in MHz),
   and **Memories**.
 * **Band select** and **Set frequency** (type MHz, e.g. `14.195`, or Hz, e.g. `14195000`), **Mode** buttons.
-* **PTT** (hold to transmit), always at the bottom, with the **TX mic input** switch above it.
+* **PTT** (hold to transmit), always at the bottom, with the round **Lock PTT** button beside it.
 
 ### Filters, Levels, Audio tabs
 
@@ -87,12 +87,10 @@ Rules that always apply:
 
 * **Hold** the button to transmit; let go to stop. The server un-keys on any hiccup: lost connection, lost control, time limit, shutdown.
 * Only the client with control can transmit; microphone audio reaches the radio only while that client is keyed.
-* **TX mic input** chooses where the radio takes SSB audio from: **REAR (remote)** for use through this app, **MIC (local)** for the front
-  microphone. If it is on MIC, a yellow note reminds you that remote audio is not transmitted. Switch it back to REAR when you finish
-  operating at the radio.
+* **The microphone button** (top right of the frequency panel) does two things at once: it arms your microphone in the browser and sets the radio's input (menu 106) to **REAR**, so the radio takes its audio from the USB port. Switching it off puts the radio back to **MIC** (the front microphone). It is locked while the radio is transmitting. If you close the page without switching it off, the radio stays on REAR until you next use the microphone button or change menu 106 on the radio.
 * **Tune** makes the radio transmit a carrier for a few seconds while the antenna tuner matches. Use an antenna or dummy load.
-* **Lock PTT** (button above *Hold to transmit*, next to the mic input choice) prevents accidental transmissions from **this device**:
-  while it is on (amber, "PTT locked") the PTT button and **Tune** cannot be used. A transmission that is already running can still be
+* **Lock PTT** (the round padlock beside *Hold to transmit*) prevents accidental transmissions from **this device**:
+  while it is on (amber) the PTT button and **Tune** cannot be used. A transmission that is already running can still be
   released, and switching the lock on while holding PTT lets go at once. The choice is remembered in this browser; other devices have
   their own switch. It is a convenience, not a security setting: the server's own safeguards (permission, control, heartbeat, time
   limit) work as before.
@@ -115,6 +113,7 @@ Rules that always apply:
 ## 7. Remote access
 
 * At home: `https://<pi-name>.local`. Your device must trust the Pi's certificate once (see [security and remote access](06-security-remote.md)).
+* A logbook on another computer (Log4OM and others) can follow and tune the radio over the home network: [logbook link](logbook.md).
 * Away from home: **Tailscale** ([guide](tailscale.md)). No port is opened on your router.
 
 ## 8. Administrators
@@ -132,6 +131,6 @@ standby; when the radio is off, the offline banner shows **Power on radio**. Det
 |---|---|
 | Radio offline | cable, radio on, **Admin > Diagnostics**; see [troubleshooting](troubleshooting.md) |
 | No sound | tap the speaker icon; Audio tab status; the radio's USB OUT LEVEL menu |
-| Microphone silent | tap the microphone icon and allow it in the browser; HTTPS needed; TX mic input = REAR; check **To radio** while keyed |
+| Microphone silent | tap the microphone icon and allow it in the browser; HTTPS needed; the microphone button is on (radio menu 106 = REAR); check **To radio** while keyed |
 | Cannot transmit | transmitting enabled? you have control? not a viewer account? |
 | Page looks old after an update | press Ctrl+F5, or the **Reload now** bar |

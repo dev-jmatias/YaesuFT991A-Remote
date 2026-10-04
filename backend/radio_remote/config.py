@@ -47,6 +47,10 @@ DEFAULTS: dict[str, dict[str, Any]] = {
     # update check: once a day the server asks GitHub (api.github.com, anonymous, read-only) for the newest release and tells the
     # administrators when it is newer than this program. Nothing is downloaded or installed automatically. check = false switches it off.
     "updates": {"check": True, "repo": "dev-jmatias/YaesuFT991A-Remote"},
+    # Hamlib "NET rigctl" link for a logbook on the home network (see rigctl.py). Off by default. It can read frequency/mode and set
+    # frequency/mode (set = false makes it read-only); it can never transmit or power the radio off. allow = "private" (this machine and
+    # the home-network ranges) or a comma-separated list of addresses / networks, e.g. "192.168.1.0/24, 100.64.0.0/10".
+    "rigctl": {"enabled": False, "port": 4532, "allow": "private", "set": True},
     "storage": {"data_dir": "data"},
 }
 
@@ -115,6 +119,14 @@ def validate(cfg: dict) -> dict:
         raise ConfigError("logging.level invalid")
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,38}/[A-Za-z0-9._-]{1,100}", cfg["updates"]["repo"]):
         raise ConfigError("updates.repo must look like owner/name")
+    r = cfg["rigctl"]
+    if not 1024 <= r["port"] <= 65535 or r["port"] == cfg["server"]["port"]:
+        raise ConfigError("rigctl.port must be 1024..65535 and different from server.port")
+    try:
+        from .rigctl import parse_allow
+        parse_allow(r["allow"])
+    except ValueError as e:
+        raise ConfigError(f"rigctl.allow: {e}") from None
     return cfg
 
 
