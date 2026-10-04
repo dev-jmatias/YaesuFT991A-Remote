@@ -4,7 +4,10 @@ from __future__ import annotations
 import asyncio
 import copy
 import logging
+import platform
+import sys
 import time
+from pathlib import Path
 
 from aiohttp import web
 
@@ -277,6 +280,50 @@ async def put_config(request):
 MAX_RESTORE_BYTES = 16 * 1024            # the server refuses larger request bodies anyway (client_max_size); a settings file is ~1 KB
 
 
+_rade_lock = asyncio.Lock()
+
+
+async def _run_rade_install(dest: Path, repo: str) -> tuple[int, str]:
+    """Run scripts/rr_admin.py fetch-rade as a child process (download, SHA-256 check, safe unpack into dest). Separate so tests can replace it."""
+    script = Path(__file__).resolve().parents[2] / "scripts" / "rr_admin.py"
+    proc = await asyncio.create_subprocess_exec(sys.executable, str(script), "fetch-rade", "--repo", repo, "--dest", str(dest),
+                                                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
+    try:
+        out, _ = await asyncio.wait_for(proc.communicate(), 600)
+    except asyncio.TimeoutError:
+        proc.kill()
+        return 1, "timed out"
+    return proc.returncode or 0, out.decode("utf-8", "replace")[-2000:]
+
+
+async def rade_install(request):
+    """The Install RADE button: download the RADE library from this version's GitHub release (checksum verified) into the data folder and
+    start using it at once, with no restart. Administrators only; the same trust as the update check (the project's own release page)."""
+    from .audio import freedv, rade
+    admin = require_admin(request)
+    app = request.app
+    body = await read_json(request)
+    if body.get("confirm") is not True:
+        raise web.HTTPBadRequest(text="confirmation required")
+    if platform.machine() not in ("aarch64", "arm64"):
+        raise web.HTTPConflict(text="the RADE library is only built for 64-bit ARM (Raspberry Pi OS 64-bit)")
+    dest = rade.install_dir()
+    if dest is None or not app[K_AUDIO]:
+        raise web.HTTPConflict(text="audio is not available on this server")
+    if _rade_lock.locked():
+        raise web.HTTPConflict(text="an installation is already running")
+    async with _rade_lock:
+        rc, out = await _run_rade_install(dest, app[K_CFG]["updates"]["repo"])
+    last = next((ln.strip() for ln in reversed(out.splitlines()) if ln.strip()), "no output")
+    app[K_AUTH].audit("rade_installed" if rc == 0 else "rade_install_failed", admin.username, client_ip(request), last[:200])
+    if rc != 0:
+        log.warning("RADE install failed: %s", last)
+        return web.json_response({"ok": False, "error": last[:300]}, status=502)
+    app[K_AUDIO].refresh_freedv()
+    why = freedv.mode_status().get("RADE", "")
+    return web.json_response({"ok": not why, "reason": why, "message": last[:300]})
+
+
 async def rigctl_state(request):
     require_admin(request)
     return web.json_response(request.app[K_RIGCTL].status())
@@ -286,6 +333,76 @@ async def update_state(request):
     """What the update check knows (administrators only): current and newest version, link, when it last asked, last error."""
     require_admin(request)
     return web.json_response(request.app[K_UPDATES].state())
+
+
+# ---- "Update now": the page only drops a request file; a root helper started by systemd (radio-remote-update.path) does the update
+UPDATE_UNIT = Path("/etc/systemd/system/radio-remote-update.path")           # present when the helper is installed (install.sh / update.sh put it there)
+UPDATE_STALE_S = 1800
+
+
+def _update_files(app) -> tuple[Path, Path, Path]:
+    d = Path(app[K_CFG]["storage"]["data_dir"])
+    return d / "update-request", d / "update-status", d / "update.log"
+
+
+def _update_status(app) -> dict:
+    req, st, logf = _update_files(app)
+    state, since, who = "idle", 0, ""
+    try:
+        parts = st.read_text(encoding="utf-8").split()
+        state, since, who = parts[0], int(parts[1]), (parts[2] if len(parts) > 2 else "")
+    except (OSError, ValueError, IndexError):
+        pass
+    if state == "running" and time.time() - since > UPDATE_STALE_S:
+        state = "failed"                                    # a helper that died (power loss) must not block the button for ever
+    if req.exists() and state != "running":
+        state = "requested"
+    try:
+        tail = [scrub(ln) for ln in logf.read_text(encoding="utf-8", errors="replace").splitlines()[-40:]]
+    except OSError:
+        tail = []
+    return {"available": UPDATE_UNIT.is_file(), "state": state, "since": since, "by": who, "log": tail, "version": __version__}
+
+
+async def update_status(request):
+    require_admin(request)
+    return web.json_response(_update_status(request.app))
+
+
+async def update_start(request):
+    """The "Update now" button: ask the root helper to install the newest release (it downloads, checks the SHA-256, backs up, installs and rolls
+    back if the new version does not start). Needs the administrator's password again, a known newer version and the helper installed."""
+    admin = require_admin(request)
+    app, auth, ip = request.app, request.app[K_AUTH], client_ip(request)
+    body = await read_json(request)
+    if body.get("confirm") is not True or not isinstance(body.get("password"), str):
+        raise web.HTTPBadRequest(text="your password and a confirmation are required")
+    st = _update_status(app)
+    if not st["available"]:
+        raise web.HTTPConflict(text="the update helper is not installed on this system (run update.sh once, or use self_update.sh on the Pi)")
+    if st["state"] in ("running", "requested"):
+        raise web.HTTPConflict(text="an update is already running")
+    if not app[K_UPDATES].state().get("newer"):
+        raise web.HTTPConflict(text="no newer version is known: press Check now first")
+    key = f"update-now:{admin.username}"
+    wait = auth.retry_after(ip, key)
+    if wait > 0:
+        raise web.HTTPTooManyRequests(text=f"too many attempts; retry in {int(wait) + 1}s")
+    if not await _run(auth.check_password, admin.user_id, body["password"]):
+        auth._record_fail(ip, key)
+        auth.audit("update_denied", admin.username, ip, "wrong password")
+        raise web.HTTPForbidden(text="wrong password")
+    auth._fails.pop((ip, key.lower()), None)
+    req, _, _ = _update_files(app)
+    try:
+        tmp = req.with_name(req.name + ".tmp")
+        tmp.write_text(f"user={admin.username}\n", encoding="utf-8")
+        tmp.replace(req)
+    except OSError as e:
+        raise web.HTTPConflict(text=f"could not ask for the update: {e}") from None
+    auth.audit("update_requested", admin.username, ip, app[K_UPDATES].state().get("latest") or "")
+    log.warning("update to %s requested by %s", app[K_UPDATES].state().get("latest"), admin.username)
+    return web.json_response({"ok": True}, status=202)
 
 
 async def update_check_now(request):
@@ -413,6 +530,9 @@ def add_routes(app: web.Application) -> None:
     r.add_post("/api/admin/ptt", set_ptt_permission)
     r.add_get("/api/admin/update", update_state)
     r.add_get("/api/admin/rigctl", rigctl_state)
+    r.add_post("/api/admin/rade/install", rade_install)
+    r.add_get("/api/admin/update/status", update_status)
+    r.add_post("/api/admin/update/start", update_start)
     r.add_post("/api/admin/update/check", update_check_now)
     r.add_get("/api/admin/backup", backup_config)
     r.add_post("/api/admin/restore", restore_config)

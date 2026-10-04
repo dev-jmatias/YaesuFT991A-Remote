@@ -6,6 +6,7 @@ import hashlib
 import json
 import logging
 import os
+import platform
 import secrets
 import time
 from dataclasses import dataclass, field
@@ -566,11 +567,14 @@ async def audio_ws(request):
 
 
 async def freedv_info(request):
+    from .audio import rade as _rade
     """FreeDV state and the preset channel list (any signed-in user may look; administrators change the list in the config)."""
     app = request.app
     fd, audio = app[K_CFG]["freedv"], app[K_AUDIO]
     st = audio.freedv_state()
-    return web.json_response({**st, "tx_level_db": fd["tx_level_db"], "install_rade": "sudo /opt/radio-remote/current/scripts/install_rade.sh", "channels": [
+    return web.json_response({**st, "tx_level_db": fd["tx_level_db"], "install_rade": "sudo /opt/radio-remote/current/scripts/install_rade.sh",
+                          "rade_installable": platform.machine() in ("aarch64", "arm64"), "arch": platform.machine(),
+                          "rade_path": _rade.loaded_path(), "channels": [
         {"name": n, "hz": int(h), "mode": m} for n, h, m in (c.split("|") for c in fd["channels"])]})
 
 
@@ -635,6 +639,8 @@ def create_app(cfg: dict, driver: RadioDriver | None = None, auth: AuthStore | N
     )
     app[K_AUDIO] = app[K_HUB].audio = audio
     audio.set_freedv_params(cfg["freedv"]["mode"], cfg["freedv"]["tx_level_db"])
+    from .audio import rade as _rade
+    _rade.set_install_dir(Path(cfg["storage"]["data_dir"]) / "lib")
     app[K_HUB].ui = {"steps": cfg["ui"]["tuning_steps_hz"],
                      "meter": {"alc_full": cfg["ui"]["meter_alc_full"], "comp_full": cfg["ui"]["meter_comp_full"],
                                "swr_warn": cfg["ui"]["swr_warn"], "swr_raw_at_3": cfg["ui"]["swr_raw_at_3"]}}

@@ -45,6 +45,9 @@ Switching FreeDV off passes the radio's audio through as before (it does not cha
 RADE V1 sends speech as an OFDM signal that is about 2.1 kHz wide and decodes at lower signal-to-noise ratios than 700D/700E (it still locks at about 0 dB
 on a fading path). It is the mode most new FreeDV activity uses. It comes from a separate library that is **not** part of the normal install (about 24 MB):
 
+The easiest way: an administrator presses **Install RADE** in **Admin > Config > RADE** (or in the **FreeDV** tab, which shows the same button; on an installed system it says **Reinstall RADE**). It works on a 64-bit ARM Pi only. The Pi downloads the
+library from the project's release page, checks its SHA-256, puts it in `/var/lib/radio-remote/lib` and starts using it at once, with no restart. From the command line:
+
 ```bash
 sudo /opt/radio-remote/current/scripts/install_rade.sh            # downloads the matching release file, checks its SHA-256, installs it, restarts the service
 sudo /opt/radio-remote/current/scripts/install_rade.sh --file F.tar.xz   # from a file you copied to the Pi (no internet)

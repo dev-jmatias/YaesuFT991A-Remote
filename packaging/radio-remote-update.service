@@ -1,0 +1,10 @@
+[Unit]
+Description=Update Radio Remote (asked for in the web page)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# runs as root: self_update.sh downloads the newest release, checks its SHA-256, makes a backup, installs it and rolls back if it does not start
+ExecStart=/opt/radio-remote/current/scripts/update_from_request.sh
+TimeoutStartSec=1800

@@ -49,7 +49,10 @@ activate_release "$NEW_RELEASE"
 run install -m 0644 "$NEW_RELEASE/packaging/radio-remote.service" /etc/systemd/system/radio-remote.service
 run install -m 0644 "$NEW_RELEASE/packaging/radio-remote-backup.service" /etc/systemd/system/radio-remote-backup.service
 run install -m 0644 "$NEW_RELEASE/packaging/radio-remote-backup.timer" /etc/systemd/system/radio-remote-backup.timer
+run install -m 0644 "$NEW_RELEASE/packaging/radio-remote-update.path" /etc/systemd/system/radio-remote-update.path
+run install -m 0644 "$NEW_RELEASE/packaging/radio-remote-update.service" /etc/systemd/system/radio-remote-update.service
 run systemctl daemon-reload
+run systemctl enable --now radio-remote-update.path          # the "Update now" button in the web page (also for Pis installed before it existed)
 
 if service_restart_and_check; then
   echo "==> Updated and healthy."

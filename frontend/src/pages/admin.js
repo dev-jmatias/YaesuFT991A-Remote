@@ -79,7 +79,9 @@ export function openSheet(root, { user, tab, sock }) {
     async config() {
       const info = await api("/api/config");
       const upd = await api("/api/admin/update").catch(() => null);
+      let ustat = await api("/api/admin/update/status").catch(() => null);
       const rig = await api("/api/admin/rigctl").catch(() => null);
+      let fdv = await api("/api/freedv").catch(() => null);
       const c = info.config, ed = info.editable;
       const opt = (list, v) => list.map((x) => `<option ${String(x) === String(v) ? "selected" : ""}>${x}</option>`).join("");
       body.innerHTML = `<div class="note"></div>
@@ -134,8 +136,19 @@ export function openSheet(root, { user, tab, sock }) {
           <p data-updline></p>
           <label class="chk"><input type="checkbox" id="upd-on" ${c.updates?.check ? "checked" : ""} ${info.writable ? "" : "disabled"}> Check for updates once a day
             <span class="dim">(asks GitHub if a newer release exists; nothing is downloaded or installed automatically)</span></label>
-          <div class="row"><button type="button" id="upd-now">Check now</button></div>
+          <div class="row"><button type="button" id="upd-now">Check now</button>
+            <button type="button" id="upd-install" class="active" hidden title="Download the newest version, check it, back up and install it (it goes back by itself if the new version does not start)">Update now…</button></div>
+          <form id="upd-form" class="row" hidden>
+            <span class="dim">The Pi downloads and installs the new version, restarts the service and the page reconnects. Radio Remote is unavailable for about a minute; a transmission in progress is stopped.</span>
+            <input name="password" type="password" placeholder="Your password" autocomplete="current-password" required>
+            <button class="danger">Update now</button></form>
+          <p class="dim" id="upd-prog" hidden></p>
+          <pre class="updlog" id="upd-log" hidden></pre>
           <p class="dim" data-updhow hidden></p>
+        </div>
+        <div class="card2 radecard"><h3>RADE (FreeDV neural mode)</h3>
+          <p class="dim" data-radeline></p>
+          <div class="row"><button type="button" id="rade-install" class="active" hidden>Install RADE</button></div>
         </div>
         <div class="card2 rigcard"><h3>Logbook link (Hamlib rigctl)</h3>
           <p class="dim">Lets a logbook program on your home network (Log4OM, for example) follow the radio and change its frequency and mode. It can never transmit or switch the radio off. It has no password, so keep the port closed on your router.</p>
@@ -148,6 +161,29 @@ export function openSheet(root, { user, tab, sock }) {
         </div>
         <p class="dim"><b>Not editable here, on purpose:</b> ${info.locked.filter((k) => k !== "safety.allow_ptt").map(esc).join(", ")}.</p>
         <div id="restart"></div>`;
+      let lastU = null, polling = false;
+      const showInstall = () => {                                    // "Update now" needs a known newer version and the root helper on the Pi
+        body.querySelector("#upd-install").hidden = !(lastU?.newer && ustat?.available) || ["running", "requested"].includes(ustat?.state);
+      };
+      const followUpdate = async () => {                             // follow the helper: the service restarts in the middle, so errors just mean "still busy"
+        if (polling) return;
+        polling = true;
+        const prog = body.querySelector("#upd-prog"), logEl = body.querySelector("#upd-log");
+        prog.hidden = false; logEl.hidden = false;
+        prog.textContent = "Updating… the page reconnects by itself when the new version starts.";
+        for (let i = 0; i < 400; i++) {                              // up to about 20 minutes
+          await new Promise((r) => setTimeout(r, 3000));
+          let s = null;
+          try { s = await api("/api/admin/update/status"); } catch { /* restarting */ }
+          if (!s) continue;
+          ustat = s;
+          if (s.log?.length) { logEl.textContent = s.log.join("\n"); logEl.scrollTop = logEl.scrollHeight; }
+          if (s.state === "done") { prog.textContent = `Updated to version ${s.version}. Reloading…`; setTimeout(() => location.reload(), 2500); break; }
+          if (s.state === "failed") { prog.textContent = "The update did not complete. Read the log below; the previous version is still in use (an update that does not start goes back by itself)."; break; }
+        }
+        polling = false;
+        showInstall();
+      };
       const paintUpd = (u) => {
         const line = body.querySelector("[data-updline]"), how = body.querySelector("[data-updhow]");
         if (!u) { line.textContent = "The update status is not available."; how.hidden = true; return; }
@@ -158,8 +194,38 @@ export function openSheet(root, { user, tab, sock }) {
         else line.textContent = u.latest ? `You have the latest version (${u.current}).${when}` : `This is version ${u.current}.${when}`;
         if (u.enabled && u.error) line.append(` The last check could not reach GitHub (${u.error}).`);
         how.hidden = !u.newer;
-        how.textContent = "To update, sign in to the Pi (SSH) and run:  sudo /opt/radio-remote/current/scripts/self_update.sh   (it makes a backup first and goes back by itself if the new version does not start).";
+        lastU = u;
+        showInstall();
+        how.textContent = "Press Update now, or sign in to the Pi (SSH) and run:  sudo /opt/radio-remote/current/scripts/self_update.sh   (it makes a backup first and goes back by itself if the new version does not start).";
       };
+      // RADE: the same Install / Reinstall button as on the FreeDV tab; the Pi downloads the library from the release page (checksum verified)
+      const paintRade = (msgOverride) => {
+        const line = body.querySelector("[data-radeline]"), b = body.querySelector("#rade-install");
+        if (!fdv) { line.textContent = "The FreeDV status is not available (audio may be off)."; b.hidden = true; return; }
+        const have = !fdv.unavailable?.RADE;
+        b.hidden = !fdv.rade_installable;
+        b.textContent = have ? "Reinstall RADE" : "Install RADE";
+        line.textContent = msgOverride || (!fdv.rade_installable
+          ? `RADE cannot be installed from here: it needs a 64-bit ARM system (Raspberry Pi OS 64-bit); this one reports "${fdv.arch || "unknown"}".`
+          : have ? `RADE is installed (${fdv.rade_path || "system library"}). It is used in the FreeDV tab.`
+          : "RADE is not installed. The button downloads the library (about 22 MB) from the project release page, checks it and starts using it at once.");
+      };
+      paintRade();
+      body.querySelector("#rade-install").onclick = guard(async () => {
+        if (!confirm("Download the RADE library (about 22 MB) from the project GitHub release page and install it? The Pi needs internet access for this.")) return;
+        const b = body.querySelector("#rade-install"), had = !fdv?.unavailable?.RADE;
+        b.disabled = true; paintRade("Installing… this takes about half a minute.");
+        let result;
+        try {
+          const r = await api("/api/admin/rade/install", "POST", { confirm: true });
+          result = !r.ok ? (r.reason || "RADE was installed but could not be loaded.")
+            : had ? "RADE reinstalled. The new copy is used after the next restart of the service." : "RADE installed. Choose RADE in the mode list of the FreeDV tab.";
+        } catch (e) { result = `Could not install RADE: ${e.message}`; }
+        b.disabled = false;
+        fdv = await api("/api/freedv").catch(() => fdv);
+        paintRade(result);
+        note(result);
+      });
       const paintRig = (s) => {
         const l = body.querySelector("[data-rigline]");
         if (!s) { l.textContent = "The status is not available."; return; }
@@ -179,6 +245,16 @@ export function openSheet(root, { user, tab, sock }) {
       });
       const when_ = (ts) => new Date(ts * 1000).toLocaleString();
       paintUpd(upd);
+      body.querySelector("#upd-install").onclick = () => { body.querySelector("#upd-form").hidden = false; body.querySelector("#upd-form input").focus(); };
+      body.querySelector("#upd-form").onsubmit = guard(async (e) => {
+        e.preventDefault();
+        const f = e.target;
+        await api("/api/admin/update/start", "POST", { confirm: true, password: f.password.value });
+        f.reset(); f.hidden = true;
+        body.querySelector("#upd-install").hidden = true;
+        followUpdate();
+      });
+      if (["running", "requested"].includes(ustat?.state)) followUpdate();             // an update is already on its way (page reopened meanwhile)
       body.querySelector("#upd-now").onclick = guard(async () => {
         const b = body.querySelector("#upd-now"); b.disabled = true;
         try { paintUpd(await api("/api/admin/update/check", "POST", {})); } finally { b.disabled = false; }

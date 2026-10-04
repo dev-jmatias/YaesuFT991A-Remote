@@ -177,6 +177,12 @@ class AudioService:
                 "modes": [m for m in freedv.ALL_MODES if not st.get(m)], "unavailable": {m: w for m, w in st.items() if w},
                 "all_modes": list(freedv.ALL_MODES)}
 
+    def refresh_freedv(self) -> None:
+        """Look again for the FreeDV libraries (after the Install RADE button put one in place)."""
+        from . import rade
+        rade.reset()
+        self.freedv_ok, self.freedv_reason = freedv.available()
+
     def set_freedv_params(self, mode: str, tx_level_db: float) -> None:
         """Defaults from the config. A running session picks up the new transmit level at once; a mode change applies the next time it is switched on."""
         self.freedv_mode = mode if mode in freedv.ALL_MODES else self.freedv_mode

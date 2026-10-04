@@ -71,7 +71,14 @@ control holder and the recent log. `sudo scripts/doctor.sh` prints similar infor
 **Update notice.** Once a day the server asks GitHub whether a newer release exists (one anonymous, read-only request to
 `api.github.com`; switch it off in *Admin > Config > Updates* or with `[updates] check = false`). When there is one,
 administrators see a bar at the top of the page ("Radio Remote v1.2.0 is available") with a link to the release notes. Nothing is
-downloaded or installed by the page.
+downloaded or installed by the notice itself.
+
+**Update from the page.** In *Admin > Config > Updates*, when a newer version is known, press **Update now…**, type your password and confirm. The page only
+drops a request file; a small root helper that systemd starts for it (`radio-remote-update.path` / `.service`, installed by `install.sh` and `update.sh`) runs
+`self_update.sh` (download, SHA-256 check, backup, install, health check, automatic rollback). The service restarts, so Radio Remote is unavailable for about a
+minute (a transmission in progress is stopped); the Updates card shows the log and the page reloads by itself when it is done. The result is also in
+`/var/lib/radio-remote/update.log`, and the request and the outcome are in the audit log. A Pi that was installed before the helper existed gets it with its next
+update from the command line.
 
 **Update from the Pi** (needs internet on the Pi):
 

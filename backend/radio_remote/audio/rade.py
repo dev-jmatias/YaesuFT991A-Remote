@@ -26,6 +26,30 @@ INSTALL_HINT = "run: sudo /opt/radio-remote/current/scripts/install_rade.sh"
 _LIB = None
 _ERR = ""
 _LOCK = threading.Lock()
+_PATH: Path | None = None                              # the library file that was loaded
+_EXTRA_DIR: Path | None = None                     # the service's own folder (data dir/lib): where the web page installs the library
+
+
+def set_install_dir(path: Path | str | None) -> None:
+    """Where the Install RADE button of the web page puts the library. The service user can write there (it cannot write /opt/radio-remote/lib)."""
+    global _EXTRA_DIR
+    _EXTRA_DIR = Path(path) if path else None
+
+
+def install_dir() -> Path | None:
+    return _EXTRA_DIR
+
+
+def loaded_path() -> str:
+    return str(_PATH) if _PATH else ""
+
+
+def reset() -> None:
+    """Forget a failed load, so a library that has just been installed is picked up without restarting the service."""
+    global _LIB, _ERR
+    with _LOCK:
+        if _LIB is None:
+            _ERR = ""
 
 
 class RadeUnavailable(Exception):
@@ -37,13 +61,15 @@ def _candidates() -> list[Path]:
     env = os.environ.get("RADIO_REMOTE_RADE_LIB")
     if env:
         out.append(Path(env))
+    if _EXTRA_DIR is not None:
+        out.append(_EXTRA_DIR / LIB_NAME)                                      # where the Install RADE button puts it (wins: it is the newer copy)
     out.append(Path("/opt/radio-remote/lib") / LIB_NAME)                       # where install_rade.sh puts it (survives updates)
     out.append(Path(__file__).resolve().parents[3] / "lib" / LIB_NAME)         # next to the program (development)
     return out
 
 
 def _load():
-    global _LIB, _ERR
+    global _LIB, _ERR, _PATH
     with _LOCK:
         if _LIB is not None or _ERR:
             return _LIB
@@ -67,7 +93,7 @@ def _load():
         except (OSError, AttributeError) as e:
             _ERR = f"the RADE library could not be loaded ({e}); {INSTALL_HINT}"
             return None
-        _LIB = lib
+        _LIB, _PATH = lib, path
         log.info("RADE library loaded from %s", path)
         return lib
 

@@ -20,6 +20,10 @@ export function createFreeDV(host, ctx) {
       <label class="fdv-mode">Mode <select id="fdv-mode" aria-label="FreeDV mode"></select></label>
     </div>
     <p class="dim fdv-note" id="fdv-note" hidden></p>
+    <div class="row fdv-rade" id="fdv-rade-row" hidden>
+      <button type="button" id="fdv-rade-install" class="active" hidden>Install RADE</button>
+      <span class="dim" id="fdv-rade-msg"></span>
+    </div>
     <h3 class="blabel">Channels</h3>
     <div class="fdv-ch" id="fdv-ch"></div>
     <div class="fdv-level"><label>Transmit level of the modem tones <b id="fdv-lv"></b> dB
@@ -40,6 +44,21 @@ export function createFreeDV(host, ctx) {
 
   const on = () => !!S.state.freedv_on;
   const hz = () => S.state.frequency || 0;
+
+  // Administrators always see where RADE stands: the Install / Reinstall button on a 64-bit ARM Pi, otherwise why it is not offered
+  function paintRadeRow() {
+    const have = !info.unavailable?.RADE, b = $("fdv-rade-install"), msg = $("fdv-rade-msg");
+    $("fdv-rade-row").hidden = !admin;
+    if (info.rade_installable) {
+      b.hidden = false;
+      b.textContent = have ? "Reinstall RADE" : "Install RADE";
+      msg.textContent = have ? `RADE is installed (${info.rade_path || "system library"}).`
+        : "RADE is not installed. The button downloads the library (about 22 MB) from the project's release page and starts using it at once.";
+    } else {
+      b.hidden = true;
+      msg.textContent = `RADE cannot be installed from here: it needs a 64-bit ARM system (Raspberry Pi OS 64-bit); this one reports "${info.arch || "unknown"}".`;
+    }
+  }
 
   function paintChannels() {
     const box = $("fdv-ch");
@@ -67,6 +86,21 @@ export function createFreeDV(host, ctx) {
       return r;
     }));
   }
+  $("fdv-rade-install").onclick = async () => {
+    if (!confirm("Download the RADE library (about 22 MB) from the project's GitHub release page and install it? The Pi needs internet access for this.")) return;
+    const b = $("fdv-rade-install"), msg = $("fdv-rade-msg"), had = !info.unavailable?.RADE;
+    b.disabled = true; msg.textContent = "Installing… this takes about half a minute.";
+    let result;
+    try {
+      const r = await api("/api/admin/rade/install", "POST", { confirm: true });
+      result = !r.ok ? (r.reason || "RADE was installed but could not be loaded.")
+        : had ? "RADE reinstalled. The new copy is used after the next restart of the service." : "RADE installed. Choose RADE in the mode list.";
+    } catch (e) { result = `Could not install RADE: ${e.message}`; }
+    b.disabled = false;
+    toast(result);
+    await load();
+    msg.textContent = result;
+  };
   $("fdv-add").onclick = () => {
     info.channels = readRows();
     info.channels.push({ name: "new", hz: 14_236_000, mode: modeSel.value || "700D" });          // (the editor lists every mode, installed or not)
@@ -104,13 +138,18 @@ export function createFreeDV(host, ctx) {
   };
 
   async function load() {
-    try { info = await api("/api/freedv"); } catch { return; }
+    try { info = await api("/api/freedv"); } catch (e) {
+      $("fdv-note").hidden = false;
+      $("fdv-note").textContent = `Could not read the FreeDV settings from the server: ${e.message}`;
+      return;
+    }
     modeSel.innerHTML = (info.modes || ["1600", "700D", "700E"]).map((m) => `<option>${m}</option>`).join("");
     modeSel.value = S.state.freedv_mode || info.mode || "700D";
     if (!(info.modes || []).includes(modeSel.value)) modeSel.value = (info.modes || [])[0] || "";
     const missing = Object.entries(info.unavailable || {});                  // modes whose library is not installed, with the reason
     $("fdv-note").hidden = !missing.length;
     $("fdv-note").textContent = missing.map(([m, why]) => `${m}: ${why}`).join("  ");
+    paintRadeRow();
     $("fdv-lvr").value = info.tx_level_db; $("fdv-lv").textContent = info.tx_level_db;
     $("fdv-lvr").disabled = !admin;
     $("fdv-lvnote").textContent = admin ? "" : "(set by an administrator)";

@@ -42,6 +42,15 @@ and goes back by itself if the new version does not start. Settings and accounts
 | `radio-remote-rade-linux-aarch64.tar.xz` | the optional RADE library (FreeDV neural mode), installed with `install_rade.sh` |
 | `SHA256SUMS` | checksums of all of the above |
 
+### What is new in 1.1.7
+
+- **Update now button** (Admin > Config > Updates): when a newer version is known, an administrator presses **Update now…**, types their password, and the Pi updates itself
+  (download, SHA-256 check, backup, install, health check, automatic rollback), shows the log and reloads the page when it is done. It works through a small root helper
+  (`radio-remote-update.path`) that `update.sh` installs, so **this first update to 1.1.7 still has to be done the usual way** (`self_update.sh`); the button is there for later versions.
+- **Install RADE button** (Admin > Config > RADE, and the FreeDV tab): administrators install the RADE library from the web page on a 64-bit ARM Pi, with no command line and no restart
+  (it shows **Reinstall RADE** once installed, and says why when it cannot be installed on a system).
+- The radio goes back to its own microphone by itself when the last operator leaves was already in 1.1.6; nothing else changed there.
+
 ### What is new in 1.1.6
 
 - **The radio goes back to its own microphone by itself**: about 15 seconds after the last operator connection has gone, the Pi sets menu 106 back to MIC, so the radio is
