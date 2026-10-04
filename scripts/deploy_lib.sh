@@ -42,3 +42,15 @@ service_restart_and_check() {   # returns non-zero if the app does not become he
   if [ "${DRY:-0}" = 1 ]; then return 0; fi
   python3 "$PREFIX/current/scripts/rr_admin.py" health --timeout 45
 }
+
+# FreeDV (optional) needs libcodec2. Install it when it is missing; never fatal (no network, a different package name on an older OS).
+ensure_codec2() {
+  if [ "${DRY:-0}" = 1 ]; then echo "+ (optional) apt-get install libcodec2-1.2"; return 0; fi
+  if ldconfig -p 2>/dev/null | grep -q 'libcodec2\.so'; then return 0; fi
+  echo "==> Installing libcodec2 (for FreeDV; optional)"
+  for p in libcodec2-1.2 libcodec2-1.1 libcodec2-1.0 libcodec2-0.9; do
+    if DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "$p" >/dev/null 2>&1; then echo "    installed $p"; return 0; fi
+  done
+  echo "    could not install libcodec2 (no network?). FreeDV stays off; later run: sudo apt install libcodec2-1.2"
+  return 0
+}

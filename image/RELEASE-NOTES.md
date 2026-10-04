@@ -41,6 +41,15 @@ and goes back by itself if the new version does not start. Settings and accounts
 | `radio-remote-v….tar.gz` | the program only: used by `self_update.sh`, or by hand to update a running Pi |
 | `SHA256SUMS` | checksums of all of the above |
 
+### What is new in 1.1.4
+
+- **FreeDV digital voice (700D and 700E)**, receive and transmit, done on the Pi with the codec2 library: a **FreeDV tab** beside Audio switches it on and
+  off, shows whether the modem is locked on a signal (with its SNR), has editable **preset channels** (the usual FreeDV calling frequencies; LSB
+  below 10 MHz, USB above) and a transmit-level setting. Listeners hear the decoded speech; with the microphone armed, your voice is sent as modem
+  tones while you hold PTT, through the same server-side transmit safeguards. The installer and the update scripts install `libcodec2` for you;
+  without it the tab simply does not appear. The codec is covered by automated tests; try receive first and transmit into a dummy load. Guide:
+  [docs/freedv.md](https://github.com/dev-jmatias/YaesuFT991A-Remote/blob/main/docs/freedv.md).
+
 ### What is new in 1.1.3
 
 - **WebSocket audio**: if WebRTC (UDP) cannot connect (hotel, office or mobile networks, some relayed paths), the page now switches to the same

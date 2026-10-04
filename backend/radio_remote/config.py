@@ -51,6 +51,13 @@ DEFAULTS: dict[str, dict[str, Any]] = {
     # frequency/mode (set = false makes it read-only); it can never transmit or power the radio off. allow = "private" (this machine and
     # the home-network ranges) or a comma-separated list of addresses / networks, e.g. "192.168.1.0/24, 100.64.0.0/10".
     "rigctl": {"enabled": False, "port": 4532, "allow": "private", "set": True},
+    # FreeDV digital voice (700D / 700E) done on the Pi with libcodec2: see audio/freedv.py and docs/freedv.md. mode = the one used when the FreeDV
+    # button is pressed; tx_level_db = level of the modem tones sent to the radio (keep the ALC barely moving); channels = the preset list shown on
+    # the FreeDV tab, each "name|frequency in Hz|mode". Frequencies below 10 MHz use LSB, above use USB (the FreeDV convention).
+    "freedv": {"mode": "700D", "tx_level_db": -6.0, "channels": [
+        "160m|1997000|700D", "80m|3625000|700D", "80m (2)|3643000|700D", "40m|7177000|700D", "40m (2)|7197000|700D",
+        "20m|14236000|700D", "20m (2)|14240000|700D", "17m|18118000|700D", "15m|21313000|700D", "12m|24933000|700D",
+        "10m|28330000|700D", "10m (2)|28720000|700D"]},
     "storage": {"data_dir": "data"},
 }
 
@@ -119,6 +126,13 @@ def validate(cfg: dict) -> dict:
         raise ConfigError("logging.level invalid")
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,38}/[A-Za-z0-9._-]{1,100}", cfg["updates"]["repo"]):
         raise ConfigError("updates.repo must look like owner/name")
+    fd = cfg["freedv"]
+    if fd["mode"] not in ("700D", "700E"):
+        raise ConfigError("freedv.mode must be 700D or 700E")
+    if not -40 <= fd["tx_level_db"] <= 0:
+        raise ConfigError("freedv.tx_level_db must be -40..0")
+    if len(fd["channels"]) > 40 or not all(isinstance(c, str) and re.fullmatch(r"[^|\n\r]{1,40}\|\d{5,9}\|(700D|700E)", c) for c in fd["channels"]):
+        raise ConfigError("freedv.channels: up to 40 entries, each like \"20m|14236000|700D\"")
     r = cfg["rigctl"]
     if not 1024 <= r["port"] <= 65535 or r["port"] == cfg["server"]["port"]:
         raise ConfigError("rigctl.port must be 1024..65535 and different from server.port")

@@ -40,6 +40,7 @@ echo "==> Current release: $PREVIOUS"
 echo "==> Backing up configuration and user database"
 run python3 "$PREVIOUS/scripts/rr_admin.py" backup --config "$CONF_DIR/config.toml" --data-dir "$DATA_DIR" --dest "$BACKUP_DIR" --keep 14
 
+ensure_codec2                  # FreeDV (optional, never fatal)
 NEW_RELEASE=""
 deploy_release "$SRC"           # installs dependencies BEFORE anything is switched; a failure here changes nothing live
 

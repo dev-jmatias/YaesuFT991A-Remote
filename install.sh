@@ -103,6 +103,8 @@ run apt-get update
 # shellcheck disable=SC2086
 run env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends $PKGS
 
+ensure_codec2
+
 # ---- optional: Tailscale (package only; the login stays a manual step) ---------------------------------------------
 if [ "$WITH_TAILSCALE" = 1 ]; then
   echo "==> Installing Tailscale"

@@ -582,3 +582,26 @@ button.lockbtn.on { background: var(--yellow); color: #1a1100; border-color: tra
   background: #1d2a44; border: 1px solid var(--line2); color: var(--text); font-size: .85rem; pointer-events: none; z-index: 5; }
 .pttcue[hidden] { display: none; }
 .ptt.latched { outline: 3px dashed var(--yellow); outline-offset: 3px; }
+
+/* ---------- FreeDV: a pane like the others (tab beside Audio on phones/tablets, a full-width card on wide screens) ---------- */
+.app:not([data-tab=freedv]) [data-pane=freedv],
+.app[data-tab=freedv] [data-pane=vfo], .app[data-tab=freedv] [data-pane=levels], .app[data-tab=freedv] [data-pane=filters], .app[data-tab=freedv] [data-pane=audio] { display: none; }
+html[data-tablet] .app:not([data-tab=freedv]) [data-pane=freedv],
+html[data-tablet] .app[data-tab=freedv] [data-pane=vfo], html[data-tablet] .app[data-tab=freedv] [data-pane=levels], html[data-tablet] .app[data-tab=freedv] [data-pane=filters], html[data-tablet] .app[data-tab=freedv] [data-pane=audio] { display: none !important; }
+@media (min-width: 700px) {
+  html:not([data-tablet]) .app [data-pane=freedv] { display: block !important; grid-area: freedv; }
+  html:not([data-tablet]) .layout.has-fd { grid-template-areas: "vfo vfo" "filters filters" "levels audio" "freedv freedv" "ptt ptt"; }
+}
+.fdv h2 { margin: 0 0 6px; }
+.fdv-status { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.fdv-ctl { align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.fdv-mode { display: inline-flex; align-items: center; gap: 6px; }
+.fdv-ch { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.fdv-c { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 0; min-height: 40px; padding: 3px 10px 3px 16px; line-height: 1.15; }
+.fdv-c small { font-size: .7rem; opacity: .75; font-weight: 400; }
+.fdv-level { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; }
+.fdv-level input[type=range] { width: 200px; vertical-align: middle; }
+.fdv-edit { margin: 8px 0; } .fdv-edit[hidden] { display: none; }
+.fdv-row { align-items: center; gap: 6px; margin-bottom: 4px; flex-wrap: nowrap; }
+.fdv-row .n { flex: 1 1 8em; min-width: 0; } .fdv-row .f { width: 7.5em; } .fdv-row button { min-height: 30px; padding: 0 10px; }
+.fdv-help { margin-top: 10px; }

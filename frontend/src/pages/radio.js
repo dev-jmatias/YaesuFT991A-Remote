@@ -5,6 +5,7 @@ import { createVfoB } from "../components/vfo-b.js";
 import { createTuningStrip } from "../components/tuning-strip.js";
 import { createDgHint, createFilters, createLevels, createTuneButton } from "../components/controls.js";
 import { createPtt } from "../components/ptt.js";
+import { createFreeDV } from "../components/freedv.js";
 import { createTuner } from "../tuner.js";
 import { el, fmtStep } from "../util.js";
 import { openSheet } from "./admin.js";
@@ -253,9 +254,19 @@ export function renderRadio(root, { onLogout, onAuthLost }) {
     audio.mount(ap);
     parts.push({ update: () => audio.update(S.state) });
 
+    // FreeDV (only when the Pi has libcodec2, see docs/freedv.md): a tab beside Audio on phones and tablets, a card under the Levels/Audio row on wide screens
+    const fdOk = !!S.audio?.freedv?.available;
+    const tabs = [...TABS];
+    $("layout").classList.toggle("has-fd", fdOk);
+    if (fdOk) {
+      parts.push(createFreeDV(pane("freedv", ""), ctx));
+      tabs.splice(tabs.findIndex(([k]) => k === "audio") + 1, 0, ["freedv", "FreeDV"]);
+    }
+    if (!tabs.some(([k]) => k === ui.tab)) ui.tab = "radio";
+
     // Phone tab bar
     const nav = view.querySelector(".tabs");
-    nav.replaceChildren(...TABS.map(([k, label]) => {
+    nav.replaceChildren(...tabs.map(([k, label]) => {
       const b = el(`<button data-t="${k}">${label}</button>`);
       b.onclick = () => { ui.tab = k; view.dataset.tab = k; nav.querySelectorAll("button").forEach((x) => x.classList.toggle("active", x.dataset.t === k)); };
       b.classList.toggle("active", k === ui.tab);

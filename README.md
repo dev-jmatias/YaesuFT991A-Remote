@@ -82,6 +82,7 @@ The manual is installed on the Pi and served at `/docs/` (Help button in the app
 | [operations.md](docs/operations.md) | configuration, services, logs, updating, backup and restore |
 | [radio-connection.md](docs/radio-connection.md) | USB CAT and audio, the radio's own menu settings |
 | [troubleshooting.md](docs/troubleshooting.md) | symptom-by-symptom fixes |
+| [freedv.md](docs/freedv.md) | FreeDV digital voice (700D/700E) with preset channels |
 | [logbook.md](docs/logbook.md) | follow and tune the radio from Log4OM or another logbook (Hamlib rigctl) |
 | [tailscale.md](docs/tailscale.md), [06-security-remote.md](docs/06-security-remote.md) | remote access and the security model |
 | [08-other-radios.md](docs/08-other-radios.md) | FTDX10, FTDX101D/MP, FT-710 (experimental) |

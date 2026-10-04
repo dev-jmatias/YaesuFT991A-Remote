@@ -117,6 +117,7 @@ Rules that always apply:
 ## 7. Remote access
 
 * At home: `https://<pi-name>.local`. Your device must trust the Pi's certificate once (see [security and remote access](06-security-remote.md)).
+* **FreeDV** digital voice (700D / 700E): the FreeDV tab (beside Audio) switches it on and off and has preset channels; the Pi does the encoding and decoding. See [FreeDV](freedv.md).
 * A logbook on another computer (Log4OM and others) can follow and tune the radio over the home network: [logbook link](logbook.md).
 * Away from home: **Tailscale** ([guide](tailscale.md)). No port is opened on your router.
 

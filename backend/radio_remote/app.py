@@ -132,7 +132,8 @@ class Hub:
             "ui": self.ui,
             "lease": self.lease.state(),
             "audio": {"available": a["available"], "reason": a["reason"],
-                      "mic": session.role in ("operator", "admin")},
+                      "mic": session.role in ("operator", "admin"),
+                      "freedv": self.audio.freedv_state() if self.audio else {"available": False, "reason": "no audio service", "on": False}},
             "state": {**self.driver.state, **self.extra, "ptt_owner": self.guard.owner},
             "safety": {"ptt_permitted": self.guard.permitted, "tx_timeout_s": self.guard.max_tx_s},
         }
@@ -204,6 +205,18 @@ class Hub:
             if mode not in caps.modes():
                 raise CommandError("unsupported mode")
             await self.driver.set_mode(mode)
+        elif typ == "freedv":
+            on, mode = msg.get("on"), msg.get("mode")
+            if not isinstance(on, bool) or (mode is not None and mode not in ("700D", "700E")):
+                raise CommandError("freedv needs on (true/false) and optionally mode 700D or 700E")
+            if not self.audio:
+                raise CommandError("audio is not available")
+            self._not_while_transmitting()
+            try:
+                self.audio.set_freedv(on, mode)
+            except AudioUnavailable as e:
+                raise CommandError(str(e)) from None
+            self.auth.audit("freedv_on" if on else "freedv_off", session.username, None, self.audio.freedv_mode if on else "")
         elif typ == "set_level":
             name = msg.get("name")
             rng = caps.level_range(name) if isinstance(name, str) else None
@@ -512,6 +525,15 @@ async def audio_ws(request):
     return ws
 
 
+async def freedv_info(request):
+    """FreeDV state and the preset channel list (any signed-in user may look; administrators change the list in the config)."""
+    app = request.app
+    fd, audio = app[K_CFG]["freedv"], app[K_AUDIO]
+    st = audio.freedv_state()
+    return web.json_response({**st, "tx_level_db": fd["tx_level_db"], "channels": [
+        {"name": n, "hz": int(h), "mode": m} for n, h, m in (c.split("|") for c in fd["channels"])]})
+
+
 async def audio_status(request):
     return web.json_response(request.app[K_AUDIO].status())
 
@@ -572,6 +594,7 @@ def create_app(cfg: dict, driver: RadioDriver | None = None, auth: AuthStore | N
         on_levels=app[K_HUB].push,
     )
     app[K_AUDIO] = app[K_HUB].audio = audio
+    audio.set_freedv_params(cfg["freedv"]["mode"], cfg["freedv"]["tx_level_db"])
     app[K_HUB].ui = {"steps": cfg["ui"]["tuning_steps_hz"],
                      "meter": {"alc_full": cfg["ui"]["meter_alc_full"], "comp_full": cfg["ui"]["meter_comp_full"],
                                "swr_warn": cfg["ui"]["swr_warn"], "swr_raw_at_3": cfg["ui"]["swr_raw_at_3"]}}
@@ -614,6 +637,7 @@ def create_app(cfg: dict, driver: RadioDriver | None = None, auth: AuthStore | N
     admin.add_routes(app)
     app.router.add_post("/api/audio/offer", audio_offer)
     app.router.add_get("/api/audio/status", audio_status)
+    app.router.add_get("/api/freedv", freedv_info)
     app.router.add_get("/ws/audio", audio_ws)
     app.router.add_get("/api/audio/devices", audio_devices)
     app.router.add_get("/api/memories", memories)

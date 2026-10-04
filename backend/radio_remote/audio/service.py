@@ -19,13 +19,14 @@ from typing import Callable
 
 import numpy as np
 
-from . import devices, opus_tuning
+from . import devices, freedv, opus_tuning
 from .backends import (AlsaSink, AlsaSource, AudioDeviceError, RecordingSink, Sink, Source, ToneSource)
 from .levels import FRAME_BYTES, FRAME_SAMPLES, RATE, apply_gain, db_to_gain, level_pct
 
 log = logging.getLogger("audio")
 
 TX_QUEUE_MAX = 6                 # frames (120 ms) of jitter buffer; older audio is dropped to bound latency
+TX_QUEUE_FREEDV = 24             # frames (480 ms) while FreeDV is on: its modem hands over whole blocks at once
 LEVEL_INTERVAL_S = 0.1
 
 
@@ -114,7 +115,14 @@ class AudioService:
         self._pump_task: asyncio.Task | None = None
         self._tx_q: collections.deque[bytes] = collections.deque(maxlen=TX_QUEUE_MAX)
         self._tx_gate_open = False
-        self._levels = {"audio_rx_level": 0, "audio_tx_level": 0, "audio_tx_frames": 0, "audio_tx_error": ""}
+        self._levels = {"audio_rx_level": 0, "audio_tx_level": 0, "audio_tx_frames": 0, "audio_tx_error": "",
+                        "freedv_on": False, "freedv_mode": "", "freedv_sync": 0, "freedv_snr": 0.0}
+        # FreeDV (see freedv.py): decode the radio's modem tones to speech for the listeners, encode the operator's speech to modem tones
+        self.freedv_ok, self.freedv_reason = freedv.available()
+        self._fd_rx: freedv.RxChain | None = None
+        self._fd_tx: freedv.TxChain | None = None
+        self.freedv_mode = "700D"                       # the app sets these from [freedv] in the config
+        self.freedv_tx_gain = db_to_gain(-6.0)
         self._last_emit = 0.0
         self.frames_in = self.frames_to_radio = 0
         self._relay = self._rx_track = None
@@ -161,6 +169,40 @@ class AudioService:
             "capture_error": self.capture_error, "playback_error": self.playback_error,
             "frames_to_radio": self.frames_to_radio,
         }
+
+    # ------------------------------------------------------------- FreeDV
+    def freedv_state(self) -> dict:
+        return {"available": self.freedv_ok, "reason": self.freedv_reason, "on": self._fd_rx is not None, "mode": self.freedv_mode,
+                "modes": sorted(freedv.MODES)}
+
+    def set_freedv_params(self, mode: str, tx_level_db: float) -> None:
+        """Defaults from the config. A running session picks up the new transmit level at once; a mode change applies the next time it is switched on."""
+        self.freedv_mode = mode if mode in freedv.MODES else self.freedv_mode
+        self.freedv_tx_gain = db_to_gain(tx_level_db)
+        if self._fd_tx:
+            self._fd_tx.level = self.freedv_tx_gain
+
+    def set_freedv(self, on: bool, mode: str | None = None) -> None:
+        """Switch FreeDV on or off. On: the radio's audio is decoded to speech for every listener and the operator's microphone is encoded
+        to modem tones while that connection owns PTT. Off: audio passes through untouched, as before."""
+        if on and not self.freedv_ok:
+            raise AudioUnavailable(self.freedv_reason or "FreeDV is not available")
+        for c in (self._fd_rx, self._fd_tx):
+            if c:
+                c.close()
+        self._fd_rx = self._fd_tx = None
+        if on:
+            self.freedv_mode = mode if mode in freedv.MODES else self.freedv_mode
+            self._fd_rx = freedv.RxChain(self.freedv_mode)
+            self._fd_tx = freedv.TxChain(self.freedv_mode, self.freedv_tx_gain)
+            self._tx_q = collections.deque(self._tx_q, maxlen=TX_QUEUE_FREEDV)      # the modem delivers its tones in bursts of up to 160 ms
+        else:
+            self._tx_q = collections.deque(self._tx_q, maxlen=TX_QUEUE_MAX)
+        self._tx_gate_open = False
+        self._levels.update(freedv_on=on, freedv_mode=self.freedv_mode if on else "", freedv_sync=0, freedv_snr=0.0)
+        self._last_emit = 0.0
+        self._level("freedv_on", on)
+        log.info("FreeDV %s%s", "on, mode " + self.freedv_mode if on else "off", "")
 
     def set_gains(self, rx_db: float | None = None, tx_db: float | None = None) -> None:
         if rx_db is not None:
@@ -235,10 +277,19 @@ class AudioService:
                 self.capture_error, backoff = None, 0.5
                 while True:
                     pcm = apply_gain(await src.read_frame(), self.rx_gain, limit=self.rx_gain > 1.0)      # a boost must not clip hard
+                    self._level("audio_rx_level", level_pct(pcm))                # the meter shows what the radio sends (the modem tones)
+                    if self._fd_rx is not None and self._tx_gate_open:
+                        pcm = bytes(FRAME_BYTES)                                 # transmitting: never decode (and replay) our own signal
+                    elif self._fd_rx is not None:                                # FreeDV: listeners get the decoded speech instead
+                        try:
+                            pcm = self._fd_rx.process(pcm)
+                            self._levels.update(freedv_sync=self._fd_rx.sync, freedv_snr=round(self._fd_rx.snr, 1))
+                        except Exception:
+                            log.exception("FreeDV receive failed; switching it off")
+                            self.set_freedv(False)
                     self._rx_q.append(pcm)
                     self._rx_event.set()
                     self._push_ws_peers(pcm)
-                    self._level("audio_rx_level", level_pct(pcm))
             except AudioDeviceError as e:
                 self.capture_error = str(e)
                 log.warning("RX capture: %s (retry in %.1fs)", e, backoff)
@@ -315,6 +366,19 @@ class AudioService:
             if not self._tx_gate_open:
                 self._tx_q.clear()                       # never send stale audio from before PTT
                 self._tx_gate_open = True
+                if self._fd_tx is not None:              # a fresh modem for every transmission: nothing left over from the last one
+                    self._fd_tx.close()
+                    self._fd_tx = freedv.TxChain(self.freedv_mode, self.freedv_tx_gain)
+            if self._fd_tx is not None:
+                # FreeDV: the microphone speech becomes modem tones. The mic gain still applies; the limiter does not (it would distort the
+                # tones), the modem output level (freedv.tx_level_db) takes its place.
+                try:
+                    for tone in self._fd_tx.process(apply_gain(pcm, self.tx_gain)):
+                        self._tx_q.append(tone)
+                        self._level("audio_tx_level", level_pct(tone))
+                except Exception:
+                    log.exception("FreeDV transmit failed")
+                return
             pcm = apply_gain(pcm, self.tx_gain, limit=True)
             self._tx_q.append(pcm)
             self._level("audio_tx_level", level_pct(pcm))
@@ -442,6 +506,7 @@ class AudioService:
             await asyncio.shield(self._close_peer(p.id))     # the control socket's handler may itself be cancelled while it runs this
 
     async def stop(self) -> None:
+        self.set_freedv(False)
         for pid in list(self.peers):
             await self._close_peer(pid)
         await self._stop_capture()
