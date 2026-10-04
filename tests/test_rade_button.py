@@ -15,6 +15,7 @@ def arm_pi(monkeypatch):
     state = {"installed": False, "calls": []}
     monkeypatch.setattr(admin.platform, "machine", lambda: "aarch64")
     monkeypatch.setattr("radio_remote.app.platform.machine", lambda: "aarch64")
+    monkeypatch.setattr(rade, "loaded_path", lambda: "")                                   # (a machine that has the real library must not leak into these tests)
     monkeypatch.setattr(freedv, "available", lambda: (True, ""))
     monkeypatch.setattr(freedv, "mode_status",
                         lambda: {"1600": "", "700D": "", "700E": "", "RADE": "" if state["installed"] else "RADE is not installed"})
