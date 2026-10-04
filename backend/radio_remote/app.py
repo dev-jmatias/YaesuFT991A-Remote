@@ -70,6 +70,8 @@ class Hub:
         self.extra: dict = {}            # non-radio state (audio levels) included in snapshots
         self.audio = None
         self.ui: dict = {}
+        self.mic_reset_delay_s = 15.0            # how long the radio stays on REAR after the last operator left (a reload or a network blip is not "left")
+        self._mic_reset_task: asyncio.Task | None = None
         self.lease = ControlLease(
             guard=guard, broadcast=self._broadcast, send_to=self.send_to, timeout_s=lease_timeout_s,
             audit=lambda event, user, detail: auth.audit(event, user or None, None, detail))
@@ -106,6 +108,40 @@ class Hub:
         c = self.clients.get(conn)
         if c and not c.ws.closed:
             asyncio.ensure_future(c.ws.send_str(json.dumps(msg)))
+
+    # ------------------------------------------------- radio input safety
+    def _operators(self) -> bool:
+        return any(c.session.role in ("operator", "admin") for c in self.clients.values())
+
+    def cancel_mic_reset(self) -> None:
+        t, self._mic_reset_task = self._mic_reset_task, None
+        if t and not t.done():
+            t.cancel()
+
+    def schedule_mic_reset(self) -> None:
+        """When the last operator has gone, put the radio's input back to its own MIC (menu 106) after a short wait: REAR is only for remote
+        operation, and with nobody left who can transmit the front microphone is the right setting."""
+        if self._operators():
+            return
+        self.cancel_mic_reset()
+        self._mic_reset_task = asyncio.ensure_future(self._mic_reset_later())
+
+    async def _mic_reset_later(self) -> None:
+        try:
+            await asyncio.sleep(self.mic_reset_delay_s)
+        except asyncio.CancelledError:
+            return
+        d = self.driver
+        if self._operators() or d.state.get("mic_select") != "REAR" or not d.caps.has("mic_select"):
+            return
+        if not d.state.get("connected") or d.state.get("tx"):
+            return
+        try:
+            await d.set_control("mic_select", "MIC")
+            log.info("the last operator left: the radio input is back on MIC")
+            self.auth.audit("mic_input_reset", None, None, "last operator left")
+        except Exception as e:                    # the radio is off or busy: leave it as it is
+            log.warning("could not switch the radio input back to MIC: %s", e)
 
     # ---------------------------------------------------------- registry
     def clients_info(self) -> list[dict]:
@@ -437,6 +473,8 @@ async def ws_handler(request):
     conn_id = secrets.token_hex(8)
     sid = request.cookies.get(COOKIE, "")
     hub.clients[conn_id] = Client(ws, s, client_ip(request), sid)
+    if s.role in ("operator", "admin"):
+        hub.cancel_mic_reset()
     bucket, strikes = TokenBucket(CMD_RATE, CMD_BURST), 0
     log.info("ws connect user=%s conn=%s", s.username, conn_id)
     try:
@@ -480,6 +518,7 @@ async def ws_handler(request):
         if app[K_AUDIO]:
             await app[K_AUDIO].close_conn(conn_id)
         await hub.lease.on_disconnect(conn_id)
+        hub.schedule_mic_reset()
         log.info("ws disconnect conn=%s", conn_id)
     return ws
 
@@ -621,6 +660,7 @@ def create_app(cfg: dict, driver: RadioDriver | None = None, auth: AuthStore | N
 
     async def on_stop(app):
         await app[K_UPDATES].stop()
+        app[K_HUB].cancel_mic_reset()
         await rigctl.stop()
         await watchdog.stop()
         await guard.stop()          # un-keys first

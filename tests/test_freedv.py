@@ -197,3 +197,4 @@ async def test_a_viewer_or_a_connection_without_control_cannot_switch_it(make_ap
     assert ack["ok"] is False
     assert client.server.app[K_AUDIO].freedv_state()["on"] is False
     await close_all(root, v)
+

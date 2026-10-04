@@ -42,6 +42,12 @@ and goes back by itself if the new version does not start. Settings and accounts
 | `radio-remote-rade-linux-aarch64.tar.xz` | the optional RADE library (FreeDV neural mode), installed with `install_rade.sh` |
 | `SHA256SUMS` | checksums of all of the above |
 
+### What is new in 1.1.6
+
+- **The radio goes back to its own microphone by itself**: about 15 seconds after the last operator connection has gone, the Pi sets menu 106 back to MIC, so the radio is
+  not left on REAR (USB audio) after you close the page. A page reload or a short network drop does not trigger it; it is left alone while the radio transmits.
+- **MIT licence** (Copyright 2026 Jorge Matias) added to the project, with notes on the third-party software it uses.
+
 ### What is new in 1.1.5
 
 - **FreeDV RADE** (the newest, neural FreeDV mode) as an optional extra, verified receiving and transmitting on a real radio. It is a separate 24 MB library

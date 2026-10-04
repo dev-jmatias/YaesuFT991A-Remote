@@ -1,7 +1,9 @@
 [project]
 name = "radio-remote"
-version = "1.1.5"
+version = "1.1.6"
 description = "Web-based remote control for Yaesu transceivers on a Raspberry Pi"
+license = {text = "MIT"}
+authors = [{name = "Jorge Matias"}]
 requires-python = ">=3.11"
 dependencies = ["aiohttp>=3.9", "pyserial>=3.5", "aiortc>=1.9,<2", "numpy>=1.26"]
 

@@ -99,7 +99,11 @@ export function createVfoPanels(host, ctx) {
   // Microphone armed = radio menu 106 on REAR (audio from the USB port); disarmed = back to MIC. A change that fails (for example during
   // a transmission, which the server refuses) is reported by the normal error toast.
   const hasMicSel = ctx.S.caps.controls.some((c) => c.name === "mic_select");
-  if (hasMicSel) au.onMicChange((on) => ctx.send("set_control", { name: "mic_select", value: on ? "REAR" : "MIC" }));
+  if (hasMicSel) {
+    au.onMicChange((on) => ctx.send("set_control", { name: "mic_select", value: on ? "REAR" : "MIC" }));
+    // after a reconnect the microphone may still be armed here while the server (no operator was connected for a while) put the radio back on MIC
+    if (au.mic && ctx.S.state.mic_select === "MIC") ctx.send("set_control", { name: "mic_select", value: "REAR" });
+  }
   au.subscribe(paintAudio);
   paintAudio();
   const [panelA, panelB] = [q(".vfopanel.a"), q(".vfopanel.b")];

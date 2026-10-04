@@ -9,7 +9,7 @@ DEST="$ROOT/image/stage-radio-remote/00-radio-remote/files/radio-remote-src"
 [ -d "$ROOT/docs-html" ] || echo "WARNING: docs-html/ not built (python scripts/build_docs.py): the image will have no manual" >&2
 rm -rf "$DEST"
 mkdir -p "$DEST"
-for item in backend frontend scripts packaging config docs docs-html requirements.txt install.sh update.sh pyproject.toml README.md; do
+for item in backend frontend scripts packaging config docs docs-html requirements.txt install.sh update.sh pyproject.toml README.md LICENSE; do
   if [ -e "$ROOT/$item" ]; then cp -a "$ROOT/$item" "$DEST/"; fi
 done
 find "$DEST" -name __pycache__ -type d -prune -exec rm -rf {} +

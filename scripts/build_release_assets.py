@@ -27,7 +27,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 ITEMS = ["backend", "frontend", "scripts", "packaging", "config", "docs", "docs-html", "requirements.txt", "install.sh", "update.sh",
-         "README.md", "pyproject.toml"]
+         "README.md", "LICENSE", "pyproject.toml"]
 JUNK_DIRS = {"__pycache__", ".pytest_cache", ".venv", ".git"}
 JUNK_FILES = {"config/radio-remote.toml", "config/none.toml", "config/none.toml.bak"}
 LF_SUFFIXES = {".sh", ".service", ".timer", ".rules", ".txt", ".md", ".py", ".js", ".css", ".html", ".toml", ".json"}
