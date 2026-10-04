@@ -71,6 +71,7 @@ class Hub:
         self.extra: dict = {}            # non-radio state (audio levels) included in snapshots
         self.audio = None
         self.ui: dict = {}
+        self._last_freq = driver.state.get("frequency") or 0
         self.mic_reset_delay_s = 15.0            # how long the radio stays on REAR after the last operator left (a reload or a network blip is not "left")
         self._mic_reset_task: asyncio.Task | None = None
         self.lease = ControlLease(
@@ -85,6 +86,10 @@ class Hub:
         self._on_change(fields)
 
     def _on_change(self, changed: dict) -> None:
+        if "frequency" in changed:                                   # FreeDV keeps its software tuning when the dial moves a little
+            old, self._last_freq = self._last_freq, changed["frequency"] or 0
+            if self.audio is not None and old and self._last_freq:
+                self.audio.freedv_dial_moved(old, self._last_freq, self.driver.state.get("mode"))
         self._pending.update(changed)
         if self._flush_handle is None:
             self._flush_handle = asyncio.get_running_loop().call_later(FLUSH_INTERVAL_S, self._flush)
@@ -244,6 +249,10 @@ class Hub:
                 raise CommandError("unsupported mode")
             await self.driver.set_mode(mode)
         elif typ == "freedv":
+            if msg.get("afc") == "reset":                            # "start the tuning search again"
+                if self.audio:
+                    self.audio.freedv_afc_reset()
+                return None
             on, mode = msg.get("on"), msg.get("mode")
             if not isinstance(on, bool) or (mode is not None and mode not in FREEDV_MODES):
                 raise CommandError("freedv needs on (true/false) and optionally mode " + ", ".join(FREEDV_MODES))
@@ -567,14 +576,16 @@ async def audio_ws(request):
 
 
 async def freedv_info(request):
-    from .audio import rade as _rade
     """FreeDV state and the preset channel list (any signed-in user may look; administrators change the list in the config)."""
+    from .audio import freedv_tune as _tune
+    from .audio import rade as _rade
     app = request.app
     fd, audio = app[K_CFG]["freedv"], app[K_AUDIO]
     st = audio.freedv_state()
     return web.json_response({**st, "tx_level_db": fd["tx_level_db"], "install_rade": "sudo /opt/radio-remote/current/scripts/install_rade.sh",
                           "rade_installable": platform.machine() in ("aarch64", "arm64"), "arch": platform.machine(),
-                          "rade_path": _rade.loaded_path(), "channels": [
+                          "rade_path": _rade.loaded_path(),
+                          "tune": {m: {"centre": p["centre"], "width": p["width"]} for m, p in _tune.PARAMS.items()}, "channels": [
         {"name": n, "hz": int(h), "mode": m} for n, h, m in (c.split("|") for c in fd["channels"])]})
 
 

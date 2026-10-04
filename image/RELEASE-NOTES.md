@@ -42,6 +42,13 @@ and goes back by itself if the new version does not start. Settings and accounts
 | `radio-remote-rade-linux-aarch64.tar.xz` | the optional RADE library (FreeDV neural mode), installed with `install_rade.sh` |
 | `SHA256SUMS` | checksums of all of the above |
 
+### What is new in 1.1.8
+
+- **FreeDV tuning aid**: FreeDV only locks when the signal is close to where the modem expects it (about +-50 Hz for RADE and 700E, about +-150 Hz for 700D and 1600), which a radio dial
+  cannot be set to by hand. The Pi now searches the tuning in software (up to +-450 Hz around the dial), holds it once the modem locks, and keeps it when you move the dial.
+  The FreeDV tab shows a spectrum of the received audio with the modem's expected band, a level check (too loud / very low), whether it is locked and how far it is correcting,
+  fine dial buttons (+-10 / +-100 Hz), **Centre the dial** and **Search again**. Needs someone listening (speaker icon). Tested against the real codec2 and RADE libraries.
+
 ### What is new in 1.1.7
 
 - **Update now button** (Admin > Config > Updates): when a newer version is known, an administrator presses **Update now…**, types their password, and the Pi updates itself

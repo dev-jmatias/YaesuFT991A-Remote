@@ -116,7 +116,8 @@ class AudioService:
         self._tx_q: collections.deque[bytes] = collections.deque(maxlen=TX_QUEUE_MAX)
         self._tx_gate_open = False
         self._levels = {"audio_rx_level": 0, "audio_tx_level": 0, "audio_tx_frames": 0, "audio_tx_error": "",
-                        "freedv_on": False, "freedv_mode": "", "freedv_sync": 0, "freedv_snr": 0.0}
+                        "freedv_on": False, "freedv_mode": "", "freedv_sync": 0, "freedv_snr": 0.0,
+                        "freedv_spec": [], "freedv_offset": 0, "freedv_hint": None, "freedv_afc": "", "freedv_level": -120, "freedv_clip": False}
         # FreeDV (see freedv.py): decode the radio's modem tones to speech for the listeners, encode the operator's speech to modem tones
         self.freedv_ok, self.freedv_reason = freedv.available()
         self._fd_rx: freedv.RxChain | None = None
@@ -177,6 +178,21 @@ class AudioService:
                 "modes": [m for m in freedv.ALL_MODES if not st.get(m)], "unavailable": {m: w for m, w in st.items() if w},
                 "all_modes": list(freedv.ALL_MODES)}
 
+    def freedv_dial_moved(self, old_hz: int, new_hz: int, mode: str | None) -> None:
+        """The radio's dial moved while FreeDV is on: every audio frequency moved with it, so the software shift is adjusted by the same amount and the lock is kept."""
+        ch = self._fd_rx
+        if ch is None or not hasattr(ch, "afc") or not old_hz or not new_hz:
+            return
+        d = new_hz - old_hz
+        if abs(d) > 600:                                      # a band change or a memory: start the search afresh
+            ch.afc.reset()
+            return
+        ch.afc.nudge(-d if mode in ("LSB", "CW-L", "DATA-L", "RTTY-L") else d)
+
+    def freedv_afc_reset(self) -> None:
+        if self._fd_rx is not None and hasattr(self._fd_rx, "afc"):
+            self._fd_rx.afc.reset()
+
     def refresh_freedv(self) -> None:
         """Look again for the FreeDV libraries (after the Install RADE button put one in place)."""
         from . import rade
@@ -212,7 +228,8 @@ class AudioService:
         else:
             self._tx_q = collections.deque(self._tx_q, maxlen=TX_QUEUE_MAX)
         self._tx_gate_open = False
-        self._levels.update(freedv_on=on, freedv_mode=self.freedv_mode if on else "", freedv_sync=0, freedv_snr=0.0)
+        self._levels.update(freedv_on=on, freedv_mode=self.freedv_mode if on else "", freedv_sync=0, freedv_snr=0.0, freedv_spec=[], freedv_offset=0,
+                            freedv_hint=None, freedv_afc="", freedv_level=-120, freedv_clip=False)
         self._last_emit = 0.0
         self._level("freedv_on", on)
         log.info("FreeDV %s%s", "on, mode " + self.freedv_mode if on else "off", "")
@@ -296,7 +313,13 @@ class AudioService:
                     elif self._fd_rx is not None:                                # FreeDV: listeners get the decoded speech instead
                         try:
                             pcm = self._fd_rx.process(pcm)
-                            self._levels.update(freedv_sync=self._fd_rx.sync, freedv_snr=round(self._fd_rx.snr, 1))
+                            ch = self._fd_rx
+                            self._levels.update(freedv_sync=ch.sync, freedv_snr=round(ch.snr, 1))
+                            if hasattr(ch, "afc"):                                   # the tuning aid (freedv_tune.py): spectrum, level, where the signal is, what was corrected
+                                self._levels.update(freedv_offset=int(round(ch.afc.offset)), freedv_afc=ch.tune_state())
+                                if ch.spec_fresh:
+                                    self._levels.update(freedv_spec=ch.spec.bands(), freedv_level=int(round(ch.spec.level_db)), freedv_clip=ch.spec.clipping,
+                                                        freedv_hint=None if ch.spec.hint is None else int(round(ch.spec.hint)))
                         except Exception:
                             log.exception("FreeDV receive failed; switching it off")
                             self.set_freedv(False)

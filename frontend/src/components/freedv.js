@@ -15,6 +15,17 @@ export function createFreeDV(host, ctx) {
   const root = el(`<div class="fdv">
     <h2>FreeDV</h2>
     <div class="fdv-status" aria-live="polite"><i class="dot" id="fdv-dot"></i><span id="fdv-text">FreeDV is off</span></div>
+    <div class="fdv-tune" id="fdv-tune">
+      <canvas id="fdv-spec" height="72" aria-label="Spectrum of the received audio"></canvas>
+      <div class="fdv-scale"><span>0</span><span>1 kHz</span><span>2 kHz</span><span>3 kHz</span><span>4 kHz</span></div>
+      <div id="fdv-tunetext" class="fdv-tunetext"></div>
+      <div class="row fdv-fine">
+        <span class="dim">Dial:</span>
+        <button type="button" data-df="-100">−100 Hz</button><button type="button" data-df="-10">−10</button><button type="button" data-df="10">+10</button><button type="button" data-df="100">+100 Hz</button>
+        <button type="button" id="fdv-centre" hidden title="Move the radio dial by the offset the software is correcting, so the signal sits where the modem expects it">Centre the dial</button>
+        <button type="button" id="fdv-again" title="Forget the tuning found so far and search again">Search again</button>
+      </div>
+    </div>
     <div class="row fdv-ctl">
       <button class="led" id="fdv-onoff">Switch FreeDV on</button>
       <label class="fdv-mode">Mode <select id="fdv-mode" aria-label="FreeDV mode"></select></label>
@@ -159,6 +170,63 @@ export function createFreeDV(host, ctx) {
     update();
   }
 
+  // ---- tuning aid: spectrum of the received audio with the modem's expected band, level check, what the software corrected, fine dial steps
+  const sideband = () => (["LSB", "CW-L", "DATA-L", "RTTY-L"].includes(S.state.mode) ? -1 : 1);
+  for (const b of root.querySelectorAll("[data-df]")) b.onclick = () => send("set_frequency", { hz: Math.max(1, hz() + +b.dataset.df) });
+  $("fdv-again").onclick = () => send("freedv", { afc: "reset" });
+  $("fdv-centre").onclick = async () => {
+    const off = +S.state.freedv_offset || 0, d = Math.round((off * sideband()) / 10) * 10;
+    if (d) await send("set_frequency", { hz: Math.max(1, hz() + d) });
+  };
+  function drawSpectrum() {
+    const cv = $("fdv-spec"), s = S.state, bands = s.freedv_spec || [];
+    const w = Math.max(200, Math.floor(cv.clientWidth * (window.devicePixelRatio || 1))), h = cv.height;
+    if (cv.width !== w) cv.width = w;
+    const g = cv.getContext("2d"), css = getComputedStyle(root), col = (n, d) => css.getPropertyValue(n).trim() || d;
+    g.clearRect(0, 0, w, h);
+    g.fillStyle = "rgba(10,16,30,.9)"; g.fillRect(0, 0, w, h);
+    const hzx = (f) => (f / 4000) * w;
+    const tn = info.tune?.[s.freedv_mode];
+    if (tn && s.freedv_on) {                                                // where the modem expects its signal, moved to where it is being received
+      const c = tn.centre + (+s.freedv_offset || 0);
+      g.fillStyle = s.freedv_afc === "locked" ? "rgba(52,211,153,.18)" : "rgba(148,163,184,.15)";
+      g.fillRect(hzx(c - tn.width / 2), 0, hzx(tn.width), h);
+    }
+    const bw = w / Math.max(1, bands.length);
+    g.fillStyle = col("--cyan", "#22d3ee");
+    bands.forEach((v, i) => { const bh = (v / 100) * (h - 4); g.fillRect(i * bw + 0.5, h - bh, Math.max(1, bw - 1), bh); });
+    if (s.freedv_hint != null && tn) {                                      // the spectrum's own guess where the signal is
+      g.strokeStyle = "rgba(251,191,36,.9)"; g.lineWidth = 2;
+      const x = hzx(tn.centre + s.freedv_hint); g.beginPath(); g.moveTo(x, 0); g.lineTo(x, h); g.stroke();
+    }
+    g.strokeStyle = "rgba(148,163,184,.35)"; g.lineWidth = 1;
+    for (const f of [1000, 2000, 3000]) { g.beginPath(); g.moveTo(hzx(f), 0); g.lineTo(hzx(f), h); g.stroke(); }
+  }
+  function tuneText() {
+    const s = S.state, au = ctx.audio?.(), streaming = !!au && (au.hear || au.mic), off = Math.round(+s.freedv_offset || 0);
+    const parts = [];
+    if (!s.freedv_on) return "Switch FreeDV on to see the received audio and to let the Pi find the tuning for you.";
+    if (!streaming) return "Tap the speaker icon (Listen): the Pi only analyses the audio while someone is listening.";
+    const lv = s.freedv_level;
+    if (s.freedv_clip) parts.push("Audio level: TOO LOUD, it clips. Lower the radio's USB output level (menu 107) or the receive gain.");
+    else if (lv != null && lv < -55) parts.push(`Audio level: very low (${lv} dBFS). Raise the radio's USB output level (menu 107) or the receive gain.`);
+    else if (lv != null) parts.push(`Audio level: ${lv} dBFS (fine).`);
+    if (s.freedv_afc === "locked") {
+      const dir = off === 0 ? "exactly in place" : `${Math.abs(off)} Hz ${off > 0 ? "above" : "below"} its normal place`;
+      parts.push(`Locked: the signal is ${dir}${off ? "; the Pi is correcting it by itself" : ""}. SNR ${(+s.freedv_snr || 0).toFixed(1)} dB.`);
+    } else if (s.freedv_afc === "searching") {
+      parts.push(`No signal locked yet: the Pi is searching up to ±450 Hz around the dial frequency${s.freedv_hint != null ? `; something that looks like the signal is about ${s.freedv_hint > 0 ? "+" : ""}${s.freedv_hint} Hz off` : ""}.`);
+    }
+    return parts.join(" ");
+  }
+  function paintTune() {
+    const on = !!S.state.freedv_on;
+    $("fdv-tune").classList.toggle("off", !on);
+    $("fdv-tunetext").textContent = tuneText();
+    $("fdv-centre").hidden = !(on && S.state.freedv_afc === "locked" && Math.abs(+S.state.freedv_offset || 0) >= 30);
+    drawSpectrum();
+  }
+
   function update() {
     const s = S.state, onNow = on(), locked = s.freedv_sync === 1;
     const b = $("fdv-onoff");
@@ -172,6 +240,7 @@ export function createFreeDV(host, ctx) {
       : !["USB", "LSB"].includes(s.mode) ? `FreeDV ${s.freedv_mode} is on, but the radio is in ${s.mode}: use USB (LSB below 10 MHz)`
       : locked ? `FreeDV ${s.freedv_mode} locked on a signal (SNR ${(+s.freedv_snr || 0).toFixed(1)} dB)` : `FreeDV ${s.freedv_mode} listening, no signal locked yet`;
     for (const c of $("fdv-ch").querySelectorAll(".fdv-c")) c.classList.toggle("active", onNow && Math.abs(hz() - +c.dataset.hz) < 500 && s.freedv_mode === c.dataset.mode);
+    paintTune();
   }
 
   load();

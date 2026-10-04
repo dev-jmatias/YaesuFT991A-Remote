@@ -14,6 +14,7 @@ from collections import deque
 
 import numpy as np
 
+from .freedv_tune import PARAMS, Afc, FreqShifter, Spectrum
 from .levels import FRAME_BYTES, FRAME_SAMPLES, RATE
 
 log = logging.getLogger("freedv")
@@ -209,6 +210,8 @@ class RxChain:
         self.fd = open_core(mode)
         self.dec = Decimator(RATE // self.fd.modem_rate, 0.45 * self.fd.modem_rate)           # radio audio -> the modem rate
         self.up = Interpolator(RATE // self.fd.speech_rate, 0.45 * self.fd.speech_rate)       # decoded speech -> 48 kHz
+        self.shifter, self.afc, self.spec = FreqShifter(self.fd.modem_rate), Afc(mode), Spectrum(mode)     # software tuning (freedv_tune.py)
+        self.spec_fresh = False
         self.fifo: deque[bytes] = deque()
         self._rest = b""
 
@@ -223,7 +226,12 @@ class RxChain:
     def process(self, pcm: bytes) -> bytes:
         """One 20 ms frame in, one 20 ms frame out (silence until speech has been decoded)."""
         x = np.frombuffer(pcm, dtype="<i2")
-        speech = self.fd.rx(_to_i16(self.dec.process(x)))
+        self.spec_fresh = self.spec.push(pcm)
+        if self.spec_fresh:
+            self.afc.hint = self.spec.hint
+        good = self.fd.sync == 1 and self.fd.snr >= PARAMS[self.fd.mode if self.fd.mode in PARAMS else "700D"]["min_snr"]
+        self.shifter.shift = self.afc.update(good, FRAME_SAMPLES / RATE)          # nothing locked: step the shift until the modem locks, then hold it
+        speech = self.fd.rx(_to_i16(self.shifter.process(self.dec.process(x))))
         if len(speech):
             self._rest += _to_i16(self.up.process(speech.astype(np.float64))).tobytes()
             while len(self._rest) >= FRAME_BYTES:
@@ -232,6 +240,9 @@ class RxChain:
             while len(self.fifo) > self.MAX_FIFO:
                 self.fifo.popleft()
         return self.fifo.popleft() if self.fifo else bytes(FRAME_BYTES)
+
+    def tune_state(self) -> str:
+        return "locked" if self.afc.locked else "searching" if self.afc.searching else "idle"
 
     def close(self) -> None:
         self.fd.close()
@@ -265,5 +276,5 @@ class TxChain:
         self.fd.close()
 
 
-__all__ = ["ALL_MODES", "FRAME_SAMPLES", "FreeDV", "FreeDVUnavailable", "MODES", "RxChain", "TxChain", "available", "available_modes",
+__all__ = ["ALL_MODES", "Afc", "FreqShifter", "Spectrum", "FRAME_SAMPLES", "FreeDV", "FreeDVUnavailable", "MODES", "RxChain", "TxChain", "available", "available_modes",
            "mode_status", "open_core"]

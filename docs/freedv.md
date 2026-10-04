@@ -31,6 +31,22 @@ Modes: **700D**, **700E** (copes better with fast fading) and **1600** (the olde
 
 Switching FreeDV off passes the radio's audio through as before (it does not change the radio's mode back).
 
+### The tuning aid: the Pi finds the tuning for you
+
+A FreeDV modem only locks when the signal is close to where it expects it, and a radio dial cannot be set that finely by hand. Measured with ideal
+signals: RADE and 700E lock only within about ±50 Hz, 700D and 1600 within about ±150 to 200 Hz. So the Pi does the fine tuning in software:
+
+* While nothing is locked it shifts the received audio, step by step, within ±450 Hz around the dial frequency, until the modem locks, and then holds that shift.
+  The strongest-looking spot in the spectrum is tried first. A short fade-out does not make it start again (it waits a few seconds).
+* **The FreeDV tab shows** the spectrum of the received audio (0 to 4 kHz) with the band where the modem expects its signal shaded (it moves with the correction), a
+  yellow line where the spectrum thinks the signal is, and a text line: the audio level (it warns when it clips or is very low), and either *Locked: the signal is
+  120 Hz above its normal place; the Pi is correcting it by itself* or *No signal locked yet: searching*.
+* **Centre the dial** (shown when the Pi is correcting 30 Hz or more) moves the radio's dial by exactly that offset, so the signal sits where the modem expects it.
+  The dial buttons (−100, −10, +10, +100 Hz) are for fine steps. If you move the dial while locked, the Pi adjusts its correction by the same amount and keeps the lock.
+  **Search again** forgets the tuning found so far.
+* The Pi only analyses the audio while someone is listening (speaker icon). If nothing locks: check that the level line says "fine", that the radio's DSP
+  (noise reduction, notch, contour, narrow filter) is off, that the sideband is right (LSB below 10 MHz) and that a FreeDV station is really on the air.
+
 ### Radio settings that matter for FreeDV
 
 * USB or LSB mode (not DATA), **speech processor off**, no equaliser tricks: the radio must pass the modem tones unchanged.

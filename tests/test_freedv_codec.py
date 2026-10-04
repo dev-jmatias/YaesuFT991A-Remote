@@ -45,3 +45,40 @@ def test_resamplers_keep_the_band_and_the_frame_size():
     assert len(y) == 160 * 20 and 8000 < np.abs(y[200:]).max() < 12000
     z = u.process(y)
     assert len(z) == len(y) * 6 and 8000 < np.abs(z[1000:]).max() < 12000
+
+
+def ssb_shift(x, hz):
+    """Move every frequency in a real signal by hz (analytic signal, FFT based): what a mistuned dial does to the audio."""
+    n = len(x)
+    h = np.zeros(n)
+    h[0] = 1
+    h[1:(n + 1) // 2] = 2
+    if n % 2 == 0:
+        h[n // 2] = 1
+    return np.real(np.fft.ifft(np.fft.fft(x) * h) * np.exp(2j * np.pi * hz * np.arange(n) / RATE))
+
+
+@pytest.mark.parametrize("mode", ["1600", "700D", "700E", "RADE"])
+@pytest.mark.parametrize("off", [-250, 200])
+def test_software_tuning_finds_a_mistuned_signal_and_holds_it(mode, off):
+    if mode not in freedv.available_modes():
+        pytest.skip(f"{mode} is not installed")
+    tx = freedv.TxChain(mode, level=1.0)
+    mic = speechlike(50 * 60)                                       # 60 s of speech
+    tones = []
+    for i in range(50 * 60):
+        tones += tx.process(mic[i * FRAME_SAMPLES:(i + 1) * FRAME_SAMPLES].tobytes())
+    x = np.frombuffer(b"".join(tones), dtype="<i2").astype(float)
+    pad = np.random.default_rng(9).standard_normal(RATE) * 300     # a second of noise before the signal
+    y = np.clip(ssb_shift(np.concatenate([pad, x]), off), -32768, 32767).astype("<i2")
+    rx = freedv.RxChain(mode)
+    n, first, good_after = len(y) // FRAME_SAMPLES, None, 0
+    for i in range(n):
+        rx.process(y[i * FRAME_SAMPLES:(i + 1) * FRAME_SAMPLES].tobytes())
+        if rx.afc.locked and first is None:
+            first = i * 0.02
+        if first is not None and i * 0.02 > first + 5:
+            good_after += rx.afc.locked
+    assert first is not None and first < 40, f"{mode} at {off:+d} Hz never locked"
+    assert good_after / max(1, n - int((first + 5) / 0.02)) > 0.7                  # and it keeps the lock
+    assert abs(rx.afc.offset - off) <= 120                                         # the offset it settled on is close to the real one
