@@ -41,6 +41,18 @@ and goes back by itself if the new version does not start. Settings and accounts
 | `radio-remote-v….tar.gz` | the program only: used by `self_update.sh`, or by hand to update a running Pi |
 | `SHA256SUMS` | checksums of all of the above |
 
+### What is new in 1.1.2
+
+- **Logbook link (Hamlib rigctl)**: switch it on in Admin > Config > Logbook link and a logbook on your home network (tested design for Log4OM:
+  Hamlib, model *NET rigctl*, `<pi>.local:4532`) follows the radio and can change frequency and mode. It can never transmit or switch the
+  radio off, only answers home-network addresses by default, and is off until you switch it on. Guide:
+  [docs/logbook.md](https://github.com/dev-jmatias/YaesuFT991A-Remote/blob/main/docs/logbook.md).
+- **The microphone button now also sets the radio's input**: armed = REAR (USB audio), off = back to MIC. The separate REAR/MIC buttons are gone.
+- **Lock PTT** is a round padlock beside HOLD TO TRANSMIT.
+- **Phones**: the top menu shows icons, RX/TX and the status lights fit on one line, VFO-A is on the frequency line.
+- **Connection dot** replaces the "radio online" text (green online, yellow reconnecting, red offline); the MEM channel tag sits under the frequency.
+- Documentation and install guide reorganised; the "what each radio supports" page is generated from the radio profiles.
+
 ### What is new in 1.1.1
 
 - **Remote access with Tailscale now works out of the box**: after `sudo tailscale up`, run
