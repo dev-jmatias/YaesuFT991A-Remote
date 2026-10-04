@@ -11,13 +11,16 @@ Only `render-config` needs the app's venv (it imports radio_remote.config); ever
   rr_admin.py health  --url http://127.0.0.1:8080/api/status [--timeout 30]
   rr_admin.py doctor  [--config CFG] [--url URL]
   rr_admin.py fetch-release --repo owner/name --out DIR [--check] [--force]     (used by self_update.sh)
+  rr_admin.py fetch-rade --repo owner/name --dest DIR [--file F.tar.xz]          (used by install_rade.sh: the optional RADE library)
 """
 from __future__ import annotations
 
 import argparse
 import hashlib
 import json
+import io
 import os
+import platform
 import re
 import shutil
 import sqlite3
@@ -354,6 +357,95 @@ def cmd_fetch_release(a) -> int:
     return 0
 
 
+# --------------------------------------------------- RADE: the optional neural FreeDV library (a separate release download)
+RADE_FILES = {"librade-rr.so": 0o755, "RADE-INFO.txt": 0o644, "LICENSE-rade_c": 0o644, "LICENSE-opus": 0o644}
+MAX_RADE_BYTES = 120 * 1024 * 1024
+
+
+def _install_rade_archive(data: bytes, dest: Path) -> list[str]:
+    """Unpack the RADE .tar.xz into dest. Only the four known plain files are accepted; each is written under a temporary name and renamed
+    into place, so a running service never sees a half-written library."""
+    names = []
+    try:
+        tf = tarfile.open(fileobj=io.BytesIO(data), mode="r:xz")
+    except tarfile.TarError as e:
+        raise ValueError(f"not a RADE package: {e}") from None
+    with tf:
+        members = tf.getmembers()
+        if not any(m.name == "librade-rr.so" for m in members):
+            raise ValueError("the package has no librade-rr.so")
+        for m in members:
+            if m.name not in RADE_FILES or not m.isfile():
+                raise ValueError(f"the RADE package holds an unexpected entry: {m.name!r}")
+        dest.mkdir(parents=True, exist_ok=True)
+        for m in members:
+            blob = tf.extractfile(m).read()
+            tmp = dest / f".{m.name}.new"
+            tmp.write_bytes(blob)
+            os.chmod(tmp, RADE_FILES[m.name])
+            os.replace(tmp, dest / m.name)
+            names.append(m.name)
+    return names
+
+
+def cmd_fetch_rade(a) -> int:
+    """Download the RADE library for this machine from the release that matches the installed version (else the newest release), verify its
+    checksum and install it into --dest. --file installs from a local file instead (no network). Prints INSTALLED <dest> on success."""
+    arch = a.arch or platform.machine()
+    if not re.fullmatch(r"[A-Za-z0-9_]{1,20}", arch):
+        print(f"unusable architecture {arch!r}", file=sys.stderr)
+        return 1
+    pkg = f"radio-remote-rade-linux-{arch}.tar.xz"
+    dest = Path(a.dest)
+    try:
+        if a.file:
+            data = Path(a.file).read_bytes()
+            if len(data) > MAX_RADE_BYTES:
+                raise ValueError("the file is bigger than expected")
+            if a.sha256 and hashlib.sha256(data).hexdigest() != a.sha256.lower():
+                print("CHECKSUM MISMATCH: nothing was installed.", file=sys.stderr)
+                return 1
+        else:
+            api = a.api_base.rstrip("/")
+            rel = None
+            for url in (f"{api}/repos/{a.repo}/releases/tags/v{installed_version()}", f"{api}/repos/{a.repo}/releases/latest"):
+                try:
+                    cand = json.loads(_get(url, limit=2_000_000, timeout=20))
+                except (urllib.error.URLError, OSError, ValueError):
+                    continue
+                if any(isinstance(x, dict) and x.get("name") == pkg for x in cand.get("assets", [])):
+                    rel = cand
+                    break
+            if rel is None:
+                print(f"no release has {pkg} (it is built with each release; this version may not offer RADE for {arch}).", file=sys.stderr)
+                return 1
+            prefix = f"https://github.com/{a.repo}/releases/download/" if api == GITHUB_API else api
+            assets = {x["name"]: x["browser_download_url"] for x in rel["assets"]
+                      if isinstance(x, dict) and isinstance(x.get("name"), str) and isinstance(x.get("browser_download_url"), str)
+                      and x["browser_download_url"].startswith(prefix)}
+            if pkg not in assets or "SHA256SUMS" not in assets:
+                print("the release has no checksum file for the RADE package", file=sys.stderr)
+                return 1
+            sums = _get(assets["SHA256SUMS"], limit=1_000_000).decode("utf-8", "replace")
+            want = next((ln.split()[0].lower() for ln in sums.splitlines()
+                         if len(ln.split()) >= 2 and ln.split()[1].lstrip("*") == pkg), None)
+            if not want or not re.fullmatch(r"[0-9a-f]{64}", want):
+                print(f"SHA256SUMS has no checksum for {pkg}", file=sys.stderr)
+                return 1
+            print(f"downloading {pkg} from release {rel.get('tag_name')} ...")
+            data = _get(assets[pkg], limit=MAX_RADE_BYTES, timeout=300)
+            if hashlib.sha256(data).hexdigest() != want:
+                print(f"CHECKSUM MISMATCH for {pkg}. Nothing was installed.", file=sys.stderr)
+                return 1
+            print(f"checksum ok: {want}")
+        _install_rade_archive(data, dest)
+    except (urllib.error.URLError, OSError, ValueError) as e:
+        print(f"RADE install failed: {e}", file=sys.stderr)
+        return 1
+    print(f"INSTALLED {dest}")
+    return 0
+
+
 # ------------------------------------------------------------------ health / doctor
 def cmd_health(a) -> int:
     end = time.monotonic() + a.timeout
@@ -476,6 +568,15 @@ def main(argv=None) -> int:
     p.add_argument("--check", action="store_true", help="only say whether a newer release exists")
     p.add_argument("--force", action="store_true", help="fetch even when the newest release is not newer")
     p.set_defaults(fn=cmd_fetch_release)
+
+    p = sub.add_parser("fetch-rade")
+    p.add_argument("--repo", default="dev-jmatias/YaesuFT991A-Remote")
+    p.add_argument("--dest", required=True)
+    p.add_argument("--file", help="install from this local .tar.xz instead of downloading")
+    p.add_argument("--sha256", help="with --file: the expected checksum")
+    p.add_argument("--arch", help=argparse.SUPPRESS)
+    p.add_argument("--api-base", default=GITHUB_API, help=argparse.SUPPRESS)
+    p.set_defaults(fn=cmd_fetch_rade)
 
     p = sub.add_parser("health")
     p.add_argument("--url", default="http://127.0.0.1:8080/api/status")

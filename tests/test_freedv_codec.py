@@ -17,7 +17,7 @@ def speechlike(n_frames, seed=1):
     return (x / np.abs(x).max() * 12000).astype("<i2")
 
 
-@pytest.mark.parametrize("mode", ["700D", "700E"])
+@pytest.mark.parametrize("mode", ["1600", "700D", "700E"])
 def test_loopback_decodes_speech_and_noise_does_not(mode):
     tx, rx = freedv.TxChain(mode, level=0.5), freedv.RxChain(mode)
     mic = speechlike(400)

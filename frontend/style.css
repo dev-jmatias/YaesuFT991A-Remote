@@ -605,3 +605,26 @@ html[data-tablet] .app[data-tab=freedv] [data-pane=vfo], html[data-tablet] .app[
 .fdv-row { align-items: center; gap: 6px; margin-bottom: 4px; flex-wrap: nowrap; }
 .fdv-row .n { flex: 1 1 8em; min-width: 0; } .fdv-row .f { width: 7.5em; } .fdv-row button { min-height: 30px; padding: 0 10px; }
 .fdv-help { margin-top: 10px; }
+
+/* FreeDV indicator on the mode / band line (before the MEM tag): lit green while the modem is locked on a signal */
+.vbadge.fdvb { background: #1d2a44; color: #9fb0d0; border: 1px solid var(--line2); white-space: nowrap; }
+.vbadge.fdvb.on { background: var(--green); color: #04210f; border-color: transparent; }
+.vbadge.fdvb[hidden] { display: none; }
+
+/* FreeDV channel cards on phones: equal-size cards in a neat grid (2 per row; 3 on larger phones) */
+@media (max-width: 699px) {
+  .fdv-ch { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+  .fdv-c { width: 100%; min-height: 48px; align-items: flex-start; justify-content: center; overflow: hidden; }
+  .fdv-c, .fdv-c small { white-space: nowrap; text-overflow: ellipsis; }
+}
+@media (min-width: 480px) and (max-width: 699px) { .fdv-ch { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+/* FreeDV channel editor on phones: the name on its own line, then frequency / mode / remove, so no text is cut off */
+@media (max-width: 699px) {
+  .fdv-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 44px; gap: 6px; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+  .fdv-row .n { grid-column: 1 / -1; width: 100%; }
+  .fdv-row .f, .fdv-row .m { width: 100%; min-width: 0; }
+  .fdv-row input, .fdv-row select { min-height: 38px; padding: 4px 8px; font-size: 1rem; text-overflow: clip; }
+  .fdv-row button { min-height: 38px; width: 44px; padding: 0; font-size: 1.2rem; }
+  #fdv-add, #fdv-save { min-height: 40px; }
+}

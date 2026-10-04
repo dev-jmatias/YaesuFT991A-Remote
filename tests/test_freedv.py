@@ -54,6 +54,7 @@ class FakeTx:
 def fake_modem(monkeypatch):
     FakeTx.made = []
     monkeypatch.setattr(freedv, "available", lambda: (True, ""))
+    monkeypatch.setattr(freedv, "mode_status", lambda: {"1600": "", "700D": "", "700E": "", "RADE": "RADE is not installed"})
     monkeypatch.setattr(service.freedv, "RxChain", FakeRx)
     monkeypatch.setattr(service.freedv, "TxChain", FakeTx)
 
@@ -71,16 +72,20 @@ async def svc(fake_modem):
     await s.stop()
 
 
+def test_config_and_codec_mode_lists_agree():
+    assert set(config.FREEDV_MODES) == set(freedv.ALL_MODES) == set(freedv.MODES) | {"RADE"}
+
+
 def test_config_defaults_and_validation():
     cfg = config.load(None)
     assert cfg["freedv"]["mode"] == "700D" and "20m|14236000|700D" in cfg["freedv"]["channels"]
-    for bad in (["no pipes"], ["x|abc|700D"], ["x|14236000|RADE"], ["a|b|c|700D"], [f"n{i}|7177000|700D" for i in range(41)]):
+    for bad in (["no pipes"], ["x|abc|700D"], ["x|14236000|RADE2"], ["a|b|c|700D"], [f"n{i}|7177000|700D" for i in range(41)]):
         c = copy.deepcopy(cfg)
         c["freedv"]["channels"] = bad
         with pytest.raises(config.ConfigError):
             config.validate(c)
     c = copy.deepcopy(cfg)
-    c["freedv"]["mode"] = "1600"
+    c["freedv"]["mode"] = "RADE2"
     with pytest.raises(config.ConfigError):
         config.validate(c)
     c["freedv"]["mode"], c["freedv"]["tx_level_db"] = "700E", 3
@@ -152,10 +157,13 @@ async def test_command_api_and_settings(make_app, fake_modem):
     assert hello["audio"]["freedv"]["available"] is True and hello["audio"]["freedv"]["on"] is False
     h = root.h
     info = await (await client.get("/api/freedv")).json()
-    assert {"name": "20m", "hz": 14236000, "mode": "700D"} in info["channels"] and info["modes"] == ["700D", "700E"]
+    assert {"name": "20m", "hz": 14236000, "mode": "700D"} in info["channels"] and info["modes"] == ["1600", "700D", "700E"] and info["unavailable"] == {"RADE": "RADE is not installed"} and "RADE" in info["all_modes"]
 
-    await ws.send_json({"id": 1, "type": "freedv", "on": True, "mode": "RADE"})
-    assert (await recv_until(ws, lambda m: m["t"] == "ack"))["ok"] is False
+    await ws.send_json({"id": 1, "type": "freedv", "on": True, "mode": "RADE2"})
+    assert (await recv_until(ws, lambda m: m["t"] == "ack"))["ok"] is False                            # not a mode at all
+    await ws.send_json({"id": 11, "type": "freedv", "on": True, "mode": "RADE"})
+    nak = await recv_until(ws, lambda m: m["t"] == "ack" and m["id"] == 11)
+    assert nak["ok"] is False and "not installed" in nak["error"]                                      # a real mode whose library is missing
     await ws.send_json({"id": 2, "type": "freedv", "on": True, "mode": "700E"})
     assert (await recv_until(ws, lambda m: m["t"] == "ack" and m["id"] == 2))["ok"] is True
     assert audio.freedv_state()["on"] and audio.freedv_mode == "700E"

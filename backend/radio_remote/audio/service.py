@@ -172,12 +172,14 @@ class AudioService:
 
     # ------------------------------------------------------------- FreeDV
     def freedv_state(self) -> dict:
+        st = freedv.mode_status()
         return {"available": self.freedv_ok, "reason": self.freedv_reason, "on": self._fd_rx is not None, "mode": self.freedv_mode,
-                "modes": sorted(freedv.MODES)}
+                "modes": [m for m in freedv.ALL_MODES if not st.get(m)], "unavailable": {m: w for m, w in st.items() if w},
+                "all_modes": list(freedv.ALL_MODES)}
 
     def set_freedv_params(self, mode: str, tx_level_db: float) -> None:
         """Defaults from the config. A running session picks up the new transmit level at once; a mode change applies the next time it is switched on."""
-        self.freedv_mode = mode if mode in freedv.MODES else self.freedv_mode
+        self.freedv_mode = mode if mode in freedv.ALL_MODES else self.freedv_mode
         self.freedv_tx_gain = db_to_gain(tx_level_db)
         if self._fd_tx:
             self._fd_tx.level = self.freedv_tx_gain
@@ -187,12 +189,17 @@ class AudioService:
         to modem tones while that connection owns PTT. Off: audio passes through untouched, as before."""
         if on and not self.freedv_ok:
             raise AudioUnavailable(self.freedv_reason or "FreeDV is not available")
+        if on:
+            want = mode if mode in freedv.ALL_MODES else self.freedv_mode
+            why = freedv.mode_status().get(want, "")
+            if why:
+                raise AudioUnavailable(f"FreeDV {want} is not available: {why}")
         for c in (self._fd_rx, self._fd_tx):
             if c:
                 c.close()
         self._fd_rx = self._fd_tx = None
         if on:
-            self.freedv_mode = mode if mode in freedv.MODES else self.freedv_mode
+            self.freedv_mode = mode if mode in freedv.ALL_MODES else self.freedv_mode
             self._fd_rx = freedv.RxChain(self.freedv_mode)
             self._fd_tx = freedv.TxChain(self.freedv_mode, self.freedv_tx_gain)
             self._tx_q = collections.deque(self._tx_q, maxlen=TX_QUEUE_FREEDV)      # the modem delivers its tones in bursts of up to 160 ms

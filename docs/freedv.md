@@ -5,8 +5,8 @@ FreeDV sends speech as modem tones in an ordinary SSB channel. Radio Remote does
 * **Receive:** the Pi turns the radio's modem tones back into speech and plays that to every listener.
 * **Transmit:** your voice (browser microphone) is turned into modem tones by the Pi and sent to the radio, while you hold PTT.
 
-Modes: **700D** and **700E** (700E copes better with fast fading). The codec is the open-source **codec2** library (the same one the FreeDV program uses).
-Not included: RADE and the other FreeDV modes.
+Modes: **700D**, **700E** (copes better with fast fading) and **1600** (the older, narrow mode; needs a stronger signal). The codec is the open-source **codec2** library (the same one the FreeDV program uses).
+**RADE** (the newer neural mode, see below) is an optional extra download. The other FreeDV modes are not included.
 
 > **Status:** the codec round trip (voice to tones to voice, noise rejected) is covered by automated tests. How well it works over the air with
 > your radio, antenna and band has to be found out by trying it: start with receive, then transmit into a dummy load.
@@ -40,6 +40,26 @@ Switching FreeDV off passes the radio's audio through as before (it does not cha
 * The receive level that goes to the Pi is the radio's menu 107 SSB OUT LEVEL ([radio connection](radio-connection.md)): the modem tones should
   be clearly present but never clipping.
 
+## RADE (the neural mode)
+
+RADE V1 sends speech as an OFDM signal that is about 2.1 kHz wide and decodes at lower signal-to-noise ratios than 700D/700E (it still locks at about 0 dB
+on a fading path). It is the mode most new FreeDV activity uses. It comes from a separate library that is **not** part of the normal install (about 24 MB):
+
+```bash
+sudo /opt/radio-remote/current/scripts/install_rade.sh            # downloads the matching release file, checks its SHA-256, installs it, restarts the service
+sudo /opt/radio-remote/current/scripts/install_rade.sh --file F.tar.xz   # from a file you copied to the Pi (no internet)
+sudo /opt/radio-remote/current/scripts/install_rade.sh --remove
+```
+
+Then choose **RADE** in the mode list of the FreeDV tab (or in a channel). Until it is installed the tab says so and offers only the codec2 modes.
+
+* The library is built from the open-source `rade_c` C port (BSD licence, with the Opus sources it uses); the release includes the licence files.
+  It runs in the same program as the rest of the server (about 3% of one fast PC core to decode, less to encode; expect roughly a quarter to a
+  third of one Pi 4 core while receiving: not yet measured on your Pi).
+* RADE V1 has no automatic level control on receive: if it does not lock on a signal you can hear clearly, try the radio's menu 107 or **Admin > Config >
+  Audio > RX gain**. For transmit use the same **modem level** slider as the other modes and keep the ALC barely moving.
+* The speech it plays is the neural vocoder's voice (clean, but not your exact voice). A few hundred milliseconds of delay is normal.
+
 ## The channels
 
 The list on the FreeDV tab comes from the configuration (`freedv.channels`). The defaults are the usual FreeDV calling frequencies (160 m
@@ -47,7 +67,7 @@ The list on the FreeDV tab comes from the configuration (`freedv.channels`). The
 as dial frequencies). Check the current activity frequencies on the FreeDV website before relying on them.
 Administrators can change the list in the tab (**Edit the channel list**): name, frequency in MHz, mode.
 
-Settings (Admin > Config or the tab): `freedv.mode` (the mode used by the FreeDV button), `freedv.tx_level_db` (-40..0), `freedv.channels`.
+Settings (Admin > Config or the tab): `freedv.mode` (the mode used when FreeDV is switched on without choosing one), `freedv.tx_level_db` (-40..0), `freedv.channels`.
 
 ## Notes and limits
 
@@ -57,6 +77,11 @@ Settings (Admin > Config or the tab): `freedv.mode` (the mode used by the FreeDV
   sent to the radio, not who may transmit.
 * CPU: decoding and encoding 700D/700E is light (a few percent of one core on a PC); not yet measured on a Pi.
 * Operating rules: FreeDV is plain unencrypted amateur digital voice; use it only where your licence and the band plan allow it.
+
+## How much CPU does it need?
+
+`python3 scripts/freedv_probe.py` (on the Pi: `/opt/radio-remote/venv/bin/python /opt/radio-remote/current/scripts/freedv_probe.py`) runs every installed mode as a
+transmit-to-receive loopback and prints the share of one CPU core each needs. On a PC the codec2 modes need about 1% and RADE about 1% to transmit and 5% to receive.
 
 ## If it does not work
 

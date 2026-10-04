@@ -2,7 +2,7 @@ import { api } from "../api.js";
 import { el } from "../util.js";
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
-// FreeDV digital voice (700D / 700E). The Pi decodes the radio's modem tones into speech for every listener and encodes the operator's
+// FreeDV digital voice (1600 / 700D / 700E with codec2, RADE with its own optional library). The Pi decodes the radio's modem tones into speech for every listener and encodes the operator's
 // microphone into modem tones while that connection holds PTT (see docs/freedv.md). This tab: on/off, the mode, the preset channels and the
 // transmit level. By the FreeDV convention frequencies below 10 MHz use LSB and above use USB.
 export const ssbFor = (hz) => (hz < 10_000_000 ? "LSB" : "USB");
@@ -11,7 +11,7 @@ const fmtMHz = (hz) => (hz / 1e6).toFixed(hz % 1000 ? 4 : 3);
 export function createFreeDV(host, ctx) {
   const { S, send, toast } = ctx;
   const admin = S.user.role === "admin";
-  let info = { channels: [], modes: ["700D", "700E"], tx_level_db: -6 };
+  let info = { channels: [], modes: ["1600", "700D", "700E"], tx_level_db: -6 };
   const root = el(`<div class="fdv">
     <h2>FreeDV</h2>
     <div class="fdv-status" aria-live="polite"><i class="dot" id="fdv-dot"></i><span id="fdv-text">FreeDV is off</span></div>
@@ -19,6 +19,7 @@ export function createFreeDV(host, ctx) {
       <button class="led" id="fdv-onoff">Switch FreeDV on</button>
       <label class="fdv-mode">Mode <select id="fdv-mode" aria-label="FreeDV mode"></select></label>
     </div>
+    <p class="dim fdv-note" id="fdv-note" hidden></p>
     <h3 class="blabel">Channels</h3>
     <div class="fdv-ch" id="fdv-ch"></div>
     <div class="fdv-level"><label>Transmit level of the modem tones <b id="fdv-lv"></b> dB
@@ -60,7 +61,7 @@ export function createFreeDV(host, ctx) {
     rows.replaceChildren(...info.channels.map((c) => {
       const r = el(`<div class="row fdv-row"><input class="n" maxlength="40" aria-label="Channel name" value="${esc(c.name)}">
         <input class="f" inputmode="decimal" aria-label="Frequency in MHz" value="${(c.hz / 1e6).toFixed(4).replace(/0+$/, "").replace(/\.$/, "")}">
-        <select class="m" aria-label="Mode">${(info.modes || ["700D", "700E"]).map((m) => `<option ${m === c.mode ? "selected" : ""}>${m}</option>`).join("")}</select>
+        <select class="m" aria-label="Mode">${(info.all_modes || info.modes || ["1600", "700D", "700E", "RADE"]).map((m) => `<option ${m === c.mode ? "selected" : ""}>${m}</option>`).join("")}</select>
         <button type="button" class="danger" aria-label="Remove">×</button></div>`);
       r.querySelector("button").onclick = () => r.remove();
       return r;
@@ -68,7 +69,7 @@ export function createFreeDV(host, ctx) {
   }
   $("fdv-add").onclick = () => {
     info.channels = readRows();
-    info.channels.push({ name: "new", hz: 14_236_000, mode: modeSel.value || "700D" });
+    info.channels.push({ name: "new", hz: 14_236_000, mode: modeSel.value || "700D" });          // (the editor lists every mode, installed or not)
     paintEditor();
   };
   function readRows() {
@@ -104,8 +105,12 @@ export function createFreeDV(host, ctx) {
 
   async function load() {
     try { info = await api("/api/freedv"); } catch { return; }
-    modeSel.innerHTML = (info.modes || ["700D", "700E"]).map((m) => `<option>${m}</option>`).join("");
+    modeSel.innerHTML = (info.modes || ["1600", "700D", "700E"]).map((m) => `<option>${m}</option>`).join("");
     modeSel.value = S.state.freedv_mode || info.mode || "700D";
+    if (!(info.modes || []).includes(modeSel.value)) modeSel.value = (info.modes || [])[0] || "";
+    const missing = Object.entries(info.unavailable || {});                  // modes whose library is not installed, with the reason
+    $("fdv-note").hidden = !missing.length;
+    $("fdv-note").textContent = missing.map(([m, why]) => `${m}: ${why}`).join("  ");
     $("fdv-lvr").value = info.tx_level_db; $("fdv-lv").textContent = info.tx_level_db;
     $("fdv-lvr").disabled = !admin;
     $("fdv-lvnote").textContent = admin ? "" : "(set by an administrator)";

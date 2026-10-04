@@ -19,7 +19,7 @@ export function createVfoPanels(host, ctx) {
           <button class="aud" data-aud="mic" aria-pressed="false">${ICON_MIC}</button>
         </span></header>
       <div class="freqrow"><div class="freqhost" data-fa></div><span class="vl vl2" aria-hidden="true">VFO-A</span></div>
-      <div class="vmode"><span id="mode">-</span><span class="vband" id="band">-</span><span class="vbadge memb" data-memb hidden></span></div>
+      <div class="vmode"><span id="mode">-</span><span class="vband" id="band">-</span><span class="vbadge fdvb" data-fdv hidden></span><span class="vbadge memb" data-memb hidden></span></div>
       <div class="smeterhost" data-sm></div>
     </section>
     <div class="txmhost" data-txm></div>
@@ -112,6 +112,13 @@ export function createVfoPanels(host, ctx) {
       root.dataset.active = bTx ? "b" : "a";                           // phones show only this panel (CSS): the frequency in use
       q("#band").textContent = s.band || "-";
       q("#mode").textContent = s.mode || "-";
+      const fdv = q("[data-fdv]");                                       // FreeDV indicator under the frequency, before the MEM tag
+      fdv.hidden = !s.freedv_on;
+      if (s.freedv_on) {
+        fdv.textContent = `FreeDV ${s.freedv_mode || ""}`.trim();
+        fdv.classList.toggle("on", s.freedv_sync === 1);
+        fdv.title = s.freedv_sync === 1 ? `FreeDV ${s.freedv_mode}: locked on a signal (SNR ${(+s.freedv_snr || 0).toFixed(1)} dB)` : `FreeDV ${s.freedv_mode}: on, no signal locked`;
+      }
       const memb = q("[data-memb]"), inMem = s.vfo_memory === "memory";
       memb.hidden = !inMem;
       if (inMem) memb.textContent = `MEM ${String(s.memory_channel ?? "").padStart(3, "0")}`;

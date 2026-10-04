@@ -28,7 +28,17 @@ jobs:
         with:
           python-version: "3.12"
 
+      # RADE (neural FreeDV mode): built from source for this architecture (about 5 minutes) and shipped as its own optional download.
+      # Building it first lets the tests below run against the real library on the real (arm64) hardware, together with libcodec2.
+      - name: Build the RADE library
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq cmake build-essential autoconf automake libtool curl git libcodec2-dev
+          bash scripts/build_rade.sh rade-out
+
       - name: Run the tests
+        env:
+          RADIO_REMOTE_RADE_LIB: ${{ github.workspace }}/rade-out/librade-rr.so
         run: |
           pip install -r requirements.txt pytest pytest-asyncio markdown
           PYTHONPATH=backend python -m pytest -q
@@ -65,7 +75,7 @@ jobs:
           python scripts/build_imager_repo.py --image "${{ steps.build.outputs.image-path }}" --tag "$TAG" \
             --repo "$GITHUB_REPOSITORY" --out os-list.json
           python scripts/build_release_assets.py --tag "$TAG" --out release-assets --installer --skip-docs \
-            --extra "${{ steps.build.outputs.image-path }}" image/first-boot-settings.ps1 os-list.json
+            --extra "${{ steps.build.outputs.image-path }}" image/first-boot-settings.ps1 os-list.json rade-out/radio-remote-rade-linux-*.tar.xz
           cat release-assets/SHA256SUMS
 
       - uses: actions/upload-artifact@v4

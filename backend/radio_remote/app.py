@@ -23,6 +23,7 @@ from .lease import ControlLease, LeaseError
 from .radio import controls
 from .radio.base import METER_FIELDS, RadioDriver, RadioError
 from .radio.registry import create_driver
+from .config import FREEDV_MODES
 from .ratelimit import TokenBucket
 from .rigctl import RigctlServer
 from .safety import TxGuard, TxRefused
@@ -207,8 +208,8 @@ class Hub:
             await self.driver.set_mode(mode)
         elif typ == "freedv":
             on, mode = msg.get("on"), msg.get("mode")
-            if not isinstance(on, bool) or (mode is not None and mode not in ("700D", "700E")):
-                raise CommandError("freedv needs on (true/false) and optionally mode 700D or 700E")
+            if not isinstance(on, bool) or (mode is not None and mode not in FREEDV_MODES):
+                raise CommandError("freedv needs on (true/false) and optionally mode " + ", ".join(FREEDV_MODES))
             if not self.audio:
                 raise CommandError("audio is not available")
             self._not_while_transmitting()
@@ -530,7 +531,7 @@ async def freedv_info(request):
     app = request.app
     fd, audio = app[K_CFG]["freedv"], app[K_AUDIO]
     st = audio.freedv_state()
-    return web.json_response({**st, "tx_level_db": fd["tx_level_db"], "channels": [
+    return web.json_response({**st, "tx_level_db": fd["tx_level_db"], "install_rade": "sudo /opt/radio-remote/current/scripts/install_rade.sh", "channels": [
         {"name": n, "hz": int(h), "mode": m} for n, h, m in (c.split("|") for c in fd["channels"])]})
 
 
