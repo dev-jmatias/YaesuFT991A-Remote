@@ -486,6 +486,32 @@ async def audio_offer(request):
         raise web.HTTPServiceUnavailable(text=str(e)) from None
 
 
+async def audio_ws(request):
+    """Audio over a WebSocket: the fallback for networks that block WebRTC (UDP). Binary Opus packets both ways; see AudioService.ws_session."""
+    app = request.app
+    s = _session(request)
+    if not s:
+        raise web.HTTPUnauthorized(text="login required")
+    if not _origin_ok(request, app[K_CFG]["server"]["allowed_origins"]):
+        raise web.HTTPForbidden(text="origin not allowed")
+    conn = request.query.get("conn", "")
+    owner = app[K_HUB].clients.get(conn)
+    if not owner or owner.session.user_id != s.user_id:
+        raise web.HTTPForbidden(text="conn does not belong to this session")
+    audio: AudioService = app[K_AUDIO]
+    if not audio.available:
+        raise web.HTTPServiceUnavailable(text=audio.reason)
+    ws = web.WebSocketResponse(heartbeat=10, max_msg_size=4096)
+    await ws.prepare(request)
+    try:
+        await audio.ws_session(ws, user=s.username, role=s.role, conn_id=conn)
+    except AudioUnavailable as e:
+        await ws.send_json({"ok": False, "error": str(e)})
+    finally:
+        await ws.close()
+    return ws
+
+
 async def audio_status(request):
     return web.json_response(request.app[K_AUDIO].status())
 
@@ -588,6 +614,7 @@ def create_app(cfg: dict, driver: RadioDriver | None = None, auth: AuthStore | N
     admin.add_routes(app)
     app.router.add_post("/api/audio/offer", audio_offer)
     app.router.add_get("/api/audio/status", audio_status)
+    app.router.add_get("/ws/audio", audio_ws)
     app.router.add_get("/api/audio/devices", audio_devices)
     app.router.add_get("/api/memories", memories)
     app.router.add_get("/ws", ws_handler)

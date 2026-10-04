@@ -37,7 +37,7 @@ wait a minute and run it again, and look at `sudo journalctl -u caddy -n 30`.
 ## Audio over Tailscale
 
 WebRTC audio uses UDP. On a **direct** tailnet path it works like the LAN. On a **relayed** (DERP) path expect extra delay or
-failure. Check with `tailscale ping <pi>` (it says "direct" or "via DERP"). A WebSocket audio fallback is a planned revision.
+failure. Check with `tailscale ping <pi>` (it says "direct" or "via DERP"). If WebRTC cannot connect, the page switches to WebSocket audio by itself (Audio tab > Connection; see [audio](04-audio.md)).
 
 ## Hardening checklist
 

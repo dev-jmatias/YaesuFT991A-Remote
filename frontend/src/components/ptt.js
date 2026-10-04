@@ -1,11 +1,12 @@
 import { el } from "../util.js";
 
-// Hold-to-transmit. The client sends a heartbeat every 250 ms while the button is held; the SERVER un-keys on
+// Hold-to-transmit, with a hands-free option: while holding, slide the finger (or mouse) UP past the lock point and let go; the
+// transmission stays on until the button is tapped again. The client sends a heartbeat every 250 ms while the button is held; the SERVER un-keys on
 // silence, disconnect or timeout, so nothing here is a safety net - it only mirrors what the server enforces.
 export function createPtt(host, ctx) {
   const { S, send, sock, signal } = ctx;
   const root = el(`<div class="pttbox">
-    <div class="pttrow"><button class="ptt" aria-label="Press and hold to transmit">HOLD TO TRANSMIT</button></div>
+    <div class="pttrow"><span class="pttcue" hidden></span><button class="ptt" aria-label="Press and hold to transmit">HOLD TO TRANSMIT</button></div>
     <div class="txtimer" hidden><div class="bar"><i></i></div><span></span></div>
     <div class="err" role="alert"></div>
   </div>`);
@@ -24,12 +25,18 @@ export function createPtt(host, ctx) {
   const lockBtn = el(`<button class="lockbtn" aria-pressed="false" aria-label="Lock PTT">${ICON_LOCK}</button>`);
   lockBtn.hidden = blocked;
   root.querySelector(".pttrow").append(lockBtn);
-  lockBtn.onclick = () => { ctx.setPttLock(!ctx.ui.pttLock); if (ctx.ui.pttLock) release(); };
+  lockBtn.onclick = () => { ctx.setPttLock(!ctx.ui.pttLock); if (ctx.ui.pttLock) release(); };      // (release is hoisted below)
 
   let hb = null, held = false, txStart = 0, tick = 0;
+  // hands-free latch: slide up LATCH_PX while holding. Everything the server enforces still applies (heartbeat while latched, time
+  // limit, un-key on disconnect); a hidden page, the lock button or the end of the transmission also end it.
+  const LATCH_PX = 70, cue = root.querySelector(".pttcue");
+  let latched = false, startY = 0, sawTx = false;
+  const showCue = (on, text) => { cue.hidden = !on; if (on) cue.textContent = text; };
   const err = (m) => { root.querySelector(".err").textContent = m || ""; if (m) setTimeout(() => (root.querySelector(".err").textContent = ""), 4000); };
 
   const release = () => {
+    latched = false; sawTx = false; showCue(false); btn.classList.remove("latched");
     if (!held) return;
     held = false;
     ctx.audio()?.setPtt(false);
@@ -38,31 +45,44 @@ export function createPtt(host, ctx) {
   };
   btn.onpointerdown = async (e) => {
     e.preventDefault();
+    if (latched) { release(); return; }                      // a tap on the latched button ends the transmission
     if (btn.disabled || held) return;
-    held = true;
+    held = true; startY = e.clientY;
+    showCue(true, "▲ slide up to lock transmit");
     try { btn.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
     try {
       await sock.send("ptt", { on: true });
       if (!held) { send("ptt", { on: false }); return; }      // released while the request was in flight
       ctx.audio()?.setPtt(true);
       hb = setInterval(() => sock.ping("ptt_hb"), 250);
-    } catch (x) { held = false; err(x.message); }
+    } catch (x) { held = false; latched = false; showCue(false); err(x.message); }
   };
-  btn.onpointerup = release; btn.onpointercancel = release; btn.onlostpointercapture = release;
+  btn.onpointermove = (e) => {
+    if (!held || latched) return;
+    if (startY - e.clientY >= LATCH_PX) {
+      latched = true;
+      btn.classList.add("latched");
+      showCue(true, "Locked on - tap the button to stop");
+    }
+  };
+  const letGo = () => { showCue(latched, "Locked on - tap the button to stop"); if (!latched) release(); };   // finger up: latched stays on
+  btn.onpointerup = letGo; btn.onpointercancel = letGo; btn.onlostpointercapture = letGo;
   btn.oncontextmenu = (e) => e.preventDefault();
-  window.addEventListener("blur", release, { signal });
+  window.addEventListener("blur", () => { if (!latched) release(); }, { signal });
   document.addEventListener("visibilitychange", () => document.hidden && release(), { signal });
 
   return {
     update() {
       const s = S.state, tx = !!s.tx, locked = !!ctx.ui.pttLock;
       btn.classList.toggle("keyed", tx);
+      if (tx) sawTx = true;
+      else if (latched && sawTx) release();                        // the transmission ended (time limit, radio, lost control): drop the latch
       btn.classList.toggle("locked", locked && !blocked);
       btn.disabled = blocked || (locked && !tx);                     // a transmission that is already running can still be released
       lockBtn.classList.toggle("on", locked);
       lockBtn.setAttribute("aria-pressed", String(locked));
       lockBtn.title = locked ? "PTT and TUNE are locked on this device. Tap to unlock." : "Lock PTT and TUNE on this device so a stray touch cannot transmit";
-      if (!blocked) btn.textContent = tx ? (s.tx_source === "radio" ? "TX (radio keyed)" : "TRANSMITTING") : locked ? "PTT LOCKED" : "HOLD TO TRANSMIT";
+      if (!blocked) btn.textContent = tx ? (s.tx_source === "radio" ? "TX (radio keyed)" : latched ? "TRANSMITTING - TAP TO STOP" : "TRANSMITTING") : locked ? "PTT LOCKED" : "HOLD TO TRANSMIT";
       if (tx && !tick) {
         txStart = performance.now();
         tick = setInterval(() => {

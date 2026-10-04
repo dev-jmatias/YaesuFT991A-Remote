@@ -49,8 +49,22 @@ On a real FT-991A with a Raspberry Pi 4:
 Automated tests (no radio) cover real WebRTC sessions in-process: RX audio and level meter, mic audio reaching the sink only while the gate is
 open, wrong connection, viewer role, peer limit, device loss and recovery.
 
-Not built: a **WebSocket-Opus fallback** for networks where WebRTC (UDP) is blocked, and a measured latency figure (budget: capture 20-80 ms + Opus
+Not measured yet: the latency of either transport (WebSocket audio, receive and transmit, and the automatic fallback with UDP blocked were verified on a real FT-991A with a Raspberry Pi 4), figure (budget: capture 20-80 ms + Opus
 20 ms + network + the browser's jitter buffer).
+
+## When WebRTC cannot connect: WebSocket audio
+
+WebRTC sends the audio as UDP packets. Some networks block that (hotel, office or school Wi-Fi, some mobile carriers, strict firewalls). The page
+then works but the audio does not connect. For that case the same Opus audio can travel over the page's own HTTPS/WebSocket connection (TCP).
+
+* **Audio tab > Connection** has three choices. **Automatic** (the default) tries WebRTC and, if it has not connected after about 9 seconds
+  or fails, switches to WebSocket audio and remembers that for 6 hours (so the next start is quick). **WebRTC (UDP)** and **WebSocket (TCP)** force one.
+* The status line says "(WebSocket)" when it is in use. Listening, the microphone and PTT behave the same. The server-side gate is identical:
+  microphone audio is only passed while that connection owns PTT, and nothing is sent from the browser unless PTT is held.
+* It needs a browser with WebCodecs (`AudioDecoder`/`AudioEncoder`: current Chrome, Edge, Firefox and Safari 17 or newer) and, for the microphone, AudioWorklet and HTTPS.
+  Otherwise the page says so and WebRTC stays in use.
+* Trade-off: TCP resends lost packets, so on a poor connection the audio can lag or stutter more than WebRTC. Prefer WebRTC when it works.
+* Server side: the Opus codec comes from PyAV (already installed for WebRTC). `audio.max_peers` counts both kinds of listener.
 
 ## Pi setup notes
 

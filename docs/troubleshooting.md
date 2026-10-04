@@ -37,7 +37,7 @@ Raspberry Pi OS **Lite** (a desktop session's PipeWire can hold the device; chec
 - Server side: Admin > Diagnostics > Audio: `rx_capture`, `capture_error`.
 - Test the sound card directly: `arecord -D plughw:CARD=CODEC,DEV=0 -f S16_LE -r 48000 -c 1 -d 5 /tmp/rx.wav && aplay /tmp/rx.wav` with a signal on the radio.
 - The radio's menus decide whether USB audio carries receive audio ([radio-connection.md](radio-connection.md)).
-- Plain `http://` pages can listen; if audio cannot connect at all, check browser console for WebRTC errors and that UDP is not blocked between you and the Pi (VPN relays can add delay).
+- Plain `http://` pages can listen; if audio cannot connect at all, try Audio tab > Connection > WebSocket (TCP); otherwise check browser console for WebRTC errors and that UDP is not blocked between you and the Pi (VPN relays can add delay).
 
 ## No TX audio
 
@@ -75,7 +75,7 @@ After a radio power cycle, the radio forgets auto-information; the app re-enable
   name yet. Run `sudo /opt/radio-remote/current/scripts/tailscale_setup.sh` ([tailscale.md](tailscale.md)).
 - `tailscale status` on both ends; `tailscale ping <pi>` shows direct vs relayed (DERP) path.
 - HTTPS names need HTTPS certificates enabled in the Tailscale admin console.
-- Audio over a relayed path is laggy or fails (WebRTC uses UDP); a direct path is needed for good audio.
+- Audio over a relayed path is laggy or fails (WebRTC uses UDP): the page falls back to WebSocket audio by itself after about 9 seconds (Audio tab > Connection; "(WebSocket)" shows in the status line). A direct path is still best.
 - If the page loads but the session cookie is not `Secure` / mic is blocked, the proxy is not forwarding `X-Forwarded-Proto: https`: use the Caddy variant ([tailscale.md](tailscale.md)).
 
 ## Service will not start / keeps restarting

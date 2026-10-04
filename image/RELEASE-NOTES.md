@@ -41,6 +41,15 @@ and goes back by itself if the new version does not start. Settings and accounts
 | `radio-remote-v….tar.gz` | the program only: used by `self_update.sh`, or by hand to update a running Pi |
 | `SHA256SUMS` | checksums of all of the above |
 
+### What is new in 1.1.3
+
+- **WebSocket audio**: if WebRTC (UDP) cannot connect (hotel, office or mobile networks, some relayed paths), the page now switches to the same
+  Opus audio over its normal HTTPS/WebSocket connection after about 9 seconds, listening and microphone included. Audio tab > Connection lets you
+  force WebRTC or WebSocket. The server-side PTT gate is unchanged. Needs a browser with WebCodecs (current Chrome, Edge, Firefox, Safari 17+).
+  Verified on a real FT-991A with UDP blocked.
+- **Hands-free transmit**: hold HOLD TO TRANSMIT, slide up until it says "Locked on", let go; tap the button to stop. The time limit, the heartbeat and
+  "page hidden" still end it.
+
 ### What is new in 1.1.2
 
 - **Logbook link (Hamlib rigctl)**: switch it on in Admin > Config > Logbook link and a logbook on your home network (tested design for Log4OM:

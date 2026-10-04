@@ -30,7 +30,7 @@ for what each radio supports see the [capability matrix](01-capability-matrix.md
 
 | Item | Why it is open |
 |---|---|
-| WebSocket audio fallback | for networks where WebRTC (UDP) is blocked; not built |
+| WebSocket audio latency | WebSocket audio (listen, microphone, automatic fallback with UDP blocked) is built and verified on the real Pi; its latency has not been measured |
 | Meter calibration | S-meter, power and SWR are shown from raw values (SWR ratio is an estimate on the FT-991A); ALC has one calibration point |
 | Audio latency | not measured |
 | Antenna switching | the FT-991A has no CAT command for it |

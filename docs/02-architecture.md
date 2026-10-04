@@ -17,7 +17,8 @@ The design below was written before the program existed. This is how it turned o
 * **Added since the design:** roles and trusted users, the audit log, remote audio with a server-side gate, Bluetooth device choice, memory channels, status
   lights, Lock PTT, the SWR warning, settings backup and restore, the update notice and `self_update.sh`, `tailscale_setup.sh`, the installer pack,
   and the ready-made Raspberry Pi image with its Imager repository.
-* **Not built:** the WebSocket-Opus audio fallback, a separate audio process, Hamlib as a backend.
+* **Audio over a WebSocket** (`/ws/audio`, binary Opus packets both ways, WebCodecs in the browser) is built as the fallback for networks that block WebRTC/UDP.
+* **Not built:** a separate audio process, Hamlib as a backend.
 
 ---
 

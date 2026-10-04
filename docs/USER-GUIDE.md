@@ -86,6 +86,10 @@ says *Hold to transmit*. An administrator can switch it off again at any time, w
 Rules that always apply:
 
 * **Hold** the button to transmit; let go to stop. The server un-keys on any hiccup: lost connection, lost control, time limit, shutdown.
+* **Hands-free transmit:** while you hold the button, slide your finger (or the mouse) **up** until the message says "Locked on", then let go.
+  The radio keeps transmitting; the button shows a dashed outline and "TRANSMITTING - TAP TO STOP". Tap it once to stop. The safeguards still
+  apply: the time limit ends it, and it also ends when the page is hidden (screen locked, another app or tab), when control is lost or the
+  connection drops. Use it only when you are sure of the band, the antenna and your power.
 * Only the client with control can transmit; microphone audio reaches the radio only while that client is keyed.
 * **The microphone button** (top right of the frequency panel) does two things at once: it arms your microphone in the browser and sets the radio's input (menu 106) to **REAR**, so the radio takes its audio from the USB port. Switching it off puts the radio back to **MIC** (the front microphone). It is locked while the radio is transmitting. If you close the page without switching it off, the radio stays on REAR until you next use the microphone button or change menu 106 on the radio.
 * **Tune** makes the radio transmit a carrier for a few seconds while the antenna tuner matches. Use an antenna or dummy load.

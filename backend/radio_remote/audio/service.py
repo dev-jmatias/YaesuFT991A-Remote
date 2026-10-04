@@ -33,6 +33,43 @@ class AudioUnavailable(Exception):
     pass
 
 
+class OpusCodec:
+    """One Opus encoder + decoder for a WebSocket audio peer (PyAV/libopus; 48 kHz mono, 20 ms packets)."""
+
+    def __init__(self, bitrate: int):
+        try:
+            import av
+            self._av = av
+            self.enc = av.CodecContext.create("libopus", "w")
+            self.enc.sample_rate, self.enc.layout, self.enc.format, self.enc.bit_rate = RATE, "mono", "s16", bitrate
+            self.enc.options = {"application": "voip", "frame_duration": "20"}
+            self.enc.open()
+            self.dec = av.CodecContext.create("opus", "r")
+            self.dec.sample_rate, self.dec.layout = RATE, "mono"
+            self.dec.open()
+        except Exception as e:                                # codec missing in this PyAV build
+            raise AudioUnavailable(f"Opus codec not available for WebSocket audio ({e})") from None
+        self._pts = 0
+        self._rest = b""
+
+    def encode(self, pcm: bytes) -> list[bytes]:
+        f = self._av.AudioFrame(format="s16", layout="mono", samples=FRAME_SAMPLES)
+        f.planes[0].update(pcm)
+        f.sample_rate, f.pts = RATE, self._pts
+        self._pts += FRAME_SAMPLES
+        return [bytes(p) for p in self.enc.encode(f)]
+
+    def decode(self, packet: bytes) -> list[bytes]:
+        """One Opus packet -> whole 20 ms mono s16 frames (anything left over waits for the next packet)."""
+        out = bytearray(self._rest)
+        for fr in self.dec.decode(self._av.Packet(packet)):
+            a = np.clip(fr.to_ndarray().reshape(-1), -1.0, 1.0)
+            out += (a * 32767.0).astype("<i2").tobytes()
+        frames = [bytes(out[i:i + FRAME_BYTES]) for i in range(0, len(out) - FRAME_BYTES + 1, FRAME_BYTES)]
+        self._rest = bytes(out[len(frames) * FRAME_BYTES:])
+        return frames
+
+
 @dataclass
 class Peer:
     id: str
@@ -44,6 +81,11 @@ class Peer:
     rx: bool = False
     state: str = "new"
     created: float = field(default_factory=time.time)
+    ws: object = None                                          # WebSocket transport (fallback for networks that block WebRTC/UDP)
+    codec: OpusCodec | None = None
+    out: asyncio.Queue | None = None
+    sender: asyncio.Task | None = None
+    task: asyncio.Task | None = None                          # the WebSocket session handler
 
 
 class AudioService:
@@ -195,6 +237,7 @@ class AudioService:
                     pcm = apply_gain(await src.read_frame(), self.rx_gain, limit=self.rx_gain > 1.0)      # a boost must not clip hard
                     self._rx_q.append(pcm)
                     self._rx_event.set()
+                    self._push_ws_peers(pcm)
                     self._level("audio_rx_level", level_pct(pcm))
             except AudioDeviceError as e:
                 self.capture_error = str(e)
@@ -251,6 +294,34 @@ class AudioService:
             await asyncio.sleep(backoff)
             backoff = min(backoff * 2, 5.0)
 
+    def _push_ws_peers(self, pcm: bytes) -> None:
+        for p in self.peers.values():
+            if p.ws is None or p.out is None:
+                continue
+            try:
+                packets = p.codec.encode(pcm)
+            except Exception:
+                log.exception("opus encode failed for %s", p.id)
+                continue
+            for pkt in packets:
+                if p.out.full():
+                    p.out.get_nowait()                         # a slow link loses its oldest audio instead of falling behind
+                p.out.put_nowait(pkt)
+
+    def _mic_frame(self, peer: Peer, pcm: bytes) -> None:
+        """One 20 ms mic frame from a peer (either transport). THE GATE: it only passes while this peer owns an active transmission."""
+        self.frames_in += 1
+        if self.tx_gate(peer.conn_id):
+            if not self._tx_gate_open:
+                self._tx_q.clear()                       # never send stale audio from before PTT
+                self._tx_gate_open = True
+            pcm = apply_gain(pcm, self.tx_gain, limit=True)
+            self._tx_q.append(pcm)
+            self._level("audio_tx_level", level_pct(pcm))
+        else:
+            self._tx_gate_open = False
+            self._level("audio_tx_level", 0)
+
     async def _consume_mic(self, peer: Peer, track) -> None:
         from av import AudioResampler
 
@@ -259,18 +330,7 @@ class AudioService:
             while True:
                 frame = await track.recv()
                 for f in resampler.resample(frame):
-                    self.frames_in += 1
-                    pcm = np.frombuffer(f.planes[0], dtype="<i2", count=f.samples).tobytes()
-                    if self.tx_gate(peer.conn_id):
-                        if not self._tx_gate_open:
-                            self._tx_q.clear()               # never send stale audio from before PTT
-                            self._tx_gate_open = True
-                        pcm = apply_gain(pcm, self.tx_gain, limit=True)
-                        self._tx_q.append(pcm)
-                        self._level("audio_tx_level", level_pct(pcm))
-                    else:
-                        self._tx_gate_open = False
-                        self._level("audio_tx_level", 0)
+                    self._mic_frame(peer, np.frombuffer(f.planes[0], dtype="<i2", count=f.samples).tobytes())
         except Exception as e:                                # MediaStreamError when the peer leaves
             log.debug("mic consumer for %s ended: %r", peer.id, e)
 
@@ -316,23 +376,70 @@ class AudioService:
         log.info("audio peer %s for %s (role=%s, mic=%s)", peer.id, user, role, can_tx)
         return {"sdp": pc.localDescription.sdp, "type": pc.localDescription.type, "peer": peer.id, "mic": can_tx}
 
+    async def ws_session(self, ws, *, user: str, role: str, conn_id: str) -> None:
+        """Audio over a WebSocket (binary Opus packets, 20 ms each, both ways). The fallback for networks where WebRTC/UDP is blocked.
+        Runs until the socket closes. Same rules as WebRTC: one session per connection, peer limit, listeners cannot transmit, and
+        microphone audio goes through the same server-side gate."""
+        from aiohttp import WSMsgType
+
+        if not self.available:
+            raise AudioUnavailable(self.reason)
+        for p in [p for p in self.peers.values() if p.conn_id == conn_id]:
+            await self._close_peer(p.id)
+        if len(self.peers) >= self.cfg["max_peers"]:
+            raise AudioUnavailable("too many audio listeners")
+        codec = OpusCodec(self.cfg["opus_bitrate"])
+        peer = Peer(secrets.token_hex(6), None, conn_id, user, role, ws=ws, codec=codec, out=asyncio.Queue(maxsize=8))
+        can_tx = role in ("operator", "admin") and self._sink_factory is not None
+        self.peers[peer.id] = peer
+        peer.state, peer.task = "connected", asyncio.current_task()
+
+        async def sender():
+            while True:
+                await ws.send_bytes(await peer.out.get())
+
+        peer.sender = asyncio.create_task(sender())
+        try:
+            await self._ensure_capture()
+            if can_tx:
+                await self._ensure_tx_sink()
+            log.info("audio peer %s for %s over WebSocket (role=%s, mic=%s)", peer.id, user, role, can_tx)
+            await ws.send_json({"ok": True, "mic": can_tx, "rate": RATE, "peer": peer.id})
+            async for m in ws:
+                if m.type == WSMsgType.BINARY and can_tx:
+                    try:
+                        for pcm in codec.decode(m.data):
+                            self._mic_frame(peer, pcm)
+                    except Exception as e:                    # a damaged packet: skip it
+                        log.debug("bad mic packet from %s: %r", peer.id, e)
+        finally:
+            await asyncio.shield(self._close_peer(peer.id))      # the web server may cancel this handler when the browser leaves
+
     async def _close_peer(self, peer_id: str) -> None:
         peer = self.peers.pop(peer_id, None)
         if not peer:
             return
+        if peer.sender:
+            peer.sender.cancel()
+            await asyncio.gather(peer.sender, return_exceptions=True)
+        if peer.ws is not None:
+            self._tx_gate_open = False
+            if peer.task is not None and peer.task is not asyncio.current_task():
+                peer.task.cancel()                         # ends the session handler; the browser sees the socket close and reconnects
         if peer.tx_task:
             peer.tx_task.cancel()
             await asyncio.gather(peer.tx_task, return_exceptions=True)
             self._tx_gate_open = False
-        await peer.pc.close()
+        if peer.pc is not None:
+            await peer.pc.close()
         if not self.peers:
             await self._stop_capture()
-        if not any(p.tx_task for p in self.peers.values()):
+        if not any(p.tx_task or (p.ws is not None and p.role in ("operator", "admin")) for p in self.peers.values()):
             await self._stop_tx_sink()
 
     async def close_conn(self, conn_id: str) -> None:
         for p in [p for p in self.peers.values() if p.conn_id == conn_id]:
-            await self._close_peer(p.id)
+            await asyncio.shield(self._close_peer(p.id))     # the control socket's handler may itself be cancelled while it runs this
 
     async def stop(self) -> None:
         for pid in list(self.peers):

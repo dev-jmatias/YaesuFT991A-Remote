@@ -575,3 +575,10 @@ button.lockbtn.on { background: var(--yellow); color: #1a1100; border-color: tra
 
 /* MEM channel tag sits on the mode / band line under the frequency (all screens) */
 .vmode { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; } .vmode .vbadge.memb { margin-left: 4px; white-space: nowrap; }
+
+/* hands-free transmit: slide up while holding PTT to latch it; tap to stop */
+.pttrow { position: relative; }
+.pttcue { position: absolute; left: 0; right: 66px; bottom: calc(100% + 6px); text-align: center; padding: 5px 10px; border-radius: 999px;
+  background: #1d2a44; border: 1px solid var(--line2); color: var(--text); font-size: .85rem; pointer-events: none; z-index: 5; }
+.pttcue[hidden] { display: none; }
+.ptt.latched { outline: 3px dashed var(--yellow); outline-offset: 3px; }
