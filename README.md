@@ -93,7 +93,7 @@ The manual is installed on the Pi and served at `/docs/` (Help button in the app
 | [freedv.md](docs/freedv.md) | FreeDV digital voice (1600, 700D, 700E, RADE) with preset channels |
 | [logbook.md](docs/logbook.md) | follow and tune the radio from Log4OM or another logbook (Hamlib rigctl) |
 | [tailscale.md](docs/tailscale.md), [06-security-remote.md](docs/06-security-remote.md) | remote access and the security model |
-| [08-other-radios.md](docs/08-other-radios.md) | FTDX10, FTDX101D/MP, FT-710 (experimental) |
+| [08-other-radios.md](docs/08-other-radios.md) | FTDX101D/MP (tested / same commands), FTDX10 and FT-710 (experimental) |
 
 <details>
 <summary>For developers and testers</summary>

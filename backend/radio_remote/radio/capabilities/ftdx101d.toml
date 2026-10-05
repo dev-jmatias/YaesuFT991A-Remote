@@ -1,12 +1,12 @@
 # Yaesu FTDX101D capability profile. Values: true | false | "unverified" ("unverified" is treated as false by the UI).
 # TESTED on a real FTDX101D (2026-10-05, see docs/08-other-radios.md and docs/bench-results.md): MAIN / SUB receivers, filters, processor, AMC, CW keyer, audio levels, tune, memories.
-# Not tried: transmitting on the SUB receiver. [model] bench_tested stays false, so the app still shows the "experimental profile" banner.
+# Not tried: transmitting on the SUB receiver. bench_tested = true, so the "experimental profile" banner is off for this radio.
 [model]
 id = "ftdx101d"
 name = "Yaesu FTDX101D"
 cat_id = "0681"                        # ID; -> ID0681;
 verified_source = "FTDX101MP_D_CAT_OM_ENG_2101-I"
-bench_tested = false
+bench_tested = true
 is_mock = false
 
 [features]

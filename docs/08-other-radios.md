@@ -1,12 +1,12 @@
-# Other radios: FTDX10, FTDX101D, FTDX101MP, FT-710 (EXPERIMENTAL)
+# Other radios: FTDX101D (tested), FTDX101MP (same commands), FTDX10, FT-710
 
 These four profiles were written from the Yaesu CAT manuals (FTDX10 2308-F, FTDX101MP/D 2101-I, FT-710 2306-C). The app shows an amber
-*EXPERIMENTAL PROFILE* banner whenever one of them is selected (`bench_tested = false` in its capability file).
+*EXPERIMENTAL PROFILE* banner whenever one is selected whose capability file says `bench_tested = false` (the FTDX10 and FT-710; the FTDX101D was tested on a real radio, and the MP, which has the same commands, shows no banner either).
 
 * **FTDX101D: tested on a real radio** (2026-10-05, Raspberry Pi 4, USB), see the next section for what works and what the manual gets wrong.
   Not everything is tried yet (transmitting on the SUB receiver, the MP variant).
 * **FTDX101MP**: same CAT commands as the D (one shared manual), so its profile is **enabled exactly like the D's**, with transmit power 5 to 200 W (the D: 5 to 100 W). No MP has been
-  available, so it still shows the experimental banner; the first owner to try it should follow the checklist below and report.
+  available here, so please report anything that differs; the first owner to try it should follow the checklist below.
 * **FTDX10 and FT-710**: still only on paper. Nothing there has been seen working on a real radio.
 
 ## FTDX101D: what was verified on a real radio

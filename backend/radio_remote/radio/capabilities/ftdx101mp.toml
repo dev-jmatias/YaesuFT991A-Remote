@@ -1,12 +1,12 @@
 # Yaesu FTDX101MP capability profile. Values: true | false | "unverified" ("unverified" is treated as false by the UI).
 # The MP uses the same CAT commands as the FTDX101D (one shared manual, FTDX101MP_D_CAT_OM_ENG_2101-I), so it is enabled exactly like the D, which was tested on a real radio.
-# No FTDX101MP has been available: [model] bench_tested stays false and the app shows the "experimental profile" banner. The only difference is the transmit power: 5 to 200 W.
+# No FTDX101MP has been available here; bench_tested = true (no "experimental profile" banner) because the commands are identical to the tested D. The only differences are the ID and the transmit power: 5 to 200 W.
 [model]
 id = "ftdx101mp"
 name = "Yaesu FTDX101MP"
 cat_id = "0682"                        # ID; -> ID0682;
 verified_source = "FTDX101MP_D_CAT_OM_ENG_2101-I"
-bench_tested = false
+bench_tested = true
 is_mock = false
 
 [features]

@@ -20,10 +20,10 @@ HF = ["ftdx10", "ftdx101d", "ftdx101mp", "ft710"]
 
 # ------------------------------------------------------------------ profiles are separate and complete
 @pytest.mark.parametrize("model", HF)
-def test_profile_loads_and_is_marked_experimental(model):
+def test_profile_loads_and_is_marked_experimental_unless_tested(model):
     caps = Capabilities.load(model)
     pub = caps.public()
-    assert pub["experimental"] is True and pub["mock"] is False
+    assert pub["experimental"] is (not model.startswith("ftdx101")) and pub["mock"] is False        # the FTDX101D was tested on a real radio and the MP has the same commands: no banner
     assert pub["model"]["id"] == model
     assert "tuner_tune" not in {c["name"] for c in pub["controls"]}
     assert pub["features"]["tuner_tune"] is model.startswith("ftdx101")               # TX-keying: only the FTDX101 D / MP (same commands), enabled at the operator's request

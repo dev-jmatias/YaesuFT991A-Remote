@@ -1,7 +1,7 @@
 ## Radio Remote
 
 Control a Yaesu radio from a phone, tablet or computer: frequency, mode, filters, meters, memories, transmit with server-side safety and
-remote audio, from a Raspberry Pi next to the radio. The **FT-991A** and the **FTDX101D** are verified on real radios; FTDX101MP (same commands as the D),
+remote audio, from a Raspberry Pi next to the radio. The **FT-991A** and the **FTDX101D** are verified on real radios, the **FTDX101MP** has the same commands as the D;
 FTDX10 and FT-710 are included but **experimental** (written from the manuals, simulator-tested only).
 
 ### Get started: pick one
@@ -41,6 +41,11 @@ and goes back by itself if the new version does not start. Settings and accounts
 | `radio-remote-v….tar.gz` | the program only: used by `self_update.sh`, or by hand to update a running Pi |
 | `radio-remote-rade-linux-aarch64.tar.xz` | the optional RADE library (FreeDV neural mode), installed with `install_rade.sh` |
 | `SHA256SUMS` | checksums of all of the above |
+
+### What is new in 1.1.11
+
+- The *experimental* banner is gone for the **FTDX101D** (tested on a real radio) and the **FTDX101MP** (the same commands as the D; its ID and its 5 to 200 W power range are the only differences, and no MP has been
+  tried here: please report anything that differs). The FTDX10 and FT-710 keep the banner. Docs and the capability matrix say the same.
 
 ### What is new in 1.1.10
 
