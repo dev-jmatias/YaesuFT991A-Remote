@@ -55,9 +55,13 @@ from the Pi itself (no internet needed).
   A purple **MEM 005** badge means the radio is in memory mode.
 * **Tuning scale.** Swipe or drag sideways (a quick flick keeps gliding). The numbers on the scale follow the tuning step; **x10**
   makes every move ten times larger.
-* **Tuning step** (-, list, +) and **Tune** (see 5): the antenna tuner.
-* **VFO tools:** *A -> B*, *B -> A*, *A <-> B* (swap), *Split* (receive on A, transmit on B), *Quick split*, **Set B** (type a frequency in MHz),
-  and **Memories**.
+* **Tuning step** (-, list, +), **Tune** (see 5): the antenna tuner, and **Memories** (see 4), side by side on one centred row.
+* **VFO tools:** *A -> B*, *B -> A*, *A <-> B* (swap), *Split* (receive on A, transmit on B), *Quick split* and **Set B** (type a frequency in MHz).
+  The rows wrap and are centred, so they fit a small screen.
+* **FTDX101D / MP (two receivers):** the panels are **MAIN** and **SUB**. The VFO tools row is **MAIN ↔ SUB** (swaps the two frequencies) and, for each receiver,
+  its name button (makes the radio's dial and keys operate it, like the radio's MAIN / SUB keys), **RX** (listen to it, on / off, at least one stays on) and **TX** (transmit
+  on it). Listen to one and transmit on the other for split. **Set MAIN frequency** and **Set SUB frequency** sit side by side in Band select. The audio you hear in the browser
+  is one receiver at a time: with only one receiver listening it follows that one.
 * **Band select** and **Set frequency** (type MHz, e.g. `14.195`, or Hz, e.g. `14195000`), **Mode** buttons.
 * **PTT** (hold to transmit), always at the bottom, with the round **Lock PTT** button beside it.
 
@@ -66,14 +70,17 @@ from the Pi itself (no internet needed).
 * **Filters & DSP** is grouped in tabs: *Filter* (width, narrow, IF shift, contour), *Noise* (manual notch, auto notch, DNR, noise blanker),
   *Receiver* (IPO/preamp, attenuator, AGC, RIT/XIT with the clarifier offset bar), *Transmit* (processor, monitor, tuner).
   Each row is a button, plus a bar where the function has a value. Double-click the clarifier bar to clear the offset.
-* **Levels:** RF gain, microphone gain, transmit power.
+  On the **FTDX101D** the panel starts with a **MAIN | SUB** switch (the filter, noise and receiver controls then act on that receiver), *Transmit* also has the
+  processor level and the **AMC output level** (the radio's PROC / PITCH knob), and there are two more tabs: *Audio* (audio out level to the app, audio in level
+  from the app) and *CW* (keyer speed, pitch, keyer, break-in).
+* **Levels:** RF gain, microphone gain, transmit power; the gain bars show 0-100 %. The FTDX101D also has AF gain and RF gain for MAIN and SUB.
 * **Audio:** volume, meters, device choice, and the raw radio meter values (see 6).
 
 PTT stays at the bottom on every tab so you can adjust a level while transmitting.
 
 ## 4. Memory channels
 
-**Memories** (VFO tools) lists the channels stored in the radio (001-099): number, name, frequency, mode. Type in the box to filter. Tap a
+**Memories** (beside **Tune**; FT-991A and FTDX101D) lists the channels stored in the radio (001-099): number, name, frequency, mode. Type in the box to filter. Tap a
 channel to recall it. **Back to VFO** returns to the VFO. **Re-read** reads the list again after you changed memories on the radio.
 Memories are never created, changed or deleted from here; do that on the radio. The list is read in the background a few seconds after the
 radio connects, so it opens at once; it is read again whenever the radio reconnects.

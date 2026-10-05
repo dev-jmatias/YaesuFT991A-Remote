@@ -3,7 +3,7 @@
 Control a Yaesu radio from a phone, tablet or computer, at home or from anywhere: frequency, mode, filters, meters, memories,
 transmit with server-side safety, and remote audio. It runs on a Raspberry Pi next to the radio. No cloud account, no app store.
 
-**Radios:** the **FT-991A** is complete and verified on a real radio. **FTDX10, FTDX101D/MP and FT-710** are included but
+**Radios:** the **FT-991A** and the **FTDX101D** are verified on real radios. The **FTDX101MP** (same commands as the D), **FTDX10** and **FT-710** are included but
 **experimental** (written from their manuals, tested only against a simulator). A built-in simulator lets you try everything without a radio.
 
 **You need:** a Raspberry Pi 4 or 5 (64-bit) with a power supply and an SD card (8 GB or more), the radio's USB cable, and a network

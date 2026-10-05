@@ -23,4 +23,4 @@ async def test_audio_gains_apply_live_without_restart(make_app):
 
 def test_af_gain_slider_is_not_offered():
     text = (SRC / "components" / "controls.js").read_text(encoding="utf-8")
-    assert 'filter(([k]) => k !== "af_gain")' in text
+    assert 'k !== "af_gain"' in text and "dual_receiver" in text        # hidden, except on dual-receiver radios

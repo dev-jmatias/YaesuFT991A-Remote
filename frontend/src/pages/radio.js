@@ -6,6 +6,7 @@ import { createTuningStrip } from "../components/tuning-strip.js";
 import { createDgHint, createFilters, createLevels, createTuneButton } from "../components/controls.js";
 import { createPtt } from "../components/ptt.js";
 import { createFreeDV } from "../components/freedv.js";
+import { createMemoryButtons } from "../components/memories.js";
 import { createTuner } from "../tuner.js";
 import { el, fmtStep } from "../util.js";
 import { openSheet } from "./admin.js";
@@ -214,6 +215,7 @@ export function renderRadio(root, { onLogout, onAuthLost }) {
     stepRow.querySelector("#up").onclick = () => ctx.tune(ui.step);
     stepRow.querySelector("#dn").onclick = () => ctx.tune(-ui.step);
     parts.push(createTuneButton(stepRow, ctx));                       // TUNE (antenna tuner) right next to the tuning step
+    parts.push(createMemoryButtons(stepRow, ctx));                    // Memories / Back to VFO beside TUNE
 
     const bandBox = block(vfo, "Band select");
     const bands = c.bands.filter((b) => (b !== "2m" || c.features.vhf) && (b !== "70cm" || c.features.uhf));
@@ -228,6 +230,17 @@ export function renderRadio(root, { onLogout, onAuthLost }) {
     };
     const bandWrap = el(`<div class="bandwrap"></div>`);
     bandWrap.append(bandRow, setf);
+    if (c.features.dual_receiver && c.features.vfo_b) {                       // FTDX101: the SUB receiver's frequency box sits right beside the MAIN one
+      setf.querySelector("label").textContent = "Set MAIN frequency";
+      const subf = el(`<form class="setfreq setsub" id="fsub"><label class="blabel" for="fsubin">Set SUB frequency</label><div class="row"><input id="fsubin" inputmode="decimal" placeholder="e.g. 7.074 or 7074000" aria-label="Enter the SUB receiver frequency in MHz or Hz"><button>Set</button></div></form>`);
+      subf.onsubmit = (e) => {
+        e.preventDefault();
+        const inp = subf.querySelector("#fsubin"), v = parseFloat(inp.value.replace(",", "."));
+        if (v > 0) send("set_frequency", { hz: v >= 100000 ? Math.round(v) : Math.round(v * 1e6), vfo: "B" });
+        inp.value = "";
+      };
+      setf.after(subf);
+    }
     bandBox.append(bandWrap);
 
     const modeBox = block(vfo, "Mode");

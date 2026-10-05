@@ -1,8 +1,8 @@
 ## Radio Remote
 
 Control a Yaesu radio from a phone, tablet or computer: frequency, mode, filters, meters, memories, transmit with server-side safety and
-remote audio, from a Raspberry Pi next to the radio. The **FT-991A** is verified on a real radio; FTDX10, FTDX101D/MP and FT-710 are
-included but **experimental** (written from the manuals, simulator-tested only).
+remote audio, from a Raspberry Pi next to the radio. The **FT-991A** and the **FTDX101D** are verified on real radios; FTDX101MP (same commands as the D),
+FTDX10 and FT-710 are included but **experimental** (written from the manuals, simulator-tested only).
 
 ### Get started: pick one
 
@@ -41,6 +41,19 @@ and goes back by itself if the new version does not start. Settings and accounts
 | `radio-remote-v….tar.gz` | the program only: used by `self_update.sh`, or by hand to update a running Pi |
 | `radio-remote-rade-linux-aarch64.tar.xz` | the optional RADE library (FreeDV neural mode), installed with `install_rade.sh` |
 | `SHA256SUMS` | checksums of all of the above |
+
+### What is new in 1.1.10
+
+- **Yaesu FTDX101D tested on a real radio** (Raspberry Pi 4, USB). The FTDX101MP uses the same commands and is enabled the same way (transmit power 5 to 200 W); no MP has been available, so both still show the
+  *experimental* banner. What works on the FTDX101D:
+  - **MAIN and SUB receivers** shown as two panels, with **RX** (listen, on / off), **TX** (transmit on MAIN or SUB, so split works) and **MAIN | SUB** selector buttons that follow the radio's own keys, a
+    **MAIN ↔ SUB** frequency swap and **Set MAIN / Set SUB frequency** side by side. The USB audio carries one receiver at a time and follows the receiver you listen to.
+  - **Filter, noise and receiver controls for each receiver** (a MAIN | SUB switch in the Filters & DSP panel), RF and AF gain per receiver, **speech processor** (the radio uses 0 = off / 1 = on; the manual says 1 / 2), **AMC output level**, and a
+    **CW** tab (keyer speed, pitch, keyer, break-in), an **Audio** tab (audio out level, audio in level, **transmit audio source DATA / USB**), **Tune** and **Memories** (read and recall only, nothing is ever written).
+  - If the radio does not answer at all, the log now says which USB ports and rates were tried; the usual cause is the radio's **CAT RTS** menu being ON (set it to OFF). The notes for this radio are in `docs/08-other-radios.md`.
+- **Gain bars show 0 to 100 %** instead of 0 to 255, on all radios.
+- **The Memories button sits beside Tune**, and the VFO tools and tuning rows wrap and are centred, so nothing runs off a small screen (all radios).
+- The COMP meter shows "off" on the FTDX101 while the speech processor is off (the radio reports a meaningless value then).
 
 ### What is new in 1.1.9
 

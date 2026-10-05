@@ -25,10 +25,12 @@ def test_profile_loads_and_is_marked_experimental(model):
     pub = caps.public()
     assert pub["experimental"] is True and pub["mock"] is False
     assert pub["model"]["id"] == model
-    assert "tuner_tune" not in {c["name"] for c in pub["controls"]} and pub["features"]["tuner_tune"] is False   # TX-keying: not until tested
+    assert "tuner_tune" not in {c["name"] for c in pub["controls"]}
+    assert pub["features"]["tuner_tune"] is model.startswith("ftdx101")               # TX-keying: only the FTDX101 D / MP (same commands), enabled at the operator's request
     names = {c["name"] for c in pub["controls"]}
     assert {"agc", "att_level", "mic_select", "nr", "nb", "notch", "contour", "if_shift", "width"} <= names
-    assert "processor" not in names and "apf" not in names and "dgid" not in names     # unverified / hidden
+    assert ("processor" in names) == model.startswith("ftdx101")                     # bench-verified on the FTDX101D; the MP uses the same commands
+    assert "apf" not in names and "dgid" not in names                                # unverified / hidden
     assert pub["bands"] == ["160m", "80m", "60m", "40m", "30m", "20m", "17m", "15m", "12m", "10m", "6m"]
     assert pub["features"]["vhf"] is False and pub["features"]["uhf"] is False
 
@@ -47,10 +49,11 @@ def test_each_radio_gets_its_own_driver_class_and_ids():
         assert isinstance(d, YaesuCatDriver) and d.caps.data["model"]["id"] == m and d.proto.RADIO_ID == MODELS[m].radio_id
 
 
-def test_dual_receiver_radios_do_not_offer_vfo_b_or_split():
-    for m in ("ftdx101d", "ftdx101mp"):
-        f = Capabilities.load(m).public()["features"]
-        assert f["vfo_b"] is False and f["split"] is False and f["quick_split"] is False
+def test_dual_receiver_radios_vfo_b_and_split():
+    f = Capabilities.load("ftdx101d").public()["features"]          # FB followed VFO-B on a real radio; split not tried yet
+    assert f["vfo_b"] is True and f["split"] is False and f["quick_split"] is False
+    f = Capabilities.load("ftdx101mp").public()["features"]         # the MP uses the same commands as the D
+    assert f["vfo_b"] is True and f["dual_receiver"] is True and f["split"] is False and f["quick_split"] is False
     f = Capabilities.load("ftdx10").public()["features"]
     assert f["vfo_b"] and f["split"] and f["quick_split"]
     f = Capabilities.load("ft710").public()["features"]
@@ -140,7 +143,10 @@ def test_decode_frames_in_the_manual_layout():
     assert p.decode("IS00-0400;") == {"if_shift": -400} and p.decode("RA02;") == {"att_level": "12 dB"}
     assert p.decode("SH0017;") == {"width_code": 17} and p.decode("MD02;") == {"mode": "USB"} and p.decode("MD1C;") == {}
     assert p.decode("AG0128;") == {"af_gain": 128} and p.decode("AG1128;") == {}               # P1 1 = SUB receiver: ignored
-    assert p.decode("PC050;") == {"rf_power": 50} and p.decode("PR02;") == {}
+    assert p.decode("PC050;") == {"rf_power": 50}
+    assert p.decode("PR01;") == {"processor": True} and p.decode("PR10;") == {"mic_eq": False}         # 0 = OFF / 1 = ON (bench); the manual's 1 / 2 is wrong
+    with pytest.raises(frame.FrameError):
+        p.decode("PR02;")
     assert p.decode("NA01;") == {"narrow": True} and p.decode("BC01;") == {"auto_notch": True} and p.decode("PA01;") == {"ipo": "AMP1"}
     assert p.decode("CO000001;") == {"contour": True} and p.decode("BP01150;") == {"notch_freq": 1500}
     assert p.decode("AC001;") == {"tuner": True} and p.decode("AC000;") == {"tuner": False}
@@ -183,10 +189,10 @@ async def test_driver_connects_and_reads_the_radio(model):
         assert s["frequency"] == 14_200_000 and s["band"] == "20m" and s["mode"] == "USB"
         assert s["agc"] == "OFF" and s["att_level"] == "OFF" and s["mic_select"] == "REAR" and s["if_shift"] == 0
         assert "ID" in r.sim.log                                                   # (the simulator logs commands without ;)
-        assert "FT" not in r.sim.log                                                # FT does not exist on these radios
+        assert ("FT" in r.sim.log) == model.startswith("ftdx101")                   # FT / FR (MAIN / SUB) exist on the FTDX101 only; the FTDX10 and FT-710 answer '?;'
         assert not any(c.startswith("EX106") or c.startswith("EX153") for c in r.sim.log)   # FT-991A menus are never sent
         if model.startswith("ftdx101"):
-            assert not any(c in ("FB", "OI", "ST") for c in r.sim.log)             # VFO B / split are not offered here
+            assert not any(c == "ST" for c in r.sim.log)                           # VFO B is read (bench-verified on the D), split is not offered yet
         else:
             assert s["mode_b"] == "LSB" and s["split"] is False
     finally:
@@ -234,6 +240,225 @@ async def test_ftdx10_controls_split_and_vfo_ops():
             await d.set_control("dgid", "5")
         with pytest.raises(RadioError):
             await d.tune_start()                                                      # tuner_tune is "unverified": never keys the radio
+    finally:
+        await d.stop()
+        await r.sim.stop()
+
+
+async def test_ftdx101_main_sub_listen_and_transmit_selection():
+    r, d = await connect("ftdx101d")
+    try:
+        await wait_for(lambda: d.state.get("rx_main") is True and d.state.get("tx_receiver") == "main")
+        assert d.state["rx_sub"] is False                                             # FR01: MAIN listening, SUB muted
+        await d.set_receivers(True, True)
+        assert r.sim.fr == "00" and d.state["rx_main"] is True and d.state["rx_sub"] is True and "FR00" in r.sim.log
+        await d.set_receivers(False, True)
+        assert r.sim.fr == "10" and d.state["rx_main"] is False and d.state["rx_sub"] is True
+        assert {"EX0101081", "EX0102081", "EX0103081", "EX0104101", "EX0105101", "EX0201081"} <= set(r.sim.log)     # one receiver listens: the USB audio (SSB / AM / FM / DATA / RTTY / CW OUT SELECT) follows it to SUB
+        r.sim.log.clear()
+        await d.set_receivers(True, True)
+        assert not any(c.startswith("EX0101") or c.startswith("EX0102") or c.startswith("EX0103") for c in r.sim.log)   # both listening: the audio source is left alone
+        await d.set_receivers(True, False)
+        assert "EX0101080" in r.sim.log and "EX0103080" in r.sim.log
+        await d.set_receivers(False, True)
+        with pytest.raises(RadioError):
+            await d.set_receivers(False, False)                                       # never mute both
+        await d.set_tx_receiver("sub")
+        assert r.sim.ft_rx == 1 and d.state["tx_receiver"] == "sub" and "FT3" in r.sim.log
+        await d.set_tx_receiver("main")
+        assert r.sim.ft_rx == 0 and d.state["tx_receiver"] == "main" and "FT2" in r.sim.log
+        with pytest.raises(RadioError):
+            await d.set_tx_receiver("both")
+        await wait_for(lambda: d.state.get("active_receiver") == "main")              # VS0: the radio operates MAIN
+        await d.set_active_receiver("sub")
+        assert r.sim.vs == 1 and d.state["active_receiver"] == "sub" and "VS1" in r.sim.log
+        await d.set_active_receiver("main")
+        assert r.sim.vs == 0 and d.state["active_receiver"] == "main"
+        with pytest.raises(RadioError):
+            await d.set_active_receiver("both")
+    finally:
+        await d.stop()
+        await r.sim.stop()
+
+
+async def test_ftdx101_audio_levels_are_written_for_ssb_am_and_fm():
+    r, d = await connect("ftdx101d")
+    try:
+        await wait_for(lambda: d.state.get("audio_out_level") == 50 and d.state.get("audio_in_level") == 50)
+        await d.set_control("audio_out_level", 80)
+        assert [r.sim.reg["EX" + g] for g in ("010109", "010209", "010309", "010411", "010511", "020109")] == ["080"] * 6 and d.state["audio_out_level"] == 80
+        await d.set_control("audio_in_level", 25)
+        assert [r.sim.reg["EX" + g] for g in ("010113", "010214", "010313")] == ["025"] * 3 and d.state["audio_in_level"] == 25
+        with pytest.raises(RadioError):
+            await d.set_control("audio_out_level", 101)
+        f = Capabilities.load("ftdx101d").public()
+        assert {"audio_out_level", "audio_in_level"} <= {c["name"] for c in f["controls"]}
+        g = Capabilities.load("ftdx10").public()
+        assert not {"audio_out_level", "audio_in_level"} & {c["name"] for c in g["controls"]}
+    finally:
+        await d.stop()
+        await r.sim.stop()
+
+
+async def test_ftdx101_sub_receiver_controls_use_p1_1_and_keep_main_untouched():
+    r, d = await connect("ftdx101d")
+    try:
+        await wait_for(lambda: d.state.get("agc_sub") == "OFF" and d.state.get("att_level_sub") == "OFF")
+        await d.set_control("agc", "SLOW", "sub")
+        assert r.sim.sub_agc == 3 and r.sim.agc == 0 and d.state["agc_sub"] == "SLOW" and d.state.get("agc") != "SLOW"
+        await d.set_control("att_level", "12 dB", "sub")
+        assert d.state["att_level_sub"] == "12 dB" and d.state.get("att_level") != "12 dB"
+        await d.set_control("if_shift", -200, "sub")
+        assert r.sim.sub_is == -200 and r.sim.is_shift == 0 and d.state["if_shift_sub"] == -200
+        await d.set_control("nr", True, "sub")
+        await d.set_control("nr_level", 9, "sub")
+        assert d.state["nr_sub"] is True and d.state["nr_level_sub"] == 9 and not d.state.get("nr_level") == 9
+        await d.set_control("notch", True, "sub")
+        await d.set_control("notch_freq", 1200, "sub")
+        assert d.state["notch_sub"] is True and d.state["notch_freq_sub"] == 1200
+        await d.set_control("narrow", True, "sub")
+        assert d.state["narrow_sub"] is True and "SH1" in r.sim.log                           # narrow changes the width codes: re-read for SUB
+        await d.set_level("rf_gain_sub", 100)
+        assert r.sim.levels["RG1"] == 100 and d.state["rf_gain_sub"] == 100
+        await d.set_control("agc", "FAST")                                                  # MAIN still works and does not touch SUB
+        assert d.state["agc"] == "FAST" and d.state["agc_sub"] == "SLOW"
+        with pytest.raises(RadioError):
+            await d.set_control("audio_out_level", 10, "sub")                                # no separate SUB setting
+        with pytest.raises(RadioError):
+            await d.set_control("agc", "FAST", "both")
+    finally:
+        await d.stop()
+        await r.sim.stop()
+
+
+async def test_ftdx10_refuses_sub_controls():
+    r, d = await connect("ftdx10")
+    try:
+        with pytest.raises(RadioError):
+            await d.set_control("agc", "FAST", "sub")
+    finally:
+        await d.stop()
+        await r.sim.stop()
+
+
+async def test_ftdx101_speech_processor_uses_0_off_1_on_not_the_manual_codes():
+    r, d = await connect("ftdx101d")
+    try:
+        await wait_for(lambda: d.state.get("processor") is False and d.state.get("processor_level") == 50)
+        await d.set_control("processor", True)
+        assert r.sim.reg["PR0"] == "1" and d.state["processor"] is True and "PR01" in r.sim.log and "PR02" not in r.sim.log     # bench: PR02 gets ?;
+        await d.set_control("processor_level", 70)
+        assert r.sim.reg["PL"] == "070" and d.state["processor_level"] == 70
+        await d.set_control("processor", False)
+        assert d.state["processor"] is False
+        assert Capabilities.load("ftdx101d").public()["features"]["processor"] is True
+        assert Capabilities.load("ftdx101mp").public()["features"]["processor"] is True         # same commands as the D (not tried on an MP)
+    finally:
+        await d.stop()
+        await r.sim.stop()
+
+
+async def test_ftdx101_cw_keyer_and_amc_controls():
+    r, d = await connect("ftdx101d")
+    try:
+        await wait_for(lambda: d.state.get("cw_speed") == 25 and d.state.get("cw_pitch") == 700 and d.state.get("amc_level") == 70)
+        assert d.state["keyer"] is False and d.state["break_in"] is False
+        await d.set_control("cw_speed", 30)
+        assert r.sim.reg["KS"] == "030" and d.state["cw_speed"] == 30
+        await d.set_control("cw_pitch", 600)
+        assert r.sim.reg["KP"] == "30" and d.state["cw_pitch"] == 600                       # KP: 300 Hz + 10 Hz per step
+        await d.set_control("cw_pitch", 1050)
+        assert r.sim.reg["KP"] == "75" and d.state["cw_pitch"] == 1050
+        await d.set_control("keyer", True)
+        await d.set_control("break_in", True)
+        assert r.sim.reg["KR"] == "1" and r.sim.reg["BI"] == "1" and d.state["keyer"] is True and d.state["break_in"] is True
+        await d.set_control("amc_level", 55)
+        assert r.sim.reg["AO"] == "055" and d.state["amc_level"] == 55
+        for name, bad in (("cw_speed", 3), ("cw_speed", 61), ("cw_pitch", 650 + 5), ("cw_pitch", 290), ("amc_level", 0)):
+            with pytest.raises(RadioError):
+                await d.set_control(name, bad)
+        names = {c["name"] for c in Capabilities.load("ftdx101d").public()["controls"]}
+        assert {"cw_speed", "cw_pitch", "keyer", "break_in", "amc_level"} <= names
+        names = {c["name"] for c in Capabilities.load("ftdx101mp").public()["controls"]}
+        assert {"cw_speed", "cw_pitch", "keyer", "break_in", "amc_level"} <= names          # the MP: same commands as the D (not tried on an MP)
+    finally:
+        await d.stop()
+        await r.sim.stop()
+
+
+async def test_ftdx101_memories_list_recall_and_back_to_vfo_read_only():
+    r, d = await connect("ftdx101d")
+    try:
+        await wait_for(lambda: d.state.get("vfo_memory") == "vfo")
+        items = await d.memory_channels(refresh=True)
+        assert [m["channel"] for m in items] == [5, 6, 99] or {m["channel"] for m in items} >= {5, 6}      # the simulator's stored channels (11 is VHF: FM on 145 MHz is outside this radio)
+        assert all(not c.startswith(("MW", "AM", "BM")) for c in r.sim.log)                              # never written
+        await d.memory_select(6)
+        await wait_for(lambda: d.state.get("vfo_memory") == "memory" and d.state.get("memory_channel") == 6)
+        assert d.state["frequency"] == 7_100_000 and d.state["mode"] == "LSB"
+        await d.memory_to_vfo()
+        await wait_for(lambda: d.state.get("vfo_memory") == "vfo")
+        assert "VM" in r.sim.log
+        assert Capabilities.load("ftdx101d").public()["features"]["memories"] is True
+        assert Capabilities.load("ftdx101mp").public()["features"]["memories"] is True
+    finally:
+        await d.stop()
+        await r.sim.stop()
+
+
+async def test_ftdx10_still_refuses_memories():
+    r, d = await connect("ftdx10")
+    try:
+        with pytest.raises(RadioError):
+            await d.memory_channels()
+    finally:
+        await d.stop()
+        await r.sim.stop()
+
+
+async def test_ftdx101_transmit_audio_source_rear_select():
+    r, d = await connect("ftdx101d")
+    try:
+        await wait_for(lambda: d.state.get("rear_select") == "DATA")
+        await d.set_control("rear_select", "USB")
+        assert [r.sim.reg["EX" + g] for g in ("010112", "010213", "010312", "010414")] == ["1"] * 4 and d.state["rear_select"] == "USB"
+        await d.set_control("rear_select", "DATA")
+        assert r.sim.reg["EX010112"] == "0" and d.state["rear_select"] == "DATA"
+        with pytest.raises(RadioError):
+            await d.set_control("rear_select", "BOTH")
+        r.sim.tx = 1
+        d.state["tx"] = True
+        with pytest.raises(RadioError):
+            await d.set_control("rear_select", "USB")                                      # never while transmitting
+        d.state["tx"] = False
+        names = {c["name"] for c in Capabilities.load("ftdx101mp").public()["controls"]}
+        assert "rear_select" in names and "rear_select" not in {c["name"] for c in Capabilities.load("ftdx10").public()["controls"]}
+    finally:
+        await d.stop()
+        await r.sim.stop()
+
+
+async def test_ftdx101_sub_af_gain_and_scale():
+    r, d = await connect("ftdx101d")
+    try:
+        await wait_for(lambda: d.state.get("af_gain_sub") == 2)                       # AG1 read at connect
+        await d.set_level("af_gain_sub", 128)
+        assert r.sim.ag1 == 128 and d.state["af_gain_sub"] == 128 and "AG1" in r.sim.log
+        assert Capabilities.load("ftdx101d").public()["levels"]["af_gain_sub"]["max"] == 255
+        assert "af_gain_sub" not in Capabilities.load("ftdx10").public()["levels"]
+    finally:
+        await d.stop()
+        await r.sim.stop()
+
+
+async def test_ftdx10_has_no_sub_receiver():
+    r, d = await connect("ftdx10")
+    try:
+        with pytest.raises(RadioError):
+            await d.set_receivers(True, True)
+        with pytest.raises(RadioError):
+            await d.set_tx_receiver("sub")
+        assert not any(c in ("FR", "FT") for c in r.sim.log)
     finally:
         await d.stop()
         await r.sim.stop()

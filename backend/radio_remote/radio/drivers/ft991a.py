@@ -19,7 +19,7 @@ from ..cat import ft991a_controls as fc
 from ..cat.proto import proto_for
 from ..cat.client import (PRIO_METER, PRIO_POLL, PRIO_PTT, PRIO_USER, CatClient, CatError, CatRejected,
                           CatTimeout)
-from ..cat.transport import SerialTransport, Transport, detect_port
+from ..cat.transport import SerialTransport, Transport, scan_ports
 
 log = logging.getLogger("cat")
 
@@ -133,9 +133,11 @@ class YaesuCatDriver(RadioDriver):
         port, baud = self._port_cfg, self._baud
         self._port_used = None
         if port == "auto":
-            found = await asyncio.get_running_loop().run_in_executor(None, detect_port, baud, self.proto.RADIO_ID)
+            from ..cat.proto import MODELS
+            known = {"0670": "FT-991A", **{m.radio_id: m.name for m in MODELS.values()}}
+            found, why = await asyncio.get_running_loop().run_in_executor(None, scan_ports, baud, self.proto.RADIO_ID, known)
             if not found:
-                raise RadioError(f"no {self.proto.NAME} found on any USB serial port")
+                raise RadioError(f"no {self.proto.NAME} (ID{self.proto.RADIO_ID}) found on any USB serial port: {why}")
             port, baud = found
         self._port_used = {"port": port, "baud": baud}
         return SerialTransport(port, baud)
@@ -159,7 +161,7 @@ class YaesuCatDriver(RadioDriver):
         self._update(connected=True)
         self.last_error = None
         log.info("%s connected", self.proto.NAME)
-        if self.caps.has("memories") and self.MODEL == "ft991a":
+        if self.caps.has("memories") and hasattr(self.proto, "memory_read"):
             self._mem_cache = None                          # a new connection: the memories may have been changed while the radio was off
             if self.t.prefetch_s > 0:
                 t = asyncio.create_task(self._prefetch_memories())
@@ -182,13 +184,20 @@ class YaesuCatDriver(RadioDriver):
         """Read commands for every control this radio profile exposes (width last: depends on mode/NA)."""
         feats = {k: self.caps.has(k) for k in ("width", "if_shift", "contour", "apf", "manual_notch", "auto_notch",
                                               "dnr", "noise_blanker", "ipo", "att", "att_levels", "agc", "rit", "xit", "processor",
-                                              "monitor", "tuner", "dgid", "mic_select")}
+                                              "monitor", "tuner", "dgid", "mic_select", "audio_out_level", "audio_in_level", "amc_level", "cw_keyer", "rear_select")}
         reads = []
         for spec in controls.available(feats):
             if spec["name"] in self.proto.ENCODE and self.proto.ENCODE[spec["name"]][0] not in reads:
                 reads.append(self.proto.ENCODE[spec["name"]][0])
         if feats["width"]:
             reads.append(self.proto.READ_WIDTH)
+        if self.caps.has("dual_receiver"):                                   # the SUB receiver's copies of the same controls
+            for spec in controls.available(feats):
+                sub = self.proto.ENCODE.get(spec["name"] + "_sub")
+                if sub and sub[0] not in reads:
+                    reads.append(sub[0])
+            if feats["width"]:
+                reads.append(self.proto.READ_WIDTH_SUB)
         return reads
 
     async def _full_sync(self) -> None:
@@ -255,11 +264,20 @@ class YaesuCatDriver(RadioDriver):
         if fields.get("tx") is False:
             fields.update(po_raw=0, swr_raw=0, alc=0, comp=0)
         old_mode = self.state.get("mode")
+        old_mode_b = self.state.get("mode_b")
         self._update(**fields)
         if fields.keys() & {"mode", "narrow", "width_code"}:
             s = self.state
             self._update(width_options=self.proto.width_options(s.get("mode"), s.get("narrow")),
                          width=self.proto.width_hz(s.get("mode"), s.get("narrow"), s.get("width_code")))
+        if fields.keys() & {"mode_b", "narrow_sub", "width_code_sub"}:
+            s = self.state
+            self._update(width_options_sub=self.proto.width_options(s.get("mode_b"), s.get("narrow_sub")),
+                         width_sub=self.proto.width_hz(s.get("mode_b"), s.get("narrow_sub"), s.get("width_code_sub")))
+        if "mode_b" in fields and old_mode_b is not None and fields["mode_b"] != old_mode_b and self.client and hasattr(self.proto, "NARROW_REREAD_SUB"):
+            t = asyncio.get_running_loop().create_task(self._reread(self.proto.NARROW_REREAD_SUB))
+            self._bg.add(t)
+            t.add_done_callback(self._bg.discard)
         if "mode" in fields and old_mode is not None and fields["mode"] != old_mode and self.client:
             # Filter widths are per mode class: refresh them after any mode change.
             t = asyncio.get_running_loop().create_task(self._reread(self.proto.NARROW_REREAD))
@@ -326,6 +344,50 @@ class YaesuCatDriver(RadioDriver):
         await self._guard_cat(c.send(self.proto.split_set(on)))
         await self._guard_cat(c.request(self.proto.SPLIT_READ))
 
+    async def set_receivers(self, main: bool, sub: bool) -> None:
+        """FTDX101 only: which receivers are listening (FR P1 P2); at least one must stay on."""
+        c = self._need_client()
+        if not self.caps.has("dual_receiver") or not hasattr(self.proto, "receivers_set"):
+            raise RadioError("this radio has no sub receiver")
+        if not (main or sub):
+            raise RadioError("at least one receiver must stay on")
+        if self.state.get("tx") or self.state.get("tuning"):
+            raise RadioError("cannot change the receivers while transmitting")
+        await self._guard_cat(c.send(self.proto.receivers_set(main, sub)))
+        if main != sub:                                                  # exactly one receiver listens: the USB audio (one receiver at a time) follows it
+            for cmd in self.proto.audio_out_set("main" if main else "sub"):
+                try:
+                    await self._guard_cat(c.send(cmd))
+                except RadioError as e:                                  # one menu item refused: the listening change itself already worked
+                    log.warning("audio source %s: %s", cmd, e)
+        await self._guard_cat(c.request("FR;"))
+
+    async def set_tx_receiver(self, which: str) -> None:
+        """FTDX101 only: transmit on the MAIN or the SUB receiver's frequency (FT2; / FT3;). With the receive side on the other one this is split."""
+        c = self._need_client()
+        if not self.caps.has("dual_receiver") or not hasattr(self.proto, "tx_receiver_set"):
+            raise RadioError("this radio has no sub receiver")
+        if self.state.get("tx") or self.state.get("tuning"):
+            raise RadioError("cannot change the transmit receiver while transmitting")
+        try:
+            cmd = self.proto.tx_receiver_set(which)
+        except frame.FrameError as e:
+            raise RadioError(str(e)) from None
+        await self._guard_cat(c.send(cmd))
+        await self._guard_cat(c.request("FT;"))
+
+    async def set_active_receiver(self, which: str) -> None:
+        """FTDX101 only: which receiver the radio's own dial and keys operate (VS0; MAIN, VS1; SUB). It does not transmit and does not change what you hear."""
+        c = self._need_client()
+        if not self.caps.has("dual_receiver") or not hasattr(self.proto, "active_receiver_set"):
+            raise RadioError("this radio has no sub receiver")
+        try:
+            cmd = self.proto.active_receiver_set(which)
+        except frame.FrameError as e:
+            raise RadioError(str(e)) from None
+        await self._guard_cat(c.send(cmd))
+        await self._guard_cat(c.request("VS;"))
+
     async def vfo_op(self, op: str) -> None:
         """SV; swap, AB; copy A to B, BA; copy B to A, QS; quick split (all documented, set-only). No command selects a VFO."""
         c = self._need_client()
@@ -361,27 +423,37 @@ class YaesuCatDriver(RadioDriver):
         await self._guard_cat(c.send(cmd))
         await self._guard_cat(c.request(self.proto.level_read(name)))
 
-    async def set_control(self, name: str, value) -> None:
+    async def set_control(self, name: str, value, receiver: str = "main") -> None:
         c = self._need_client()
         spec = controls.SPEC_BY_NAME.get(name)
         if not spec or not self.caps.has(spec["feature"]):
             raise RadioError(f"control {name} not supported")
+        sub = receiver == "sub"
+        if receiver not in ("main", "sub"):
+            raise RadioError("receiver must be main or sub")
+        if sub and (not self.caps.has("dual_receiver") or (name != "width" and name + "_sub" not in self.proto.ENCODE)):
+            raise RadioError(f"{name} has no separate SUB receiver setting")
         try:
             value = controls.coerce(spec, value)
         except ValueError as e:
             raise RadioError(f"{name}: {e}") from None
-        if name == "mic_select" and self.state.get("tx"):
-            raise RadioError("cannot change the mic input while transmitting")
+        if name in ("mic_select", "rear_select") and self.state.get("tx"):
+            raise RadioError("cannot change the audio input while transmitting")
         if name == "width":
-            opts = {o["hz"]: o["code"] for o in self.state.get("width_options", [])}
+            opts = {o["hz"]: o["code"] for o in self.state.get("width_options_sub" if sub else "width_options", [])}
             if value not in opts:
                 raise RadioError("width not available in this mode / filter setting")
-            await self._guard_cat(c.send(self.proto.width_set(opts[value])))
-            await self._guard_cat(c.request(self.proto.READ_WIDTH))
+            if sub:
+                await self._guard_cat(c.send(self.proto.width_set(opts[value], "1")))
+                await self._guard_cat(c.request(self.proto.READ_WIDTH_SUB))
+            else:
+                await self._guard_cat(c.send(self.proto.width_set(opts[value])))
+                await self._guard_cat(c.request(self.proto.READ_WIDTH))
             return
-        if name not in self.proto.ENCODE:
+        key = name + "_sub" if sub else name
+        if key not in self.proto.ENCODE:
             raise RadioError(f"control {name} is not available on the {self.proto.NAME}")
-        read, encode = self.proto.ENCODE[name]
+        read, encode = self.proto.ENCODE[key]
         cmds = encode(value)
         turned_on = False
         if name == "clarifier_hz" and value and not (self.state.get("rit") or self.state.get("xit")):
@@ -393,7 +465,7 @@ class YaesuCatDriver(RadioDriver):
         if turned_on:
             await self._guard_cat(c.request("RT;"))
         if name == "narrow":                       # code meanings change with narrow/wide
-            await self._guard_cat(c.request(self.proto.READ_WIDTH))
+            await self._guard_cat(c.request(self.proto.READ_WIDTH_SUB if sub else self.proto.READ_WIDTH))
 
     async def set_band(self, band: str) -> None:
         c = self._need_client()
@@ -406,7 +478,7 @@ class YaesuCatDriver(RadioDriver):
 
     # ------------------------------------------------------------ memory channels (read and select only: never written)
     def _need_memories(self) -> None:
-        if not self.caps.has("memories") or self.MODEL != "ft991a":
+        if not self.caps.has("memories") or not hasattr(self.proto, "memory_read"):
             raise RadioError("memory channels are not enabled for this radio profile")
 
     async def memory_channels(self, refresh: bool = False) -> list[dict]:
@@ -428,18 +500,18 @@ class YaesuCatDriver(RadioDriver):
                         # BENCH-FOUND on a real FT-991A: the answer to MT00N; always says channel 001 in its P1 field, with the data of
                         # channel N. So the answer is matched on "MT" alone (one command is in flight at a time) and the channel
                         # number is taken from the request, never from the answer.
-                        ans, answered = await c.request(frame.memory_read(ch), prio=PRIO_POLL, expect="MT"), True
+                        ans, answered = await c.request(self.proto.memory_read(ch), prio=PRIO_POLL, expect="MT"), True
                         break
                     except CatRejected:
                         rejected, answered = rejected + 1, True   # an empty channel is answered with ?;
                         break
                     except CatTimeout:
-                        log.warning("memory list: no answer to %s (attempt %d)", frame.memory_read(ch), attempt)
+                        log.warning("memory list: no answer to %s (attempt %d)", self.proto.memory_read(ch), attempt)
                 notag = False
                 if not answered:
                     # MT (with tag) is silent for this channel: try the MR read, which has no tag (frequency and mode only)
                     try:
-                        ans, answered, notag = await c.request(frame.memory_read_notag(ch), prio=PRIO_POLL, expect="MR"), True, True
+                        ans, answered, notag = await c.request(self.proto.memory_read_notag(ch), prio=PRIO_POLL, expect="MR"), True, True
                         log.info("memory list: no answer to MT%03d; but MR%03d; -> %s", ch, ch, ans)
                     except CatRejected:
                         answered = True
@@ -457,11 +529,11 @@ class YaesuCatDriver(RadioDriver):
                 if ans is None:
                     continue
                 try:
-                    item = frame.decode_memory_notag(ans) if notag else frame.decode_memory(ans)
+                    item = self.proto.decode_memory_notag(ans) if notag else self.proto.decode_memory(ans)
                 except frame.FrameError as e:
                     log.warning("unreadable memory answer %r: %s", ans, e)
                     continue
-                log.info("memory list: %s -> %s", frame.memory_read(ch), ans)                  # stored channels are few: log them all
+                log.info("memory list: %s -> %s", self.proto.memory_read(ch), ans)                  # stored channels are few: log them all
                 if item:
                     item["channel"] = ch                                                        # from the request (see above)
                     item["band"] = band_for(item["frequency"])
@@ -492,7 +564,7 @@ class YaesuCatDriver(RadioDriver):
         if self.state.get("tx") or self.state.get("tuning"):
             raise RadioError("cannot change channel while transmitting")
         try:
-            cmd = frame.memory_select(channel)
+            cmd = self.proto.memory_select(channel)
         except frame.FrameError as e:
             raise RadioError(str(e)) from None
         if self._mem_cache is not None and not any(m["channel"] == channel for m in self._mem_cache):

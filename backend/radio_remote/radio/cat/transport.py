@@ -185,8 +185,8 @@ def candidate_ports() -> list[str]:
     return sorted(out)
 
 
-def probe_port(port: str, baud: int, expect_id: str, timeout: float = 0.6) -> bool:
-    """Blocking, READ-ONLY probe: sends 'ID;' only."""
+def probe_answer(port: str, baud: int, timeout: float = 0.6) -> str:
+    """Blocking, READ-ONLY probe: sends 'ID;' only and returns what came back ("" = nothing, or the port could not be opened)."""
     import serial
     import time
 
@@ -201,9 +201,9 @@ def probe_port(port: str, baud: int, expect_id: str, timeout: float = 0.6) -> bo
         end, buf = time.monotonic() + timeout, b""
         while time.monotonic() < end and b";" not in buf:
             buf += ser.read(64)
-        return buf.decode("ascii", "replace").strip().startswith("ID" + expect_id)
+        return buf.decode("ascii", "replace").strip()
     except (serial.SerialException, OSError):
-        return False
+        return ""
     finally:
         try:
             ser.close()
@@ -211,11 +211,36 @@ def probe_port(port: str, baud: int, expect_id: str, timeout: float = 0.6) -> bo
             pass
 
 
-def detect_port(preferred_baud: int, expect_id: str) -> tuple[str, int] | None:
-    bauds = [preferred_baud] + [b for b in (38400, 19200, 9600, 4800) if b != preferred_baud]
-    for port in candidate_ports():
+def probe_port(port: str, baud: int, expect_id: str, timeout: float = 0.6) -> bool:
+    return probe_answer(port, baud, timeout).startswith("ID" + expect_id)
+
+
+def scan_ports(preferred_baud: int, expect_id: str, known_ids: dict[str, str] | None = None) -> tuple[tuple[str, int] | None, str]:
+    """Look for the radio on every Silicon Labs USB serial port at every CAT rate. Returns ((port, baud) or None, a sentence saying what was seen),
+    so a failure can say WHY: no port at all, silence at every rate, or a radio of another model answering."""
+    known_ids = known_ids or {}
+    bauds = [preferred_baud] + [b for b in (38400, 19200, 9600, 4800, 115200) if b != preferred_baud]
+    ports = candidate_ports()
+    if not ports:
+        return None, "no Silicon Labs USB serial port is visible (is the USB cable plugged in and the radio switched on? try: lsusb)"
+    seen = []
+    for port in ports:
+        silent = True
         for baud in bauds:
-            if probe_port(port, baud, expect_id):
+            ans = probe_answer(port, baud)
+            if ans.startswith("ID" + expect_id):
                 log.info("radio found on %s @ %d", port, baud)
-                return port, baud
-    return None
+                return (port, baud), ""
+            if ans:
+                silent = False
+                code = ans[2:6]
+                seen.append(f"{port} answered {ans!r} at {baud} baud" + (f" ({known_ids[code]}: choose that model in Admin > Config)" if code in known_ids else ""))
+                break
+        if silent:
+            rates = "/".join(str(b) for b in bauds)
+            seen.append(f"{port}: no answer at {rates} baud (the Standard port of a radio is silent; check the radio's CAT rate menu)")
+    return None, "; ".join(seen)
+
+
+def detect_port(preferred_baud: int, expect_id: str) -> tuple[str, int] | None:
+    return scan_ports(preferred_baud, expect_id)[0]

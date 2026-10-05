@@ -163,7 +163,7 @@ def memory_read_notag(channel: int) -> str:
     return f"MR{channel:03d};"
 
 
-def decode_memory_notag(answer: str) -> dict | None:
+def decode_memory_notag(answer: str, modes: dict | None = None) -> dict | None:
     """MR answer: channel(3) freq(9) clar(5) rxclar txclar mode vfo/mem ctcss fixed(2) shift = 25 characters, no tag."""
     if not _FRAME_RE.match(answer) or not answer.startswith("MR"):
         raise FrameError(f"not an MR answer: {answer!r}")
@@ -173,12 +173,13 @@ def decode_memory_notag(answer: str) -> dict | None:
     hz = int(p[3:12])
     if hz == 0:
         return None
-    if p[19] not in MODES:
+    modes = modes or MODES
+    if p[19] not in modes:
         raise FrameError("bad MR mode")
-    return {"channel": int(p[:3]), "frequency": hz, "mode": MODES[p[19]], "tag": ""}
+    return {"channel": int(p[:3]), "frequency": hz, "mode": modes[p[19]], "tag": ""}
 
 
-def decode_memory(answer: str) -> dict | None:
+def decode_memory(answer: str, modes: dict | None = None) -> dict | None:
     """MT answer: channel(3) freq(9) clar(5) rxclar txclar mode vfo/mem ctcss(1) fixed(2) shift fixed tag(up to 12).
     Returns None for an empty channel (frequency 0)."""
     if not _FRAME_RE.match(answer) or not answer.startswith("MT"):
@@ -189,6 +190,7 @@ def decode_memory(answer: str) -> dict | None:
     hz = int(p[3:12])
     if hz == 0:
         return None
-    if p[19] not in MODES:
+    modes = modes or MODES
+    if p[19] not in modes:
         raise FrameError("bad MT mode")
-    return {"channel": int(p[:3]), "frequency": hz, "mode": MODES[p[19]], "tag": p[26:].strip()}
+    return {"channel": int(p[:3]), "frequency": hz, "mode": modes[p[19]], "tag": p[26:].strip()}

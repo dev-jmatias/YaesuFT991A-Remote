@@ -101,6 +101,10 @@ button.icon { width: 34px; padding: 0; } button.icon.wide { width: auto; padding
 .vbadge.txb.on { background: var(--red); color: #fff; border-color: transparent; animation: pulse 1s infinite; }
 .vbadge.split { background: var(--yellow); color: #1a1100; border-color: transparent; }
 .vbadge[hidden] { display: none; }
+.vbadge.pick { cursor: pointer; user-select: none; }
+.vbadge.pick:hover { border-color: #8da2cc; }
+.vbadge.txb.sel { border-color: var(--red); color: #f3a3a3; }
+.vbadge.txb.sel.on { color: #fff; }
 .vband { margin-left: auto; color: var(--dim); font-size: .8rem; }
 .vmode { font-size: 1.05rem; font-weight: 600; letter-spacing: .04em; margin: 0 0 6px; }
 .nodata { font-size: .78rem; padding: 14px 0 4px; border-top: 1px dashed var(--line); margin-top: 8px; }
@@ -653,3 +657,40 @@ html[data-tablet] .app[data-tab=freedv] [data-pane=vfo], html[data-tablet] .app[
 .fdv-rpf { gap: 8px; align-items: flex-end; flex-wrap: wrap; }
 .fdv-rpf label { display: flex; flex-direction: column; font-size: .8rem; }
 .fdv-tune-btn { order: 2; } .fdv-rmsg { order: 3; }
+
+.rxtx { display: inline-flex; flex-wrap: nowrap; gap: 6px; align-items: center; }
+.rxtxg { display: inline-flex; align-items: center; gap: 3px; padding: 1px 5px; border: 1px solid var(--line2); border-radius: 6px; }
+.rxtxl { font-size: .6rem; font-weight: 700; letter-spacing: .05em; color: #9fb0d0; margin-right: 1px; }
+.led.txsel.on { background: var(--red); border-color: transparent; color: #fff; }
+.vfopanel.operating { box-shadow: 0 0 0 1px #3a5083 inset; }
+.rxtxg button.led.selrx { font-weight: 700; letter-spacing: .05em; }
+
+/* VFO tools of a dual-receiver radio: one row [MAIN <-> SUB] [MAIN RX TX] [SUB RX TX], same button height as the rest of the app (the shared .vfob-ctl button rules).
+   On phones the row never wraps: the buttons just get a little smaller. Wider screens may wrap if there is really no room. */
+.vfob-ctl.dualctl { display: flex !important; flex-wrap: wrap !important; gap: 4px !important; overflow: visible !important; align-items: center; }
+.vfob-ctl.dualctl .rxtx { display: contents; }
+.vfob-ctl.dualctl .rxtxg { display: flex; gap: 3px; flex: 0 0 auto; padding: 0; border: 0; }
+.vfob-ctl.dualctl button.led { flex: 0 0 auto; width: auto; white-space: nowrap; padding-left: 9px !important; padding-right: 7px !important; }
+.vfob-ctl.dualctl .rxtxg button.led { padding-right: 5px !important; letter-spacing: 0; }
+@media (max-width: 560px) {
+  .vfob-ctl.dualctl { flex-wrap: nowrap !important; gap: 3px !important; }
+  .vfob-ctl.dualctl .rxtxg { gap: 2px; }
+  .vfob-ctl.dualctl button.led { font-size: .64rem !important; padding-left: 7px !important; padding-right: 3px !important; }
+}
+/* MAIN and SUB selector buttons the same width, RX / TX a little larger */
+.vfob-ctl.dualctl .rxtxg button.selrx { min-width: 3.7em; text-align: center; }
+.vfob-ctl.dualctl .rxtxg button.led:not(.selrx) { min-width: 2.5em; padding-left: 11px !important; padding-right: 7px !important; }
+@media (max-width: 560px) {
+  .vfob-ctl.dualctl .rxtxg button.selrx { min-width: 3.4em; }
+  .vfob-ctl.dualctl .rxtxg button.led:not(.selrx) { min-width: 2.3em; padding-left: 9px !important; padding-right: 5px !important; font-size: .66rem !important; }
+}
+.rxswitch { display: flex; align-items: center; gap: 6px; margin: 0 0 8px; }
+.rxswitch .alabel { margin-right: 4px; }
+.rxswitch button.led.sm { min-width: 4.2em; text-align: center; }
+/* VFO tab: the VFO tools and the tuning step rows wrap and are centred on every screen (nothing runs off a small screen), for all radios */
+.toolrow .block { text-align: center; }
+.steprow, .vfob-ctl { flex-wrap: wrap !important; justify-content: center !important; overflow: visible !important; }
+.steprow > *, .vfob-ctl > * { flex: 0 0 auto; }
+.steprow .tune { margin-left: 10px; }
+.vfob-read { text-align: center; }
+.vfob-ctl .bform { justify-content: center; }.meter-off { opacity: .45; }

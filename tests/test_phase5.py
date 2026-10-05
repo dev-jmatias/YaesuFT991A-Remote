@@ -101,7 +101,7 @@ def test_every_encoded_control_has_a_spec_and_feature():
     for name in fc.ENCODE:
         assert name in controls.SPEC_BY_NAME, name
     from radio_remote.radio.cat.proto import HfProto
-    known = set(fc.ENCODE) | set(HfProto("ftdx10").ENCODE)           # a control may exist on the newer radios only (att_level)
+    known = set(fc.ENCODE) | set(HfProto("ftdx10").ENCODE) | set(HfProto("ftdx101d").ENCODE)   # a control may exist on the newer radios only (att_level, the FTDX101 audio levels)
     for name, spec in controls.SPEC_BY_NAME.items():
         assert name == "width" or name in known, name
 

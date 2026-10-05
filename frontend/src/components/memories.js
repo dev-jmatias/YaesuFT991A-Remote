@@ -69,3 +69,21 @@ export function openMemories(ctx) {
   load(false);
   return { close };
 }
+
+
+// Memories / Back to VFO buttons, placed beside TUNE in the tuning step row (they used to sit in the VFO tools row, which ran off small screens).
+export function createMemoryButtons(host, ctx) {
+  if (!ctx.S.caps.features.memories) return { update() {} };
+  const mem = el(`<button class="led" data-mem title="The memory channels stored in the radio: look at them and recall one">Memories</button>`);
+  const back = el(`<button class="led" data-tovfo hidden title="Leave memory mode and go back to the VFO">Back to VFO</button>`);
+  mem.onclick = () => openMemories(ctx);
+  back.onclick = () => ctx.send("memory_vfo");
+  host.append(mem, back);
+  return {
+    update() {
+      const inMem = ctx.S.state.vfo_memory === "memory";
+      mem.classList.toggle("on", inMem);
+      back.hidden = !inMem;
+    },
+  };
+}

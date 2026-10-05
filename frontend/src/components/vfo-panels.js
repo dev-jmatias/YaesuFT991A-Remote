@@ -12,21 +12,23 @@ const ICON_MIC = SVG(`<rect x="9" y="3" width="6" height="11" rx="3" fill="curre
 
 export function createVfoPanels(host, ctx) {
   const hasB = !!ctx.S.caps.features.vfo_b;
+  const dual = !!ctx.S.caps.features.dual_receiver;           // FTDX101: VFO-A is the MAIN receiver, "VFO-B" is the SUB receiver
+  const LA = dual ? "MAIN" : "VFO-A", LB = dual ? "SUB" : "VFO-B";
   const root = el(`<div class="vfopanels">
-    <section class="vfopanel a" aria-label="VFO A">
-      <header><span class="vl">VFO-A</span><span class="vbadge rxb on" data-rx>RX</span><span class="vbadge txb" data-atx>TX</span><span class="rxchips" data-chips></span><span class="audbtns">
+    <section class="vfopanel a" aria-label="${LA}">
+      <header><span class="vl">${LA}</span><span class="vbadge rxb on" data-rx>RX</span><span class="vbadge txb" data-atx>TX</span><span class="rxchips" data-chips></span><span class="audbtns">
           <button class="aud" data-aud="listen" aria-pressed="false">${ICON_SPK}</button>
           <button class="aud" data-aud="mic" aria-pressed="false">${ICON_MIC}</button>
         </span></header>
-      <div class="freqrow"><div class="freqhost" data-fa></div><span class="vl vl2" aria-hidden="true">VFO-A</span></div>
+      <div class="freqrow"><div class="freqhost" data-fa></div><span class="vl vl2" aria-hidden="true">${LA}</span></div>
       <div class="vmode"><span id="mode">-</span><span class="vband" id="band">-</span><span class="vbadge fdvb" data-fdv hidden></span><span class="vbadge memb" data-memb hidden></span></div>
       <div class="smeterhost" data-sm></div>
     </section>
     <div class="txmhost" data-txm></div>
-    ${hasB ? `<section class="vfopanel b" aria-label="VFO B">
-      <header><span class="vl">VFO-B</span><span class="vbadge txb" data-btx>TX</span><span class="vbadge split" data-split hidden>SPLIT</span><span class="vmodeb" data-mb></span><span class="vband" data-bb></span></header>
+    ${hasB ? `<section class="vfopanel b" aria-label="${LB}">
+      <header><span class="vl">${LB}</span>${dual ? `<span class="vbadge rxb " data-rxs title="The SUB receiver is listening (change it with the RX buttons below)">RX</span><span class="vbadge txb" data-btx title="Transmit is on the SUB receiver (change it with the TX buttons below)">TX</span><span class="vbadge split" data-split hidden title="Split: you transmit on a receiver you are not listening to">SPLIT</span>` : `<span class="vbadge txb" data-btx>TX</span><span class="vbadge split" data-split hidden>SPLIT</span>`}<span class="vmodeb" data-mb></span><span class="vband" data-bb></span></header>
       <div class="freqhost" data-fb></div>
-      <div class="nodata dim">The signal meter is only available for VFO A (not in the CAT commands)</div>
+      <div class="nodata dim">The signal meter is only available for ${dual ? "the MAIN receiver" : "VFO A"} (not in the CAT commands)</div>
     </section>` : ""}
   </div>`);
   host.append(root);
@@ -112,8 +114,10 @@ export function createVfoPanels(host, ctx) {
     update() {
       const s = ctx.S.state;
       paintAudio();                                                    // the mic button is locked during a transmission
-      const aTx =!!s.tx && !s.split, bTx = !!s.tx && !!s.split;       // in split, transmit happens on VFO B
-      root.dataset.active = bTx ? "b" : "a";                           // phones show only this panel (CSS): the frequency in use
+      const txRx = s.tx_receiver === "sub" ? "sub" : "main", rxMain = s.rx_main !== false, rxSub = !!s.rx_sub;   // dual-receiver radios only
+      const aTx = dual ? !!s.tx && txRx === "main" : !!s.tx && !s.split;
+      const bTx = dual ? !!s.tx && txRx === "sub" : !!s.tx && !!s.split;                // in split, transmit happens on VFO B
+      root.dataset.active = (dual ? (bTx || (!rxMain && rxSub && !aTx)) : bTx) ? "b" : "a";   // phones show only this panel (CSS): the frequency in use
       q("#band").textContent = s.band || "-";
       q("#mode").textContent = s.mode || "-";
       const fdv = q("[data-fdv]");                                       // FreeDV indicator under the frequency, before the MEM tag
@@ -127,16 +131,24 @@ export function createVfoPanels(host, ctx) {
       memb.hidden = !inMem;
       if (inMem) memb.textContent = `MEM ${String(s.memory_channel ?? "").padStart(3, "0")}`;
       paintChips(s);
-      q("[data-rx]").classList.toggle("on", !aTx);
+      q("[data-rx]").classList.toggle("on", dual ? rxMain : !aTx);
       q("[data-atx]").classList.toggle("on", aTx);
+      if (dual) q("[data-atx]").classList.toggle("sel", txRx === "main");        // "sel" = the transmit receiver (outline); "on" = keyed (red)
       panelA.classList.toggle("keyed", aTx);
+      if (dual) { panelA.classList.toggle("operating", s.active_receiver !== "sub"); if (hasB) panelB.classList.toggle("operating", s.active_receiver === "sub"); }   // the receiver the radio's own dial and keys act on
       if (hasB) {
         q("[data-bb]").textContent = s.band_b || "";
         q("[data-mb]").textContent = s.mode_b || "";
         q("[data-btx]").classList.toggle("on", bTx);
-        q("[data-split]").hidden = !s.split;
+        if (dual) {
+          q("[data-rxs]").classList.toggle("on", rxSub);
+          q("[data-btx]").classList.toggle("sel", txRx === "sub");
+          q("[data-split]").hidden = !(txRx === "main" ? !rxMain : !rxSub);       // transmitting on a receiver you are not listening to
+        } else {
+          q("[data-split]").hidden = !s.split;
+        }
         panelB.classList.toggle("keyed", bTx);
-        panelB.classList.toggle("txvfo", !!s.split);
+        panelB.classList.toggle("txvfo", dual ? txRx === "sub" : !!s.split);
       }
       paintAudio();
       parts.forEach((p) => p.update?.());

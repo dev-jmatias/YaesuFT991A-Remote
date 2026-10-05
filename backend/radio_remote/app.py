@@ -247,6 +247,31 @@ class Hub:
                 raise CommandError("'on' must be boolean")
             self._not_while_transmitting()
             await self.driver.set_split(on)
+        elif typ == "receivers":                                      # FTDX101: which of MAIN / SUB are listening
+            if not caps.has("dual_receiver"):
+                raise CommandError("this radio has no sub receiver")
+            main, sub = msg.get("main"), msg.get("sub")
+            if not isinstance(main, bool) or not isinstance(sub, bool):
+                raise CommandError("'main' and 'sub' must be boolean")
+            if not (main or sub):
+                raise CommandError("at least one receiver must stay on")
+            self._not_while_transmitting()
+            await self.driver.set_receivers(main, sub)
+        elif typ == "tx_receiver":                                    # FTDX101: transmit on MAIN or on SUB (split when it differs from the one you listen to)
+            if not caps.has("dual_receiver"):
+                raise CommandError("this radio has no sub receiver")
+            which = msg.get("receiver")
+            if which not in ("main", "sub"):
+                raise CommandError("receiver must be main or sub")
+            self._not_while_transmitting()
+            await self.driver.set_tx_receiver(which)
+        elif typ == "active_receiver":                                # FTDX101: the receiver the radio's own dial and keys operate
+            if not caps.has("dual_receiver"):
+                raise CommandError("this radio has no sub receiver")
+            which = msg.get("receiver")
+            if which not in ("main", "sub"):
+                raise CommandError("receiver must be main or sub")
+            await self.driver.set_active_receiver(which)
         elif typ == "set_mode":
             mode = msg.get("mode")
             if mode not in caps.modes():
@@ -283,7 +308,10 @@ class Hub:
                 value = controls.coerce(spec, msg.get("value"))
             except ValueError as e:
                 raise CommandError(f"{name}: {e}") from None
-            await self.driver.set_control(name, value)
+            receiver = msg.get("receiver", "main")                    # FTDX101: the same control for the SUB receiver
+            if receiver not in ("main", "sub") or (receiver == "sub" and not caps.has("dual_receiver")):
+                raise CommandError("receiver must be main (or sub on a dual-receiver radio)")
+            await self.driver.set_control(name, value, receiver)
         elif typ == "set_band":
             band = msg.get("band")
             if band not in caps.data.get("bands", {}).get("list", []):

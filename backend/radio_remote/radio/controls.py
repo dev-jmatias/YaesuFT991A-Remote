@@ -47,6 +47,19 @@ SPECS: list[dict[str, Any]] = [
     {"name": "processor", "label": "Processor", "group": "Transmit", "kind": "bool", "feature": "processor"},
     {"name": "processor_level", "label": "Processor level", "group": "Transmit", "kind": "int",
      "feature": "processor", "min": 0, "max": 100, "step": 1},
+    # FTDX101: the rear / USB audio menus (CAT manual p.10): "<mode> OUT LEVEL" (receive audio sent to the Pi) and "RPORT GAIN" (transmit audio coming in from the Pi), 0..100,
+    # written for SSB, AM and FM together so the level does not change with the mode.
+    {"name": "audio_out_level", "label": "Audio out level", "group": "Audio", "kind": "int", "feature": "audio_out_level", "min": 0, "max": 100, "step": 1},
+    # FTDX101: REAR SELECT (CAT manual p.10) = where the transmit audio comes in from the rear: 0 DATA socket, 1 USB. Remote audio needs USB. SSB 01-01-12, AM 01-02-13, FM 01-03-12, DATA 01-04-14.
+    {"name": "rear_select", "label": "Transmit audio source", "group": "Audio", "kind": "enum", "feature": "rear_select", "choices": ["DATA", "USB"]},
+    {"name": "audio_in_level", "label": "Audio in level", "group": "Audio", "kind": "int", "feature": "audio_in_level", "min": 0, "max": 100, "step": 1},
+    # FTDX101: AO "AMC OUTPUT LEVEL" 001..100 (the level the radio's PROC/PITCH knob shows as "AMC out" on its screen)
+    {"name": "amc_level", "label": "AMC output level", "group": "Transmit", "kind": "int", "feature": "amc_level", "min": 1, "max": 100, "step": 1},
+    # --- CW (none of these transmit): KS key speed 4..60 WPM, KP pitch 300..1050 Hz in 10 Hz steps, KR electronic keyer on/off, BI break-in on/off
+    {"name": "cw_speed", "label": "Keyer speed", "group": "CW", "kind": "int", "feature": "cw_keyer", "min": 4, "max": 60, "step": 1, "unit": "WPM"},
+    {"name": "cw_pitch", "label": "CW pitch", "group": "CW", "kind": "int", "feature": "cw_keyer", "min": 300, "max": 1050, "step": 10, "unit": "Hz", "default": 700},
+    {"name": "keyer", "label": "Keyer", "group": "CW", "kind": "bool", "feature": "cw_keyer"},
+    {"name": "break_in", "label": "Break-in", "group": "CW", "kind": "bool", "feature": "cw_keyer"},
     {"name": "monitor", "label": "Monitor", "group": "Transmit", "kind": "bool", "feature": "monitor"},
     {"name": "monitor_level", "label": "Monitor level", "group": "Transmit", "kind": "int", "feature": "monitor",
      "min": 0, "max": 100, "step": 1},

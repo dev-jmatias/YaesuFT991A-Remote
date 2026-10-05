@@ -45,6 +45,11 @@ class Ft991aProto:
     width_options = staticmethod(fc.width_options)
     width_hz = staticmethod(fc.width_hz)
     width_set = staticmethod(fc.width_set)
+    memory_read = staticmethod(frame.memory_read)
+    memory_read_notag = staticmethod(frame.memory_read_notag)
+    memory_select = staticmethod(frame.memory_select)
+    decode_memory = staticmethod(frame.decode_memory)
+    decode_memory_notag = staticmethod(frame.decode_memory_notag)
 
     def split_set(self, on: bool) -> str:
         return "FT3;" if on else "FT2;"                      # bench-verified
@@ -119,6 +124,10 @@ MODELS: dict[str, HfModel] = {
 }
 
 
+# commands whose P1 is the receiver (0 MAIN, 1 SUB) on the FTDX101 and whose SUB answers are decoded with the MAIN parser
+SUB_PER_RX = ("NA", "IS", "CO", "BP", "BC", "NR", "RL", "NB", "PA", "RA", "GT", "SH")
+
+
 def _b(v) -> int:
     return 1 if v else 0
 
@@ -130,7 +139,9 @@ def _signed(v: int) -> str:
 class HfProto:
     BAND_CODES = fc.BAND_CODES                              # BS 00..10 = 1.8 .. 50 MHz, the same numbering as the FT-991A
     READ_WIDTH = "SH0;"
+    READ_WIDTH_SUB = "SH1;"                                  # FTDX101 SUB receiver
     NARROW_REREAD = ["NA0;", "SH0;"]
+    NARROW_REREAD_SUB = ["NA1;", "SH1;"]
     SPLIT_READ = "ST;"                                       # ST P1: 0 off, 1 on, 2 on + 5 kHz up
     S_METER_READ = "SM0;"
     TX_METER_CYCLE = ("RM5;", "RM6;", "RM4;", "RM3;")        # PO, SWR, ALC, COMP
@@ -146,6 +157,9 @@ class HfProto:
             "af_gain": ("AG0", 3, 0, 255), "rf_gain": ("RG0", 3, 0, 255), "mic_gain": ("MG", 3, 0, 100),
             "rf_power": ("PC", 3, 5, self.m.power_max),
         }
+        if model.startswith("ftdx101"):
+            self.LEVELS["af_gain_sub"] = ("AG1", 3, 0, 255)             # AG P1=1: the SUB receiver's own volume
+            self.LEVELS["rf_gain_sub"] = ("RG1", 3, 0, 255)
         self.ENCODE = self._encoders()
         self._mic_by_value = {v: k for k, v in self.m.mic_values.items()}
 
@@ -172,8 +186,42 @@ class HfProto:
     def split_set(self, on: bool) -> str:
         return "ST1;" if on else "ST0;"
 
-    def width_set(self, code: int) -> str:
-        return f"SH00{code:02d};"                            # SH P1 P2 P3P3, P1 = P2 = 0 fixed
+    # Memory channels (MT / MR read, MC recall: the same layout as the FT-991A; only the mode letters differ). Read and recall only: nothing is ever written.
+    memory_read = staticmethod(frame.memory_read)
+    memory_read_notag = staticmethod(frame.memory_read_notag)
+    memory_select = staticmethod(frame.memory_select)
+
+    def decode_memory(self, answer: str):
+        return frame.decode_memory(answer, HF_MODES)
+
+    def decode_memory_notag(self, answer: str):
+        return frame.decode_memory_notag(answer, HF_MODES)
+
+    # FTDX101 MAIN / SUB receivers (CAT manual p.13): FR P1 P2 = MAIN / SUB receiver 0 listening, 1 muted; FT set 2 = transmit on MAIN, 3 = on SUB (read FT -> FT0 / FT1)
+    def receivers_set(self, main: bool, sub: bool) -> str:
+        return f"FR{0 if main else 1}{0 if sub else 1};"
+
+    # The rear / USB audio carries ONE receiver, chosen per mode family by "<mode> OUT SELECT" (0 MAIN, 1 SUB): SSB 01-01-08, AM 01-02-08, FM 01-03-08 (CAT manual p.10).
+    # DATA, RTTY and CW have the same item but their numbers are ambiguous in the manual, so they are not touched.
+    AUDIO_OUT_MENUS = ("010108", "010208", "010308", "010410", "010510", "020108")     # SSB, AM, FM, DATA, RTTY, CW (the last three read back 0 / 3 digits as the manual says, on a real FTDX101D)
+
+    def audio_out_set(self, which: str) -> list[str]:
+        if which not in ("main", "sub"):
+            raise FrameError("receiver must be main or sub")
+        return [f"EX{m}{0 if which == 'main' else 1};" for m in self.AUDIO_OUT_MENUS]
+
+    def active_receiver_set(self, which: str) -> str:               # VS P1: 0 = MAIN band operation, 1 = SUB band operation (the receiver the radio's dial and keys act on)
+        if which not in ("main", "sub"):
+            raise FrameError("receiver must be main or sub")
+        return "VS0;" if which == "main" else "VS1;"
+
+    def tx_receiver_set(self, which: str) -> str:
+        if which not in ("main", "sub"):
+            raise FrameError("receiver must be main or sub")
+        return "FT2;" if which == "main" else "FT3;"
+
+    def width_set(self, code: int, rx: str = "0") -> str:
+        return f"SH{rx}0{code:02d};"                         # SH P1 (receiver) P2 (0 fixed) P3P3
 
     def _table(self, mode):
         cls = self.m.mode_class.get(mode or "")
@@ -193,6 +241,8 @@ class HfProto:
             out += ["FB;", "OI;"]
         if caps.has("split"):
             out.append(self.SPLIT_READ)
+        if caps.has("dual_receiver"):
+            out += ["FR;", "FT;", "VS;", "AG1;"]
         return out + ["TX;", "AG0;", "RG0;", "MG;", "PC;", "SM0;"]
 
     def backstop_reads(self, caps) -> list[str]:
@@ -201,14 +251,20 @@ class HfProto:
             out += ["FB;", "OI;"]
         if caps.has("split"):
             out.append(self.SPLIT_READ)
+        if caps.has("dual_receiver"):
+            out += ["FR;", "FT;", "VS;"]
         return out
 
     def slow_reads(self, caps) -> list[str]:
         out = ["AG0;", "RG0;", "MG;", "PC;"]
+        if caps.has("dual_receiver"):
+            out += ["AG1;", "RG1;"]
         if caps.has("vfo_b"):
             out.append("FB;")
         if caps.has("split"):
             out.append(self.SPLIT_READ)
+        if caps.has("dual_receiver"):
+            out += ["FR;", "FT;", "VS;"]
         return out
 
     def settled_vfo_reads(self, caps) -> list[str]:
@@ -218,30 +274,48 @@ class HfProto:
         return out + ["MD0;"]
 
     # ------------------------------------------------------------------ controls: name -> (read, encode(value) -> [commands])
+    def _rx_encoders(self, rx: str) -> dict[str, tuple[str, Callable[[Any], list[str]]]]:
+        """The controls that exist once per receiver. rx is the P1 digit: "0" = MAIN (the only one on most radios), "1" = SUB (FTDX101)."""
+        return {
+            "narrow": (f"NA{rx};", lambda v: [f"NA{rx}{_b(v)};"]),
+            "if_shift": (f"IS{rx};", lambda v: [f"IS{rx}0{_signed(v)};"]),                  # IS P1 P2 +/- P4P4P4P4 (0..1200 Hz, 20 Hz steps)
+            "contour": (f"CO{rx}0;", lambda v: [f"CO{rx}0{_b(v):04d};"]),
+            "contour_freq": (f"CO{rx}1;", lambda v: [f"CO{rx}1{v:04d};"]),
+            "notch": (f"BP{rx}0;", lambda v: [f"BP{rx}0{_b(v):03d};"]),
+            "notch_freq": (f"BP{rx}1;", lambda v: [f"BP{rx}1{v // 10:03d};"]),
+            "auto_notch": (f"BC{rx};", lambda v: [f"BC{rx}{_b(v)};"]),
+            "nr": (f"NR{rx};", lambda v: [f"NR{rx}{_b(v)};"]),
+            "nr_level": (f"RL{rx};", lambda v: [f"RL{rx}{v:02d};"]),
+            "nb": (f"NB{rx};", lambda v: [f"NB{rx}{_b(v)};"]),
+            "ipo": (f"PA{rx};", lambda v: [f"PA{rx}{fc.IPO_CODES[v]};"]),
+            "att_level": (f"RA{rx};", lambda v: [f"RA{rx}{ATT_CHOICES.index(v)};"]),
+            "agc": (f"GT{rx};", lambda v: [f"GT{rx}{AGC_CODES[v]};"]),
+        }
+
     def _encoders(self) -> dict[str, tuple[str, Callable[[Any], list[str]]]]:
         m = self.m
         enc: dict[str, tuple[str, Callable[[Any], list[str]]]] = {
-            "narrow": ("NA0;", lambda v: [f"NA0{_b(v)};"]),
-            "if_shift": ("IS0;", lambda v: [f"IS00{_signed(v)};"]),                    # IS P1 P2 +/- P4P4P4P4 (0..1200 Hz, 20 Hz steps)
-            "contour": ("CO00;", lambda v: [f"CO00{_b(v):04d};"]),
-            "contour_freq": ("CO01;", lambda v: [f"CO01{v:04d};"]),
+            **self._rx_encoders("0"),
             "apf": ("CO02;", lambda v: [f"CO02{_b(v):04d};"]),
             "apf_freq": ("CO03;", lambda v: [f"CO03{v // 10 + 25:04d};"]),
-            "notch": ("BP00;", lambda v: [f"BP00{_b(v):03d};"]),
-            "notch_freq": ("BP01;", lambda v: [f"BP01{v // 10:03d};"]),
-            "auto_notch": ("BC0;", lambda v: [f"BC0{_b(v)};"]),
-            "nr": ("NR0;", lambda v: [f"NR0{_b(v)};"]),
-            "nr_level": ("RL0;", lambda v: [f"RL0{v:02d};"]),
-            "nb": ("NB0;", lambda v: [f"NB0{_b(v)};"]),
-            "nb_level": ("NL0;", lambda v: [f"NL0{v:03d};"]),
-            "ipo": ("PA0;", lambda v: [f"PA0{fc.IPO_CODES[v]};"]),
-            "att_level": ("RA0;", lambda v: [f"RA0{ATT_CHOICES.index(v)};"]),
-            "agc": ("GT0;", lambda v: [f"GT0{AGC_CODES[v]};"]),
+            "nb_level": ("NL0;", lambda v: [f"NL0{v:03d};"]),                                  # NL P1 is fixed 0: one level for both receivers
             "monitor": ("ML0;", lambda v: [f"ML0{_b(v):03d};"]),
             "monitor_level": ("ML1;", lambda v: [f"ML1{v:03d};"]),
             "tuner": ("AC;", lambda v: [f"AC00{_b(v)};"]),
+            "amc_level": ("AO;", lambda v: [f"AO{v:03d};"]),                               # AO P1P1P1 001..100
+            "cw_speed": ("KS;", lambda v: [f"KS{v:03d};"]),                                # KS P1P1P1 004..060 WPM
+            "cw_pitch": ("KP;", lambda v: [f"KP{(v - 300) // 10:02d};"]),                  # KP P1P1 00..75 = 300..1050 Hz in 10 Hz steps
+            "keyer": ("KR;", lambda v: [f"KR{_b(v)};"]),
+            "break_in": ("BI;", lambda v: [f"BI{_b(v)};"]),
+            "processor": ("PR0;", lambda v: [f"PR0{_b(v)};"]),
+            "processor_level": ("PL;", lambda v: [f"PL{v:03d};"]),                         # PL P1P1P1 000..100
             "mic_select": (f"EX{m.mic_menu};", lambda v: [f"EX{m.mic_menu}{m.mic_values[v]};"]),
         }
+        if self.model.startswith("ftdx101"):
+            enc["audio_out_level"] = ("EX010109;", lambda v: [f"EX{g}{v:03d};" for g in ("010109", "010209", "010309", "010411", "010511", "020109")])    # SSB / AM / FM / DATA / RTTY / CW OUT LEVEL
+            enc["audio_in_level"] = ("EX010113;", lambda v: [f"EX{g}{v:03d};" for g in ("010113", "010214", "010313")])     # SSB / AM / FM RPORT GAIN
+            enc["rear_select"] = ("EX010112;", lambda v: [f"EX{g}{1 if v == 'USB' else 0};" for g in ("010112", "010213", "010312", "010414")])   # REAR SELECT: SSB / AM / FM / DATA
+            enc.update({f"{k}_sub": v for k, v in self._rx_encoders("1").items()})                                           # the same controls for the SUB receiver
         if m.has_rt:
             enc.update({
                 "rit": ("RT;", lambda v: [f"RT{_b(v)};"]),
@@ -255,6 +329,9 @@ class HfProto:
         if not frame._FRAME_RE.match(f):
             raise FrameError(f"malformed frame {f!r}")
         cmd, p = f[:2], f[2:-1]
+        if cmd in SUB_PER_RX and p[:1] == "1" and self.model.startswith("ftdx101"):
+            inner = self.decode(f"{cmd}0{p[1:]};")                                  # SUB answers: the MAIN parser (P1 forced to 0), keys get a _sub suffix
+            return {f"{k}_sub": v for k, v in inner.items()}
         if cmd in ("FA", "FB"):
             if len(p) != 9:
                 raise FrameError(f"{cmd} needs 9 digits")
@@ -279,10 +356,14 @@ class HfProto:
                 raise FrameError("bad IF clarifier sign")
             offset = _int(p[13:17]) * (-1 if p[12] == "-" else 1)
             return {"frequency": _int(p[3:12]), "mode": HF_MODES[p[19]], "rit": p[17] == "1", "xit": p[18] == "1",
-                    "clarifier_hz": offset, "vfo_memory": {"0": "vfo", "1": "memory"}.get(p[20], "other")}
+                    "clarifier_hz": offset, "vfo_memory": {"0": "vfo", "1": "memory"}.get(p[20], "other"), "memory_channel": _int(p[:3])}
         if cmd in ("AG", "RG", "SM"):
             if len(p) != 4:
                 raise FrameError(f"{cmd} needs P1 + 3 digits")
+            if cmd == "AG" and p[0] == "1" and self.model.startswith("ftdx101"):
+                return {"af_gain_sub": _int(p[1:])}
+            if cmd == "RG" and p[0] == "1" and self.model.startswith("ftdx101"):
+                return {"rf_gain_sub": _int(p[1:])}
             return {{"AG": "af_gain", "RG": "rf_gain", "SM": "smeter"}[cmd]: _int(p[1:])} if p[0] == "0" else {}
         if cmd in ("MG", "PC"):
             if len(p) != 3:
@@ -297,6 +378,18 @@ class HfProto:
             if p not in ("0", "1", "2"):
                 raise FrameError("bad ST")
             return {"split": p != "0"}
+        if cmd == "FR":
+            if len(p) != 2 or p[0] not in "01" or p[1] not in "01":
+                raise FrameError("bad FR")
+            return {"rx_main": p[0] == "0", "rx_sub": p[1] == "0"}                 # 0 = that receiver is listening, 1 = muted
+        if cmd == "VS":
+            if p not in ("0", "1"):
+                raise FrameError("bad VS")
+            return {"active_receiver": "main" if p == "0" else "sub"}
+        if cmd == "FT":
+            if p not in ("0", "1"):
+                raise FrameError("bad FT")
+            return {"tx_receiver": "main" if p == "0" else "sub"}
         if cmd == "GT":
             if len(p) != 2 or p[0] != "0" or not p[1].isdigit() or int(p[1]) not in AGC_NAMES:
                 raise FrameError("bad GT")
@@ -324,11 +417,33 @@ class HfProto:
                 if len(v) != 1 or not v.isdigit():
                     raise FrameError("bad EX mic menu")
                 return {"mic_select": self._mic_by_value.get(int(v), "MIC")}
+            if self.model.startswith("ftdx101"):
+                for key, menu in (("audio_out_level", "010109"), ("audio_in_level", "010113")):
+                    if p.startswith(menu) and len(p) == len(menu) + 3 and p[len(menu):].isdigit():
+                        return {key: int(p[len(menu):])}
+                if p.startswith("010112") and len(p) == 7 and p[6] in "01":
+                    return {"rear_select": "USB" if p[6] == "1" else "DATA"}
             return {}
+        if cmd in ("AO", "KS"):
+            if len(p) != 3 or not p.isdigit():
+                raise FrameError(f"bad {cmd}")
+            return {"amc_level" if cmd == "AO" else "cw_speed": _int(p)}
+        if cmd == "KP":
+            if len(p) != 2 or not p.isdigit() or int(p) > 75:
+                raise FrameError("bad KP")
+            return {"cw_pitch": 300 + 10 * int(p)}
+        if cmd in ("KR", "BI"):
+            if p not in ("0", "1"):
+                raise FrameError(f"bad {cmd}")
+            return {"keyer" if cmd == "KR" else "break_in": p == "1"}
         if cmd == "PR":
-            return {}                                                                 # the processor is not offered (see the profile)
+            # BENCH-VERIFIED on a real FTDX101D: PR0 = speech processor, PR1 = parametric mic equalizer, value 0 = OFF / 1 = ON
+            # (the manual says 1 = OFF / 2 = ON, and PR02 is rejected with ?;)
+            if len(p) != 2 or p[0] not in "01" or p[1] not in "01":
+                raise FrameError("bad PR")
+            return {("processor" if p[0] == "0" else "mic_eq"): p[1] == "1"}
         parser = fc.PARSERS.get(cmd)
-        return parser(p) if parser and cmd not in ("FT", "EX", "SH", "IS", "RA", "AC", "PR") else {}
+        return parser(p) if parser and cmd not in ("FT", "EX", "SH", "IS", "RA", "AC") else {}
 
 
 def proto_for(model: str):

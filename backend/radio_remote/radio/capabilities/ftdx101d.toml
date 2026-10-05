@@ -1,6 +1,6 @@
 # Yaesu FTDX101D capability profile. Values: true | false | "unverified" ("unverified" is treated as false by the UI).
-# EXPERIMENTAL: written from the CAT manual only (FTDX101MP_D_CAT_OM_ENG_2101-I); no Yaesu FTDX101D has been available for testing,
-# so [model] bench_tested = false and the app shows an "experimental profile" banner. Everything marked true is documented in the manual.
+# TESTED on a real FTDX101D (2026-10-05, see docs/08-other-radios.md and docs/bench-results.md): MAIN / SUB receivers, filters, processor, AMC, CW keyer, audio levels, tune, memories.
+# Not tried: transmitting on the SUB receiver. [model] bench_tested stays false, so the app still shows the "experimental profile" banner.
 [model]
 id = "ftdx101d"
 name = "Yaesu FTDX101D"
@@ -34,17 +34,23 @@ att = false
 att_levels = true                     # RA: OFF / 6 / 12 / 18 dB
 rit = true
 xit = true
-processor = "unverified"              # PR/PL: the manual says PR 1 = OFF / 2 = ON, which was wrong on the FT-991A: verify before enabling
+processor = true                      # PR0 / PL: bench-verified on a real FTDX101D (0 = OFF, 1 = ON; the manual's 1 / 2 is wrong, PR02 gets ?;)
 monitor = true                        # ML
 tuner = true                          # AC00x tuner on/off (does not transmit)
-tuner_tune = "unverified"             # KEYS the transmitter: enable only after a dummy-load test (p.4)
+tuner_tune = true                    # AC002; = tuning start/stop (CAT manual: P3 2). KEYS the transmitter: enabled at the user's request, the app asks for confirmation (dummy load or antenna) and the TX guard applies
 mic_select = true                     # EX SSB mod source menu
 dgid = false
-memories = "unverified"               # MC / MT exist in the manual; not implemented for this radio yet
+memories = true                      # MT / MR read + MC recall + VM (the V/M key): bench-verified on a real FTDX101D (read only, nothing is ever written)
 split = "unverified"                          # ST
 quick_split = "unverified"                    # QS
-vfo_b = "unverified"                          # FB / OI / AB / BA / SV
-# FTDX101 has two receivers: FB is the SUB band, not a VFO B, so the VFO B / split features stay off until verified
+vfo_b = true                                  # FB / OI: bench-verified on a real FTDX101D (FA 14.150500 / FB 7.000500 followed VFO-A / VFO-B); the AB / BA / SV buttons are not yet tried
+audio_out_level = true                  # EX 01 01 09 (and AM / FM): the CAT manual p.10; level sent to the USB audio
+audio_in_level = true                   # EX 01 01 13 RPORT GAIN: audio coming in from the USB
+rear_select = true                    # REAR SELECT DATA / USB (SSB, AM, FM, DATA): the transmit audio source from the rear
+amc_level = true                       # AO: bench-read on a real FTDX101D (AO070)
+cw_keyer = true                       # KS / KP / KR / BI: bench-read on a real FTDX101D (SD is left out: the radio answers 2 digits, the manual says 4)
+dual_receiver = true                       # FA = MAIN receiver (VFO-A), FB / OI = SUB receiver: the app says MAIN / SUB and hides the A/B copy and swap buttons
+# split / quick_split stay off until tried on the radio
 
 [frequency]
 ranges = [[30000, 75000000]]          # FA / FB (manual)
@@ -55,11 +61,19 @@ list = ["LSB", "USB", "CW-U", "CW-L", "AM", "FM", "DATA-U", "DATA-L", "RTTY-L", 
 [levels.af_gain]
 min = 0
 max = 255
-label = "AF Gain"
+label = "AF Gain MAIN"
+[levels.af_gain_sub]
+min = 0
+max = 255
+label = "AF Gain SUB"
 [levels.rf_gain]
 min = 0
 max = 255
-label = "RF Gain"
+label = "RF Gain MAIN"
+[levels.rf_gain_sub]
+min = 0
+max = 255
+label = "RF Gain SUB"
 [levels.mic_gain]
 min = 0
 max = 100

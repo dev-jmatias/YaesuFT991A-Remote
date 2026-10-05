@@ -35,34 +35,54 @@ export function createDgHint(host, ctx) {
 }
 // Main level sliders (RF / MIC / TX power ...): one row each, label | slider | value, aligned in a column.
 export function createLevels(host, ctx) {
-  // AF gain is the radio's own speaker volume: irrelevant when listening through the browser, so it is not offered here.
-  const levels = Object.entries(ctx.S.caps.levels).filter(([k]) => k !== "af_gain");
+  // AF gain is the radio's own speaker volume: irrelevant when listening through the browser, so it is not offered here,
+  // except on dual-receiver radios (FTDX101) where the MAIN and SUB volumes are two separate knobs the operator may want to set.
+  const dual = !!ctx.S.caps.features.dual_receiver;
+  const levels = Object.entries(ctx.S.caps.levels).filter(([k]) => dual || k !== "af_gain");
   const root = el(`<div class="levels"></div>`);
   host.append(root);
+  // the radio counts 0..255 for gains: shown as 0..100 % (the radio value is converted both ways); 0..100 scales are shown as they are
   const rows = levels.map(([k, r]) => {
-    const w = el(`<div class="arow"><span class="alabel">${r.label}</span><input type="range" min="${r.min}" max="${r.max}" aria-label="${r.label}"><span class="aval" data-v></span></div>`);
+    const pct = r.max === 255, hi = pct ? 100 : r.max, lo = pct ? 0 : r.min;
+    const show = (raw) => (pct ? `${Math.round((raw * 100) / 255)}%` : `${raw}`);
+    const w = el(`<div class="arow"><span class="alabel">${r.label}</span><input type="range" min="${lo}" max="${hi}" aria-label="${r.label}"><span class="aval" data-v></span></div>`);
     const inp = w.querySelector("input"), v = w.querySelector("[data-v]");
-    inp.oninput = () => (v.textContent = inp.value);
-    inp.onchange = () => ctx.send("set_level", { name: k, value: +inp.value });
+    inp.oninput = () => (v.textContent = pct ? `${inp.value}%` : inp.value);
+    inp.onchange = () => ctx.send("set_level", { name: k, value: pct ? Math.round((+inp.value * 255) / 100) : +inp.value });
     root.append(w);
-    return { k, inp, v };
+    return { k, inp, v, pct, show };
   });
   return {
     update() {
-      for (const { k, inp, v } of rows) {
+      for (const { k, inp, v, pct, show } of rows) {
         const val = ctx.S.state[k];
-        if (val !== undefined && document.activeElement !== inp) { inp.value = val; v.textContent = val; }
+        if (val !== undefined && document.activeElement !== inp) { inp.value = pct ? Math.round((val * 100) / 255) : val; v.textContent = show(val); }
       }
     },
   };
 }
-
 // Full filter / DSP panel, grouped in tabs. Every control is one row with the same three columns: [button or label | bar or select | value].
 export function createFilters(host, ctx) {
   const controls = ctx.S.caps.controls.filter((x) => !x.quick);      // quick ones (DG-ID) live next to the mode row
   if (!controls.length) { host.append(el(`<div class="dim">This radio exposes no adjustable filter controls.</div>`)); return { update() {} }; }
   const root = el(`<div class="filters tabbed"></div>`);
   host.append(root);
+  // FTDX101: every control that exists once per receiver acts on the receiver chosen here (MAIN or SUB); the others (RIT, audio levels, ...) always act on the radio
+  const dual = !!ctx.S.caps.features.dual_receiver;
+  let rx = "main";
+  if (dual) {
+    const bar = el(`<div class="rxswitch" role="group" aria-label="Receiver these controls act on"><span class="alabel">Receiver</span><button class="led sm on" data-rxs="main" aria-pressed="true">MAIN</button><button class="led sm" data-rxs="sub" aria-pressed="false">SUB</button></div>`);
+    bar.querySelectorAll("button").forEach((b) => (b.onclick = () => {
+      rx = b.dataset.rxs;
+      bar.querySelectorAll("button").forEach((x) => { x.classList.toggle("on", x === b); x.setAttribute("aria-pressed", String(x === b)); });
+      root.dataset.rx = rx;
+      paint();
+    }));
+    root.append(bar);
+  }
+  const PER_RX = new Set(["width", "narrow", "if_shift", "contour", "contour_freq", "notch", "notch_freq", "auto_notch", "nr", "nr_level", "nb", "ipo", "att_level", "agc"]);
+  const keyOf = (n) => (dual && rx === "sub" && PER_RX.has(n) ? n + "_sub" : n);          // the state key of the chosen receiver
+  const send = (name, value) => ctx.send("set_control", dual && rx === "sub" && PER_RX.has(name) ? { name, value, receiver: "sub" } : { name, value });
   const groups = [...new Set(controls.map((x) => x.group))];
   const tabs = el(`<div class="subtabs" role="tablist" aria-label="Filter and DSP groups"></div>`);
   root.append(tabs);
@@ -72,7 +92,7 @@ export function createFilters(host, ctx) {
 
   function toggle(s) {
     const b = el(`<button class="tog led" data-c="${s.name}">${s.label}</button>`);
-    b.onclick = () => ctx.send("set_control", { name: s.name, value: !ctx.S.state[s.name] });
+    b.onclick = () => send(s.name, !ctx.S.state[keyOf(s.name)]);
     return b;
   }
   // the slider is "display: contents": its input and value take the 2nd and 3rd column of the row; the label only shows when it stands alone
@@ -81,15 +101,15 @@ export function createFilters(host, ctx) {
     const inp = w.querySelector("input"), v = w.querySelector("[data-v]");
     if (s.default !== undefined) { inp.value = s.default; v.textContent = fmt(s, s.default); }       // shown until the radio reports its own value
     inp.oninput = () => (v.textContent = fmt(s, +inp.value));
-    inp.onchange = () => ctx.send("set_control", { name: s.name, value: +inp.value });
-    if (s.name === "clarifier_hz") { inp.title = "Double-click to clear the offset"; inp.ondblclick = () => { inp.value = 0; v.textContent = fmt(s, 0); ctx.send("set_control", { name: s.name, value: 0 }); }; }
+    inp.onchange = () => send(s.name, +inp.value);
+    if (s.name === "clarifier_hz") { inp.title = "Double-click to clear the offset"; inp.ondblclick = () => { inp.value = 0; v.textContent = fmt(s, 0); send(s.name, 0); }; }
     return w;
   }
   function select(s) {
     const w = el(`<label class="sel" data-c="${s.name}"><span class="alabel">${s.label}</span><select></select></label>`);
     const sel = w.querySelector("select");
     if (s.kind === "enum") sel.innerHTML = s.choices.map((x) => `<option>${x}</option>`).join("");
-    sel.onchange = () => ctx.send("set_control", { name: s.name, value: s.kind === "width" ? +sel.value : sel.value });
+    sel.onchange = () => send(s.name, s.kind === "width" ? +sel.value : sel.value);
     return w;
   }
 
@@ -135,11 +155,20 @@ export function createFilters(host, ctx) {
     tabs.append(b);
   }
   show(active);
-  return {
+  function paint() {
+    const st = ctx.S.state;
+    for (const w of root.querySelectorAll("[data-c]")) {
+      const n = w.dataset.c, val = st[keyOf(n)], spec = controls.find((x) => x.name === n);
+      w.dataset.sig = "";                                              // force the width list to be rebuilt for the other receiver
+      void val; void spec;
+    }
+    api.update();
+  }
+  const api = {
     update() {
       const st = ctx.S.state;
       for (const w of root.querySelectorAll("[data-c]")) {
-        const n = w.dataset.c, val = st[n], spec = controls.find((x) => x.name === n);
+        const n = w.dataset.c, val = st[keyOf(n)], spec = controls.find((x) => x.name === n);
         if (w.tagName === "BUTTON") w.classList.toggle("on", !!val);
         else if (spec.kind === "int") {
           const inp = w.querySelector("input");
@@ -147,7 +176,7 @@ export function createFilters(host, ctx) {
         } else {
           const sel = w.querySelector("select");
           if (spec.kind === "width") {
-            const opts = st.width_options || [];
+            const opts = st[dual && rx === "sub" ? "width_options_sub" : "width_options"] || [];
             (w.closest(".crow") || w).hidden = !opts.length;
             // Rebuilding the options on every meter update closes an open dropdown (it flickered and could not be used on phones):
             // only touch the list when it really changed, and never while the user has it open.
@@ -162,4 +191,5 @@ export function createFilters(host, ctx) {
       }
     },
   };
+  return api;
 }

@@ -139,7 +139,12 @@ export function createTxMeters(host, ctx) {
     else swr.set(((st.swr_raw || 0) / 255) * 0.5, "");
     const a = pct(st.alc || 0, cal.alc_full), cp = pct(st.comp || 0, cal.comp_full);
     alc.set(a / 100, Math.round(a) + " %");
-    comp.set(cp / 100, Math.round(cp) + " %");
+    // FTDX101: with the speech processor off the radio's COMP value is not a compression reading (it sat at 244 from the start of a transmission, whatever the voice
+    // did, on a real FTDX101D; the manual says the COMP meter shows the compression "during speech processor operation"), so the bar is shown as off.
+    const compOff = !!f.dual_receiver && !!f.processor && st.processor === false;
+    comp.root.classList.toggle("meter-off", compOff);
+    if (compOff) comp.set(0, "off");
+    else comp.set(cp / 100, Math.round(cp) + " %");
   };
 
   return { update };

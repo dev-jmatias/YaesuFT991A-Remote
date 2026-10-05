@@ -25,8 +25,8 @@ How to read the table:
 | Microphone input (menu: MIC / REAR) | works | from the manual | from the manual | from the manual | from the manual |
 | Monitor | works | from the manual | from the manual | from the manual | from the manual |
 | PTT (hold to transmit) | works | from the manual | from the manual | from the manual | from the manual |
-| Speech processor | works | not offered yet | not offered yet | not offered yet | not offered yet |
-| TUNE (start the tuner: transmits a carrier) | works | not offered yet | not offered yet | not offered yet | not offered yet |
+| Speech processor | works | not offered yet | from the manual | from the manual | not offered yet |
+| TUNE (start the tuner: transmits a carrier) | works | not offered yet | from the manual | from the manual | not offered yet |
 | **Meters** | | | | | |
 | ALC meter | works | from the manual | from the manual | from the manual | from the manual |
 | Compression meter | works | from the manual | from the manual | from the manual | from the manual |
@@ -47,17 +47,23 @@ How to read the table:
 | RIT | works | from the manual | from the manual | from the manual | not offered yet |
 | XIT | works | from the manual | from the manual | from the manual | not offered yet |
 | **VFOs and memories** | | | | | |
-| Memory channels: list and recall | works | not offered yet | not offered yet | not offered yet | not offered yet |
+| Memory channels: list and recall | works | not offered yet | from the manual | from the manual | not offered yet |
 | Quick split (QS) | from the manual, untested | from the manual | not offered yet | not offered yet | not offered yet |
 | Split | works | from the manual | not offered yet | not offered yet | from the manual |
-| VFO B (A=B, B=A, swap, set frequency) | works | from the manual | not offered yet | not offered yet | from the manual |
+| VFO B (A=B, B=A, swap, set frequency) | works | from the manual | from the manual | from the manual | from the manual |
 | **Radio** | | | | | |
 | 144 MHz band | works | - | - | - | - |
 | 430 MHz band | works | - | - | - | - |
+| amc_level | - | - | from the manual | from the manual | - |
 | Antenna switching over CAT | - | - | - | - | - |
+| audio_in_level | - | - | from the manual | from the manual | - |
+| audio_out_level | - | - | from the manual | from the manual | - |
 | C4FM mode (mode select only) | works | - | - | - | - |
+| cw_keyer | - | - | from the manual | from the manual | - |
+| dual_receiver | - | - | from the manual | from the manual | - |
 | Power off over CAT | works | from the manual | from the manual | from the manual | from the manual |
 | Power on over CAT (from standby) | works | from the manual | from the manual | from the manual | from the manual |
+| rear_select | - | - | from the manual | from the manual | - |
 | WIRES DG-ID menu value | works | - | - | - | - |
 
 ## Modes, bands and frequency range
@@ -73,7 +79,7 @@ How to read the table:
 
 | | FT-991A | FTDX10 | FTDX101D | FTDX101MP | FT-710 |
 |---|---|---|---|---|---|
-| Level controls | AF Gain 0-255, RF Gain 0-255, Mic Gain 0-100, TX Power 5-100 | AF Gain 0-255, RF Gain 0-255, Mic Gain 0-100, TX Power 5-100 | AF Gain 0-255, RF Gain 0-255, Mic Gain 0-100, TX Power 5-100 | AF Gain 0-255, RF Gain 0-255, Mic Gain 0-100, TX Power 5-200 | AF Gain 0-255, RF Gain 0-255, Mic Gain 0-100, TX Power 5-100 |
+| Level controls | AF Gain 0-255, RF Gain 0-255, Mic Gain 0-100, TX Power 5-100 | AF Gain 0-255, RF Gain 0-255, Mic Gain 0-100, TX Power 5-100 | AF Gain MAIN 0-255, AF Gain SUB 0-255, RF Gain MAIN 0-255, RF Gain SUB 0-255, Mic Gain 0-100, TX Power 5-100 | AF Gain MAIN 0-255, AF Gain SUB 0-255, RF Gain MAIN 0-255, RF Gain SUB 0-255, Mic Gain 0-100, TX Power 5-200 | AF Gain 0-255, RF Gain 0-255, Mic Gain 0-100, TX Power 5-100 |
 
 ## Not available on any of them (over CAT)
 

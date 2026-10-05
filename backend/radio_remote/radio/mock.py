@@ -147,7 +147,7 @@ class MockDriver(RadioDriver):
         self._update(width_options=fc.width_options(s["mode"], s["narrow"]),
                      width=fc.width_hz(s["mode"], s["narrow"], s["width_code"]))
 
-    async def set_control(self, name: str, value) -> None:
+    async def set_control(self, name: str, value, receiver: str = "main") -> None:
         spec = controls.SPEC_BY_NAME.get(name)
         if not spec or not self.caps.has(spec["feature"]):
             raise RadioError(f"control {name} not supported")

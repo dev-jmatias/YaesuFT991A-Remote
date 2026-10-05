@@ -217,3 +217,24 @@ audio, `NA`/`GT` quirks, `PS0;`/`PS1;`. Meter calibration against real signals i
   shows its own hostname / user / Wi-Fi screens for it through the content repository (`os-list.json`); the settings script was needed before.
   The in-app update (`self_update.sh`: checksum, backup, install, health check) installed a newer release. `tailscale_setup.sh` made the Pi
   reachable over its `.ts.net` name with a real certificate. The memory list read failed until the "answer says channel 001" behaviour was handled.
+
+## FTDX101D (real radio, 2026-10-05)
+
+Hardware: Raspberry Pi 4 (hostname FT991A), FTDX101D over USB, app v1.1.9 plus the local FTDX101D work. The radio first stayed silent until its menu **CAT RTS** was set to OFF (with RTS high it answered
+`ID0681;`), CAT rate 38400, Enhanced port `/dev/ttyUSB0`. Read-only first contact: 36 commands answered, 0 timeouts, 0 rejected.
+
+| Check | Result |
+|---|---|
+| Frequency, band, mode (MAIN) and the SUB receiver (`FB`, `OI`) | work, both directions |
+| `FR` (which receivers listen), `FT` (transmit MAIN / SUB), `VS` (operated receiver) | work; the radio's own keys are followed |
+| USB audio carries one receiver | SSB OUT SELECT 0 / 1 switches it; the other mode families answer the same way |
+| Audio out level, audio in level (`EX0101 09`, `EX010113` and the AM / FM / DATA / RTTY / CW versions) | work |
+| Filter, noise, receiver controls for MAIN and for SUB (`P1` = 0 / 1) | work |
+| Speech processor | **`PR0` is 0 = OFF / 1 = ON, the manual says 1 / 2 and `PR02;` gets `?;`**; the radio's PROC light follows |
+| PROC / PITCH knob | sets the AMC output level (`AO`) while the menu PROC LEVEL is not COMP; sets `PL` when it is COMP |
+| CW keyer (`KS`, `KP`, `KR`, `BI`) | the values apply; the radio's main screen does not show them outside CW mode. `SD` answers 2 digits, not 4: not offered |
+| TUNE (`AC002;`), antenna tuner on / off | work |
+| Memories (`MT` read, `MC` recall, `VM;` = V/M key) | work; the radio has only channel 001 stored. `MT` answers have the FT-991A layout |
+| PTT and meters | PTT keyed several times by the operator; SUB on the air not tried |
+
+Not tried: transmitting on the SUB receiver, and the FTDX101MP.

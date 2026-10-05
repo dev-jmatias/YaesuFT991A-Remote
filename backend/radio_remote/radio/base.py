@@ -115,6 +115,15 @@ class RadioDriver(ABC):
     async def set_split(self, on: bool) -> None:
         raise RadioError("split is not supported")
 
+    async def set_receivers(self, main: bool, sub: bool) -> None:
+        raise RadioError("this radio has no sub receiver")
+
+    async def set_tx_receiver(self, which: str) -> None:
+        raise RadioError("this radio has no sub receiver")
+
+    async def set_active_receiver(self, which: str) -> None:
+        raise RadioError("this radio has no sub receiver")
+
     async def tune_start(self) -> None:
         raise RadioError("antenna tuner tune is not supported")
 
@@ -126,7 +135,7 @@ class RadioDriver(ABC):
         return {}
 
     # ---- optional operations; drivers override what the radio really supports
-    async def set_control(self, name: str, value: Any) -> None:
+    async def set_control(self, name: str, value: Any, receiver: str = "main") -> None:
         raise RadioError(f"control {name} not supported")
 
     async def set_band(self, band: str) -> None:
