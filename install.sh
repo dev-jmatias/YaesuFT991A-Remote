@@ -20,6 +20,8 @@ HOST_NAME=""
 WITH_CADDY=1
 WITH_HAMLIB=0
 WITH_TAILSCALE=0
+WITH_RADE=1
+RADE_FILE=""
 WHEELS=""
 DRY=0
 FORCE_ARCH=0
@@ -33,6 +35,9 @@ Usage: sudo ./install.sh [options]
   --no-caddy        do not install/configure Caddy (you then provide HTTPS yourself)
   --with-hamlib     also install hamlib utilities (rigctl) for diagnostics
   --with-tailscale  also install Tailscale (you still log in once with: sudo tailscale up)
+  --no-rade         do not install the RADE library (the neural FreeDV mode). By default it is downloaded from the release page
+                    (about 22 MB, checksum verified); if that fails the install carries on without it
+  --rade-file FILE  install RADE from this local radio-remote-rade-linux-<cpu>.tar.xz instead of downloading it (offline installs, images)
   --wheels DIR      install the Python packages from DIR (offline, no PyPI): used by the installer pack
   --dry-run         print the actions only
   --force-arch      allow a 32-bit ARM OS (Python wheels may be missing; not recommended)
@@ -48,6 +53,8 @@ while [ $# -gt 0 ]; do
     --no-caddy) WITH_CADDY=0; shift ;;
     --with-hamlib) WITH_HAMLIB=1; shift ;;
     --with-tailscale) WITH_TAILSCALE=1; shift ;;
+    --no-rade) WITH_RADE=0; shift ;;
+    --rade-file) RADE_FILE="${2:?--rade-file needs a path}"; shift 2 ;;
     --wheels) WHEELS="${2:?--wheels needs a directory}"; shift 2 ;;
     --dry-run) DRY=1; shift ;;
     --force-arch) FORCE_ARCH=1; shift ;;
@@ -96,7 +103,7 @@ export RR_WHEELS="$WHEELS"
 
 # ---- packages ---------------------------------------------------------------------------------------------------
 echo "==> Installing system packages"
-PKGS="python3 python3-venv python3-pip alsa-utils libopus0 curl ca-certificates"
+PKGS="python3 python3-venv python3-pip alsa-utils libopus0 curl ca-certificates avahi-daemon"      # avahi: so <hostname>.local resolves on a plain Debian too (Raspberry Pi OS has it)
 [ "$WITH_CADDY" = 1 ] && PKGS="$PKGS caddy"
 [ "$WITH_HAMLIB" = 1 ] && PKGS="$PKGS libhamlib-utils"
 run apt-get update
@@ -104,6 +111,20 @@ run apt-get update
 run env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends $PKGS
 
 ensure_codec2
+
+# ---- RADE: the neural FreeDV mode. A separate library (see docs/freedv.md); never fatal: without it FreeDV still offers 1600, 700D and 700E ---------
+if [ "$WITH_RADE" = 1 ]; then
+  echo "==> RADE library (the neural FreeDV mode; optional)"
+  RADE_ARGS=(--dest "$PREFIX/lib")
+  [ -n "$RADE_FILE" ] && RADE_ARGS+=(--file "$RADE_FILE")
+  if [ "$IMAGE" = 1 ] && [ -z "$RADE_FILE" ]; then
+    echo "    (building an image without a RADE file: skipped; it can be installed from the web page later)"
+  elif run python3 "$SRC/scripts/rr_admin.py" fetch-rade "${RADE_ARGS[@]}"; then
+    run chmod 0755 "$PREFIX/lib"
+  else
+    echo "    RADE could not be installed now (no internet, or no library for this CPU yet). Install it later: Admin > Config > RADE."
+  fi
+fi
 
 # ---- optional: Tailscale (package only; the login stays a manual step) ---------------------------------------------
 if [ "$WITH_TAILSCALE" = 1 ]; then

@@ -7,7 +7,8 @@ transmit with server-side safety, and remote audio. It runs on a Raspberry Pi ne
 **experimental** (written from their manuals, tested only against a simulator). A built-in simulator lets you try everything without a radio.
 
 **You need:** a Raspberry Pi 4 or 5 (64-bit) with a power supply and an SD card (8 GB or more), the radio's USB cable, and a network
-(cable or Wi-Fi). Everything below is free software.
+(cable or Wi-Fi). Everything below is free software. It also runs on a 64-bit **Debian 12 or 13 PC** instead of a Pi: see
+[docs/INSTALL.md](docs/INSTALL.md), route D.
 
 ## Get it: two ways
 

@@ -86,3 +86,41 @@ def test_install_from_a_local_file_with_and_without_a_checksum(tmp_path, capsys)
 def test_the_script_is_wired_up():
     sh = (Path(__file__).resolve().parents[1] / "scripts" / "install_rade.sh").read_text(encoding="utf-8")
     assert "fetch-rade" in sh and "--remove" in sh and "systemctl restart radio-remote" in sh and "\r" not in sh
+
+
+# ---- RADE is part of the installations (image, installer pack, install.sh), never fatal ----
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_install_sh_installs_rade_unless_told_not_to():
+    sh = (ROOT / "install.sh").read_text(encoding="utf-8")
+    assert "--no-rade" in sh and "--rade-file" in sh and 'fetch-rade "${RADE_ARGS[@]}"' in sh
+    assert sh.index("ensure_codec2") < sh.index("fetch-rade")                              # after the system packages
+    block = sh[sh.index("==> RADE library"):][:900]
+    assert "else" in block and "could not be installed now" in block                       # a failure only prints a hint
+    assert 'WITH_RADE=1' in sh                                                             # on by default
+
+
+def test_the_image_and_the_installer_pack_carry_the_library():
+    chroot = (ROOT / "image" / "stage-radio-remote" / "00-radio-remote" / "01-run-chroot.sh").read_text(encoding="utf-8")
+    assert "--rade-file /usr/src/radio-remote-src/rade/radio-remote-rade-linux-aarch64.tar.xz" in chroot
+    stage = (ROOT / "image" / "stage_program.sh").read_text(encoding="utf-8")
+    assert "RADE_FILE" in stage and 'cp "$RADE_FILE" "$DEST/rade/"' in stage
+    pack = (ROOT / "installer" / "install-everything.sh").read_text(encoding="utf-8")
+    assert 'rade/radio-remote-rade-linux-"$(uname -m)".tar.xz' in pack and "--rade-file" in pack and "--no-rade" in pack
+    wf = (ROOT / ".github" / "workflows" / "build-image.yml").read_text(encoding="utf-8")
+    assert "RADE_FILE=rade-out/radio-remote-rade-linux-aarch64.tar.xz bash image/stage_program.sh" in wf
+    assert "--rade-file rade-out/radio-remote-rade-linux-aarch64.tar.xz" in wf
+
+
+def test_the_installer_zip_gets_the_library(tmp_path):
+    import zipfile
+
+    import build_release_assets as bra
+    lib = tmp_path / "radio-remote-rade-linux-aarch64.tar.xz"
+    lib.write_bytes(b"fake library package")
+    z = tmp_path / "pack.zip"
+    bra.write_zip(z, "9.9.9", [("backend/radio_remote/__init__.py", b'__version__ = "9.9.9"')], [], None, [lib])
+    with zipfile.ZipFile(z) as zf:
+        assert zf.read("radio-remote-installer/rade/radio-remote-rade-linux-aarch64.tar.xz") == b"fake library package"
+        assert "radio-remote-installer/install-everything.sh" in zf.namelist()

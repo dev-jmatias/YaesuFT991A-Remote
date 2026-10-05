@@ -122,6 +122,9 @@ class AudioService:
         self.freedv_ok, self.freedv_reason = freedv.available()
         self._fd_rx: freedv.RxChain | None = None
         self._fd_tx: freedv.TxChain | None = None
+        self.on_freedv_state = None                    # callbacks (FreeDV Reporter): (on, mode) and (transmitting)
+        self.on_freedv_tx = None
+        self._fd_tx_reported = False
         self.freedv_mode = "700D"                       # the app sets these from [freedv] in the config
         self.freedv_tx_gain = db_to_gain(-6.0)
         self._last_emit = 0.0
@@ -233,6 +236,17 @@ class AudioService:
         self._last_emit = 0.0
         self._level("freedv_on", on)
         log.info("FreeDV %s%s", "on, mode " + self.freedv_mode if on else "off", "")
+        self._check_fd_tx()
+        if self.on_freedv_state:
+            self.on_freedv_state(on, self.freedv_mode if on else "")
+
+    def _check_fd_tx(self) -> None:
+        """Tell the listener (FreeDV Reporter) when this station starts or stops transmitting FreeDV."""
+        now = self._fd_tx is not None and self._tx_gate_open
+        if now != self._fd_tx_reported:
+            self._fd_tx_reported = now
+            if self.on_freedv_tx:
+                self.on_freedv_tx(now)
 
     def set_gains(self, rx_db: float | None = None, tx_db: float | None = None) -> None:
         if rx_db is not None:
@@ -306,6 +320,7 @@ class AudioService:
                 await src.start()
                 self.capture_error, backoff = None, 0.5
                 while True:
+                    self._check_fd_tx()
                     pcm = apply_gain(await src.read_frame(), self.rx_gain, limit=self.rx_gain > 1.0)      # a boost must not clip hard
                     self._level("audio_rx_level", level_pct(pcm))                # the meter shows what the radio sends (the modem tones)
                     if self._fd_rx is not None and self._tx_gate_open:

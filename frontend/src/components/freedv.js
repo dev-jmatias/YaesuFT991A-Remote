@@ -9,7 +9,7 @@ export const ssbFor = (hz) => (hz < 10_000_000 ? "LSB" : "USB");
 const fmtMHz = (hz) => (hz / 1e6).toFixed(hz % 1000 ? 4 : 3);
 
 export function createFreeDV(host, ctx) {
-  const { S, send, toast } = ctx;
+  const { S, send, toast, signal } = ctx;
   const admin = S.user.role === "admin";
   let info = { channels: [], modes: ["1600", "700D", "700E"], tx_level_db: -6 };
   const root = el(`<div class="fdv">
@@ -37,9 +37,22 @@ export function createFreeDV(host, ctx) {
     </div>
     <h3 class="blabel">Channels</h3>
     <div class="fdv-ch" id="fdv-ch"></div>
+    <h3 class="blabel">On the air now (FreeDV Reporter)</h3>
+    <div class="fdv-rep" id="fdv-rep"><div class="dim" id="fdv-rep-status"></div><div id="fdv-rep-list"></div></div>
     <div class="fdv-level"><label>Transmit level of the modem tones <b id="fdv-lv"></b> dB
       <input type="range" id="fdv-lvr" min="-40" max="0" step="1" aria-label="FreeDV transmit level"></label>
       <span class="dim" id="fdv-lvnote"></span></div>
+    <details class="fdv-edit" id="fdv-repset" hidden><summary>FreeDV Reporter settings</summary>
+      <p class="dim">Announce this station on <b>qso.freedv.org</b> while FreeDV is on (callsign, grid square, frequency, mode, whether you are transmitting) and list who else is on the air.
+        Off by default. <b>Your callsign and grid square are shown publicly on that site.</b> The Pi connects only while FreeDV is switched on.</p>
+      <label class="chk"><input type="checkbox" id="rp-enabled"> Switch the link to FreeDV Reporter on</label>
+      <label class="chk"><input type="checkbox" id="rp-announce"> Announce this station</label>
+      <label class="chk"><input type="checkbox" id="rp-watch"> Show who is on the air</label>
+      <div class="row fdv-rpf"><label>Callsign <input id="rp-call" maxlength="15" autocapitalize="characters" size="10"></label>
+        <label>Grid square <input id="rp-grid" maxlength="8" size="8" placeholder="IO91wm"></label>
+        <label>Message <input id="rp-msg" maxlength="100" size="24" placeholder="optional, e.g. CQ FreeDV"></label>
+        <button type="button" id="rp-save" class="active">Apply</button></div>
+    </details>
     <details class="fdv-edit" id="fdv-edit" hidden><summary>Edit the channel list</summary>
       <div id="fdv-rows"></div>
       <div class="row"><button type="button" id="fdv-add">Add a channel</button><button type="button" id="fdv-save" class="active">Save the list</button></div>
@@ -56,7 +69,7 @@ export function createFreeDV(host, ctx) {
   const on = () => !!S.state.freedv_on;
   const hz = () => S.state.frequency || 0;
 
-  // Administrators always see where RADE stands: the Install / Reinstall button on a 64-bit ARM Pi, otherwise why it is not offered
+  // Administrators always see where RADE stands: the Install / Reinstall button on a 64-bit system, otherwise why it is not offered
   function paintRadeRow() {
     const have = !info.unavailable?.RADE, b = $("fdv-rade-install"), msg = $("fdv-rade-msg");
     $("fdv-rade-row").hidden = !admin;
@@ -67,7 +80,7 @@ export function createFreeDV(host, ctx) {
         : "RADE is not installed. The button downloads the library (about 22 MB) from the project's release page and starts using it at once.";
     } else {
       b.hidden = true;
-      msg.textContent = `RADE cannot be installed from here: it needs a 64-bit ARM system (Raspberry Pi OS 64-bit); this one reports "${info.arch || "unknown"}".`;
+      msg.textContent = `RADE cannot be installed from here: it needs a 64-bit Linux system (Raspberry Pi OS 64-bit, or Debian on a 64-bit PC); this one reports "${info.arch || "unknown"}".`;
     }
   }
 
@@ -170,6 +183,53 @@ export function createFreeDV(host, ctx) {
     update();
   }
 
+  // ---- FreeDV Reporter: who is on the air (and the settings for the announcement, administrators only)
+  let rep = null, repTimer = 0;
+  const tuneTo = async (st) => {
+    await send("set_mode", { mode: ssbFor(st.freq) });
+    await send("set_frequency", { hz: st.freq });
+    await send("freedv", { on: true, mode: st.mode });
+  };
+  function paintReporter() {
+    const box = $("fdv-rep-list"), line = $("fdv-rep-status");
+    if (!rep) { line.textContent = "FreeDV Reporter: not available."; box.replaceChildren(); return; }
+    const mine = rep.role === "report" || rep.role === "report_wo";
+    line.textContent = !rep.enabled ? "FreeDV Reporter is off. An administrator can switch it on in the settings below."
+      : !S.state.freedv_on ? "FreeDV Reporter is on and connects when FreeDV is switched on."
+      : rep.connected ? `Connected to qso.freedv.org${mine ? " as an announced station" : " (viewing only)"}. ${rep.total} stations listed${rep.near ? `, ${rep.near} within 5 kHz of your frequency` : ""}.`
+      : rep.error ? `Cannot reach FreeDV Reporter: ${rep.error}` : "Connecting to FreeDV Reporter…";
+    if (rep.needs_callsign) line.textContent += " To be listed yourself, set a callsign and grid square in the settings.";
+    box.replaceChildren(...rep.stations.map((st) => {
+      const r = el(`<div class="fdv-rep-row${st.near ? " near" : ""}"><b>${esc(st.callsign)}</b> <span class="dim">${esc(st.grid)}</span>
+        <span class="fdv-rf">${(st.freq / 1e6).toFixed(4)} MHz</span> <span class="fdv-rm">${esc(st.mode)}</span>${st.tx ? `<span class="fdv-txb">TX</span>` : ""}${st.listening ? `<span class="dim"> (listening)</span>` : ""}
+        ${st.message ? `<span class="dim fdv-rmsg">${esc(st.message)}</span>` : ""}</div>`);
+      if (st.tunable) { const b = el(`<button type="button" class="fdv-tune-btn" title="Tune to this station: ${esc(st.callsign)} on ${(st.freq / 1e6).toFixed(4)} MHz, ${esc(st.mode)}">Tune</button>`); b.onclick = () => tuneTo(st); r.append(b); }
+      return r;
+    }));
+  }
+  async function loadReporter() {
+    try { rep = await api("/api/freedv/reporter"); } catch { rep = null; }
+    paintReporter();
+  }
+  repTimer = setInterval(loadReporter, 4000);
+  signal?.addEventListener("abort", () => clearInterval(repTimer));
+  if (admin) {
+    $("fdv-repset").hidden = false;
+    $("rp-save").onclick = async () => {
+      const g = $("rp-grid").value.trim();
+      const v = { enabled: $("rp-enabled").checked, announce: $("rp-announce").checked, watch: $("rp-watch").checked,
+                  callsign: $("rp-call").value.trim().toUpperCase(), grid_square: g.slice(0, 2).toUpperCase() + g.slice(2, 4) + g.slice(4, 6).toLowerCase() + g.slice(6),
+                  message: $("rp-msg").value.trim() };
+      try { await api("/api/config", "PUT", { reporter: v }); toast("FreeDV Reporter settings applied."); } catch (e) { toast(e.message); }
+      await loadReporter();
+    };
+    api("/api/config").then((c) => {
+      const r = c.config.reporter || {};
+      $("rp-enabled").checked = !!r.enabled; $("rp-announce").checked = r.announce !== false; $("rp-watch").checked = r.watch !== false;
+      $("rp-call").value = r.callsign || ""; $("rp-grid").value = r.grid_square || ""; $("rp-msg").value = r.message || "";
+    }).catch(() => {});
+  }
+
   // ---- tuning aid: spectrum of the received audio with the modem's expected band, level check, what the software corrected, fine dial steps
   const sideband = () => (["LSB", "CW-L", "DATA-L", "RTTY-L"].includes(S.state.mode) ? -1 : 1);
   for (const b of root.querySelectorAll("[data-df]")) b.onclick = () => send("set_frequency", { hz: Math.max(1, hz() + +b.dataset.df) });
@@ -244,5 +304,6 @@ export function createFreeDV(host, ctx) {
   }
 
   load();
+  loadReporter();
   return { update };
 }

@@ -206,7 +206,7 @@ export function openSheet(root, { user, tab, sock }) {
         b.hidden = !fdv.rade_installable;
         b.textContent = have ? "Reinstall RADE" : "Install RADE";
         line.textContent = msgOverride || (!fdv.rade_installable
-          ? `RADE cannot be installed from here: it needs a 64-bit ARM system (Raspberry Pi OS 64-bit); this one reports "${fdv.arch || "unknown"}".`
+          ? `RADE cannot be installed from here: it needs a 64-bit Linux system (Raspberry Pi OS 64-bit, or Debian on a 64-bit PC); this one reports "${fdv.arch || "unknown"}".`
           : have ? `RADE is installed (${fdv.rade_path || "system library"}). It is used in the FreeDV tab.`
           : "RADE is not installed. The button downloads the library (about 22 MB) from the project release page, checks it and starts using it at once.");
       };

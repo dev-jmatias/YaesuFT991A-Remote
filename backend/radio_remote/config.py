@@ -58,6 +58,9 @@ DEFAULTS: dict[str, dict[str, Any]] = {
         "160m|1997000|700D", "80m|3625000|700D", "80m (2)|3643000|700D", "40m|7177000|700D", "40m (2)|7197000|700D",
         "20m|14236000|700D", "20m (2)|14240000|700D", "17m|18118000|700D", "15m|21313000|700D", "12m|24933000|700D",
         "10m|28330000|700D", "10m (2)|28720000|700D"]},
+    # FreeDV Reporter (qso.freedv.org): announce this station while FreeDV is on and show who else is on the air (see freedv_reporter.py, docs/freedv.md).
+    # Off by default. callsign and grid square are shown publicly on that site. host/tls are for tests and file editing only.
+    "reporter": {"enabled": False, "announce": True, "watch": True, "callsign": "", "grid_square": "", "message": "", "host": "qso.freedv.org", "tls": True},
     "storage": {"data_dir": "data"},
 }
 
@@ -127,6 +130,15 @@ def validate(cfg: dict) -> dict:
         raise ConfigError("logging.level invalid")
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,38}/[A-Za-z0-9._-]{1,100}", cfg["updates"]["repo"]):
         raise ConfigError("updates.repo must look like owner/name")
+    rp = cfg["reporter"]
+    if rp["callsign"] and not re.fullmatch(r"[A-Za-z0-9/]{3,15}", rp["callsign"]):
+        raise ConfigError("reporter.callsign: 3 to 15 letters, digits or /")
+    if rp["grid_square"] and not re.fullmatch(r"[A-Ra-r]{2}[0-9]{2}([A-Xa-x]{2}([0-9]{2})?)?", rp["grid_square"]):
+        raise ConfigError("reporter.grid_square must be a Maidenhead locator such as IO91 or IO91wm")
+    if len(rp["message"]) > 100 or any(ord(ch) < 32 for ch in rp["message"]):
+        raise ConfigError("reporter.message: at most 100 characters, no control characters")
+    if not re.fullmatch(r"[A-Za-z0-9.-]{1,100}(:\d{1,5})?", rp["host"]):
+        raise ConfigError("reporter.host must be a host name, optionally with :port")
     fd = cfg["freedv"]
     if fd["mode"] not in FREEDV_MODES:
         raise ConfigError("freedv.mode must be one of " + ", ".join(FREEDV_MODES))

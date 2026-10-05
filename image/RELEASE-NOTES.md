@@ -42,6 +42,15 @@ and goes back by itself if the new version does not start. Settings and accounts
 | `radio-remote-rade-linux-aarch64.tar.xz` | the optional RADE library (FreeDV neural mode), installed with `install_rade.sh` |
 | `SHA256SUMS` | checksums of all of the above |
 
+### What is new in 1.1.9
+
+- **RADE is now part of the installations**: the ready-made image and the installer pack contain the RADE library, and `install.sh` downloads and installs it by itself
+  (`--no-rade` skips it, `--rade-file FILE` uses a local copy). A new installation has the neural FreeDV mode ready; ordinary updates stay small and keep an installed library.
+- **Debian 12 / 13 on a PC**: Radio Remote can be installed on a normal 64-bit Debian PC, not only on a Raspberry Pi (installation guide, route D). The RADE library is now also built for the PC
+  (`radio-remote-rade-linux-x86_64.tar.xz`), inside a Debian 12 container so it runs on Debian 12 and newer; the **Install RADE** button works on both kinds of machine.
+- **FreeDV Reporter** (qso.freedv.org), off by default: the FreeDV tab can announce your station while FreeDV is on (callsign, grid square, frequency, mode, whether you are transmitting; this
+  is public on that site) and lists who is on the air, with a **Tune** button for each station. Settings in the FreeDV tab (administrators).
+
 ### What is new in 1.1.8
 
 - **FreeDV tuning aid**: FreeDV only locks when the signal is close to where the modem expects it (about +-50 Hz for RADE and 700E, about +-150 Hz for 700D and 1600), which a radio dial

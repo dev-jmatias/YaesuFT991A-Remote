@@ -28,6 +28,12 @@ else
   echo "No bundled 'wheels' folder: the Python libraries will be downloaded from PyPI (this needs internet and takes longer)."
 fi
 
+# the RADE library for this CPU, if the pack carries one (offline install of the neural FreeDV mode)
+case " $* " in
+  *" --no-rade "*|*" --rade-file "*) ;;
+  *) for f in "$HERE"/rade/radio-remote-rade-linux-"$(uname -m)".tar.xz; do [ -f "$f" ] && ARGS+=(--rade-file "$f"); done ;;
+esac
+
 # default radio model for this pack, unless the caller chose one
 case " $* " in
   *" --model "*) ;;

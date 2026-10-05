@@ -85,7 +85,8 @@ def write_tar(dest: Path, files: list[tuple[str, bytes]]) -> None:
             tf.addfile(ti, io.BytesIO(data))
 
 
-def write_zip(dest: Path, version: str, files: list[tuple[str, bytes]], docs: list[tuple[str, bytes]], wheels: Path | None) -> None:
+def write_zip(dest: Path, version: str, files: list[tuple[str, bytes]], docs: list[tuple[str, bytes]], wheels: Path | None,
+              rade: list[Path] | None = None) -> None:
     top = "radio-remote-installer"
     with zipfile.ZipFile(dest, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as z:
         def add(name: str, data: bytes, mode: int = 0o644):
@@ -102,6 +103,8 @@ def write_zip(dest: Path, version: str, files: list[tuple[str, bytes]], docs: li
         if wheels:
             for w in sorted(wheels.glob("*.whl")):
                 add(f"wheels/{w.name}", w.read_bytes())
+        for r in rade or []:                                       # the RADE library (install-everything.sh installs it, offline)
+            add(f"rade/{r.name}", r.read_bytes())
 
 
 def download_wheels(into: Path) -> None:
@@ -127,6 +130,7 @@ def main(argv=None) -> int:
     ap.add_argument("--out", required=True)
     ap.add_argument("--installer", action="store_true", help="also build the installer zip (downloads the offline Python libraries)")
     ap.add_argument("--extra", nargs="*", default=[], help="other release files to copy into --out and list in SHA256SUMS")
+    ap.add_argument("--rade-file", nargs="*", default=[], help="RADE library file(s) to put into the installer zip (rade/)")
     ap.add_argument("--skip-docs", action="store_true", help="do not (re)build the manual: docs-html/ must already exist")
     ap.add_argument("--allow-version-mismatch", action="store_true")
     a = ap.parse_args(argv)
@@ -154,7 +158,7 @@ def main(argv=None) -> int:
         download_wheels(wheels)
         docs = [(rel.removeprefix("docs-html/"), data) for rel, data in files if rel.startswith("docs-html/")]
         zip_path = out / f"radio-remote-installer-{version}.zip"
-        write_zip(zip_path, version, files, docs, wheels)
+        write_zip(zip_path, version, files, docs, wheels, [Path(p) for p in a.rade_file])
         shutil.rmtree(wheels)
         produced.append(zip_path)
 

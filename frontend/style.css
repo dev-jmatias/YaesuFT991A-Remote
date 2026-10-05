@@ -641,3 +641,15 @@ html[data-tablet] .app[data-tab=freedv] [data-pane=vfo], html[data-tablet] .app[
 .fdv-fine { gap: 6px; align-items: center; flex-wrap: wrap; }
 .fdv-fine button { min-height: 32px; padding: 2px 10px; }
 .fdv-tune.off canvas { opacity: .45; }
+
+/* FreeDV Reporter: who is on the air */
+.fdv-rep { margin: 4px 0 12px; }
+.fdv-rep-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 4px 6px; border-bottom: 1px solid var(--line); font-size: .85rem; }
+.fdv-rep-row.near { background: rgba(52,211,153,.08); }
+.fdv-rep-row .fdv-rf { font-variant-numeric: tabular-nums; }
+.fdv-txb { background: var(--red); color: #fff; font-size: .62rem; font-weight: 700; padding: 0 5px; border-radius: 3px; }
+.fdv-rmsg { flex: 1 1 100%; }
+.fdv-tune-btn { margin-left: auto; min-height: 26px; padding: 0 10px; }
+.fdv-rpf { gap: 8px; align-items: flex-end; flex-wrap: wrap; }
+.fdv-rpf label { display: flex; flex-direction: column; font-size: .8rem; }
+.fdv-tune-btn { order: 2; } .fdv-rmsg { order: 3; }

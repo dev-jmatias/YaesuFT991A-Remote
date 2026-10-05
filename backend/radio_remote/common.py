@@ -13,6 +13,7 @@ K_CFG, K_AUTH, K_DRIVER, K_GUARD, K_HUB, K_AUDIO = (
     web.AppKey(n, object) for n in ("cfg", "auth", "driver", "guard", "hub", "audio"))
 K_UPDATES = web.AppKey("updates", object)
 K_RIGCTL = web.AppKey("rigctl", object)
+K_REPORTER = web.AppKey("reporter", object)
 K_CFGPATH = web.AppKey("cfgpath", object)
 K_RESTART = web.AppKey("restart", object)
 K_STARTED = web.AppKey("started", float)

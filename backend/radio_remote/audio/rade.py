@@ -44,6 +44,12 @@ def loaded_path() -> str:
     return str(_PATH) if _PATH else ""
 
 
+def installable() -> bool:
+    """The RADE library is built for 64-bit Linux on ARM (Raspberry Pi) and on a PC (x86_64)."""
+    import platform
+    return platform.machine().lower() in ("aarch64", "arm64", "x86_64")
+
+
 def reset() -> None:
     """Forget a failed load, so a library that has just been installed is picked up without restarting the service."""
     global _LIB, _ERR

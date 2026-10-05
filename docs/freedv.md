@@ -59,10 +59,15 @@ signals: RADE and 700E lock only within about ±50 Hz, 700D and 1600 within abou
 ## RADE (the neural mode)
 
 RADE V1 sends speech as an OFDM signal that is about 2.1 kHz wide and decodes at lower signal-to-noise ratios than 700D/700E (it still locks at about 0 dB
-on a fading path). It is the mode most new FreeDV activity uses. It comes from a separate library that is **not** part of the normal install (about 24 MB):
+on a fading path). It is the mode most new FreeDV activity uses. It comes from a separate library of about 24 MB.
 
-The easiest way: an administrator presses **Install RADE** in **Admin > Config > RADE** (or in the **FreeDV** tab, which shows the same button; on an installed system it says **Reinstall RADE**). It works on a 64-bit ARM Pi only. The Pi downloads the
-library from the project's release page, checks its SHA-256, puts it in `/var/lib/radio-remote/lib` and starts using it at once, with no restart. From the command line:
+**A new installation already has it, you do not need to do anything:** the ready-made image and the installer pack contain the RADE library, and `install.sh` (Raspberry Pi or
+Debian PC) downloads and installs it as part of the install (`--no-rade` skips it). Ordinary updates do not carry it, so they stay small, and a library that is already installed is kept.
+
+**If it is missing**, for example because the install had no internet: an administrator presses **Install RADE** in **Admin > Config > RADE** (or in the **FreeDV** tab, which shows the same
+button; once RADE is installed it says **Reinstall RADE**). The Pi downloads the library from the project's release page, checks its SHA-256, puts it in `/var/lib/radio-remote/lib` and starts
+using it at once, with no restart. It works on 64-bit Linux: a Raspberry Pi with the 64-bit OS, or Debian 12/13 on a 64-bit PC (see [installation](INSTALL.md), route D). The library is built on
+Debian 12 and runs on Debian 12 and newer. From the command line:
 
 ```bash
 sudo /opt/radio-remote/current/scripts/install_rade.sh            # downloads the matching release file, checks its SHA-256, installs it, restarts the service
@@ -78,6 +83,23 @@ Then choose **RADE** in the mode list of the FreeDV tab (or in a channel). Until
 * RADE V1 has no automatic level control on receive: if it does not lock on a signal you can hear clearly, try the radio's menu 107 or **Admin > Config >
   Audio > RX gain**. For transmit use the same **modem level** slider as the other modes and keep the ALC barely moving.
 * The speech it plays is the neural vocoder's voice (clean, but not your exact voice). A few hundred milliseconds of delay is normal.
+
+## FreeDV Reporter: be listed, and see who is on the air
+
+[qso.freedv.org](https://qso.freedv.org/) is the live list of FreeDV stations: callsign, grid square, frequency, mode, whether the station is transmitting right now, and a short message.
+Radio Remote can join it. **It is off by default.**
+
+* **Switch it on** (administrators): *FreeDV tab > FreeDV Reporter settings*. Tick **Switch the link to FreeDV Reporter on**, and enter your **callsign** and **grid square**
+  (for example `IO91wm`) to be listed, plus an optional short message. Choose whether to **announce** this station, to **show who is on the air**, or both. *Apply*.
+* **What is sent, and when:** the Pi connects to qso.freedv.org **only while FreeDV is switched on** and disconnects when you switch it off. It sends your callsign, grid square and the program name
+  ("Radio Remote 1.x") once, then your dial frequency whenever it changes, your FreeDV mode, whether you are transmitting (it flips when you hold PTT with FreeDV on, and back when you let go)
+  and your message. **Your callsign and grid square are public on that site.** Nothing else is sent: no audio, no accounts, no settings.
+* **Who is on the air:** the FreeDV tab lists the stations the site reports, those within 5 kHz of your frequency first (shaded), stations that are transmitting marked **TX**. **Tune** moves your
+  radio to that station (sideband, frequency and FreeDV mode) and switches FreeDV on. Stations in a mode this program cannot decode (for example RADE V2) have no Tune button.
+* **Limits:** your callsign is not sent inside the FreeDV signal itself (other stations see you in the web list, not in their decoder), so say it by voice when you transmit as usual.
+  Reports of the stations *you* hear (their callsign and SNR) are not sent yet. The site's protocol was taken from open-source clients, not from official documentation, so if the site changes,
+  the link simply shows "cannot reach FreeDV Reporter" and everything else keeps working.
+* The settings are in the configuration under `[reporter]` (`enabled`, `announce`, `watch`, `callsign`, `grid_square`, `message`).
 
 ## The channels
 

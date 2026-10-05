@@ -13,7 +13,7 @@ from aiohttp import web
 
 from . import __version__, config, sysinfo
 from .common import (COOKIE, K_AUDIO, K_AUTH, K_CFG, K_CFGPATH, K_DRIVER, K_GUARD, K_HUB, K_RESTART, K_SESSION,
-                     K_RIGCTL, K_STARTED, K_UPDATES, client_ip, read_json, require_admin)
+                     K_REPORTER, K_RIGCTL, K_STARTED, K_UPDATES, client_ip, read_json, require_admin)
 from .logs import RING, scrub
 
 log = logging.getLogger("admin")
@@ -30,9 +30,11 @@ EDITABLE = {
     "updates": {"check"},
     "rigctl": {"enabled", "port", "allow", "set"},
     "freedv": {"mode", "tx_level_db", "channels"},
+    "reporter": {"enabled", "announce", "watch", "callsign", "grid_square", "message"},
 }
 LOCKED = ["safety.allow_ptt", "server.host", "server.port", "server.allowed_origins", "storage.data_dir", "updates.repo"]
-LIVE = {("logging", "level"), ("audio", "rx_gain_db"), ("audio", "tx_gain_db"), ("updates", "check"), ("rigctl", "enabled"), ("rigctl", "port"), ("rigctl", "allow"), ("rigctl", "set"), ("freedv", "mode"), ("freedv", "tx_level_db"), ("freedv", "channels")}
+LIVE = {("logging", "level"), ("audio", "rx_gain_db"), ("audio", "tx_gain_db"), ("updates", "check"), ("rigctl", "enabled"), ("rigctl", "port"), ("rigctl", "allow"), ("rigctl", "set"), ("freedv", "mode"), ("freedv", "tx_level_db"), ("freedv", "channels"), ("reporter", "enabled"), ("reporter", "announce"), ("reporter", "watch"), ("reporter", "callsign"),
+        ("reporter", "grid_square"), ("reporter", "message")}
 
 
 async def _run(fn, *a):
@@ -269,6 +271,10 @@ async def put_config(request):
     app[K_CFG].update(new)
     if "rigctl" in body and app.get(K_RIGCTL):
         await app[K_RIGCTL].apply()                     # start, stop or move the logbook link at once
+    if "reporter" in body and app.get(K_REPORTER):
+        app[K_REPORTER].apply()
+        if "message" in body["reporter"]:
+            app[K_REPORTER].set_message()
     if "freedv" in body and app[K_AUDIO]:
         app[K_AUDIO].set_freedv_params(new["freedv"]["mode"], new["freedv"]["tx_level_db"])
     if any(k in ("rx_gain_db", "tx_gain_db") for k in body.get("audio", {})) and app[K_AUDIO]:
@@ -305,8 +311,8 @@ async def rade_install(request):
     body = await read_json(request)
     if body.get("confirm") is not True:
         raise web.HTTPBadRequest(text="confirmation required")
-    if platform.machine() not in ("aarch64", "arm64"):
-        raise web.HTTPConflict(text="the RADE library is only built for 64-bit ARM (Raspberry Pi OS 64-bit)")
+    if not rade.installable():
+        raise web.HTTPConflict(text="the RADE library is built for 64-bit Linux only (Raspberry Pi OS 64-bit, or Debian on a 64-bit PC)")
     dest = rade.install_dir()
     if dest is None or not app[K_AUDIO]:
         raise web.HTTPConflict(text="audio is not available on this server")

@@ -12,6 +12,11 @@ mkdir -p "$DEST"
 for item in backend frontend scripts packaging config docs docs-html requirements.txt install.sh update.sh pyproject.toml README.md LICENSE; do
   if [ -e "$ROOT/$item" ]; then cp -a "$ROOT/$item" "$DEST/"; fi
 done
+# the RADE library for the image (the release workflow builds it first): RADE_FILE=path/to/radio-remote-rade-linux-aarch64.tar.xz
+if [ -n "${RADE_FILE:-}" ]; then
+  [ -f "$RADE_FILE" ] || { echo "RADE_FILE not found: $RADE_FILE" >&2; exit 1; }
+  mkdir -p "$DEST/rade" && cp "$RADE_FILE" "$DEST/rade/"
+fi
 find "$DEST" -name __pycache__ -type d -prune -exec rm -rf {} +
 rm -f "$DEST/config/radio-remote.toml" "$DEST/config/none.toml"
 echo "staged the program in $DEST"

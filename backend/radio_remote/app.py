@@ -18,7 +18,7 @@ from aiohttp import WSMsgType, web
 from . import __version__, admin, logs, sdnotify, updates
 from .audio.service import AudioService, AudioUnavailable
 from .auth import AuthStore, Session
-from .common import (COOKIE, K_AUDIO, K_AUTH, K_CFG, K_CFGPATH, K_DRIVER, K_GUARD, K_HUB, K_RESTART, K_SESSION,
+from .common import (COOKIE, K_AUDIO, K_AUTH, K_CFG, K_CFGPATH, K_DRIVER, K_GUARD, K_HUB, K_REPORTER, K_RESTART, K_SESSION,
                      K_RIGCTL, K_STARTED, K_UPDATES, CommandError, client_ip, is_https, read_json)
 from .lease import ControlLease, LeaseError
 from .radio import controls
@@ -26,6 +26,7 @@ from .radio.base import METER_FIELDS, RadioDriver, RadioError
 from .radio.registry import create_driver
 from .config import FREEDV_MODES
 from .ratelimit import TokenBucket
+from .freedv_reporter import FreeDVReporter
 from .rigctl import RigctlServer
 from .safety import TxGuard, TxRefused
 
@@ -71,6 +72,7 @@ class Hub:
         self.extra: dict = {}            # non-radio state (audio levels) included in snapshots
         self.audio = None
         self.ui: dict = {}
+        self.reporter = None                     # FreeDV Reporter (set by create_app)
         self._last_freq = driver.state.get("frequency") or 0
         self.mic_reset_delay_s = 15.0            # how long the radio stays on REAR after the last operator left (a reload or a network blip is not "left")
         self._mic_reset_task: asyncio.Task | None = None
@@ -88,6 +90,8 @@ class Hub:
     def _on_change(self, changed: dict) -> None:
         if "frequency" in changed:                                   # FreeDV keeps its software tuning when the dial moves a little
             old, self._last_freq = self._last_freq, changed["frequency"] or 0
+            if self.reporter is not None:
+                self.reporter.set_frequency(self._last_freq)
             if self.audio is not None and old and self._last_freq:
                 self.audio.freedv_dial_moved(old, self._last_freq, self.driver.state.get("mode"))
         self._pending.update(changed)
@@ -583,10 +587,16 @@ async def freedv_info(request):
     fd, audio = app[K_CFG]["freedv"], app[K_AUDIO]
     st = audio.freedv_state()
     return web.json_response({**st, "tx_level_db": fd["tx_level_db"], "install_rade": "sudo /opt/radio-remote/current/scripts/install_rade.sh",
-                          "rade_installable": platform.machine() in ("aarch64", "arm64"), "arch": platform.machine(),
+                          "rade_installable": _rade.installable(), "arch": platform.machine(),
                           "rade_path": _rade.loaded_path(),
                           "tune": {m: {"centre": p["centre"], "width": p["width"]} for m, p in _tune.PARAMS.items()}, "channels": [
         {"name": n, "hz": int(h), "mode": m} for n, h, m in (c.split("|") for c in fd["channels"])]})
+
+
+async def freedv_reporter_status(request):
+    """FreeDV Reporter: the connection state and the stations it lists, those near our frequency first (any signed-in user)."""
+    app = request.app
+    return web.json_response(app[K_REPORTER].status(near_hz=app[K_DRIVER].state.get("frequency") or 0))
 
 
 async def audio_status(request):
@@ -660,6 +670,11 @@ def create_app(cfg: dict, driver: RadioDriver | None = None, auth: AuthStore | N
 
     app[K_RIGCTL] = rigctl = RigctlServer(driver, lambda: app[K_CFG], lambda ev, detail: auth.audit(ev, None, None, detail))
 
+    app[K_REPORTER] = reporter = FreeDVReporter(lambda: app[K_CFG], __version__, lambda: driver.state.get("frequency") or 0)
+    audio.on_freedv_state = reporter.set_active
+    audio.on_freedv_tx = reporter.set_transmitting
+    app[K_HUB].reporter = reporter
+
     watchdog = sdnotify.Watchdog(lambda: guard._task is not None and not guard._task.done())
 
     async def on_start(app):
@@ -672,6 +687,7 @@ def create_app(cfg: dict, driver: RadioDriver | None = None, auth: AuthStore | N
         log.info("started: radio=%s allow_ptt=%s", driver.caps.data["model"]["name"], guard.allow_ptt)
         watchdog.start()
         await rigctl.apply()
+        reporter.start()
         if not driver.is_mock and not os.environ.get("RADIO_REMOTE_TESTING"):        # a simulated radio / the tests never phone home
             app[K_UPDATES].start()
 
@@ -679,6 +695,7 @@ def create_app(cfg: dict, driver: RadioDriver | None = None, auth: AuthStore | N
         await app[K_UPDATES].stop()
         app[K_HUB].cancel_mic_reset()
         await rigctl.stop()
+        await reporter.stop()
         await watchdog.stop()
         await guard.stop()          # un-keys first
         await audio.stop()
@@ -696,6 +713,7 @@ def create_app(cfg: dict, driver: RadioDriver | None = None, auth: AuthStore | N
     app.router.add_post("/api/audio/offer", audio_offer)
     app.router.add_get("/api/audio/status", audio_status)
     app.router.add_get("/api/freedv", freedv_info)
+    app.router.add_get("/api/freedv/reporter", freedv_reporter_status)
     app.router.add_get("/ws/audio", audio_ws)
     app.router.add_get("/api/audio/devices", audio_devices)
     app.router.add_get("/api/memories", memories)

@@ -57,9 +57,12 @@ async def test_rules(make_app, arm_pi, monkeypatch):
     assert (await op.c.post(URL, json={"confirm": True}, headers=op.h)).status == 403          # administrators only
     assert (await client.post(URL, json={}, headers=root.h)).status == 400                       # confirmation needed
     assert (await client.post(URL, json={"confirm": True})).status == 403                        # no CSRF token
-    monkeypatch.setattr(admin.platform, "machine", lambda: "x86_64")
+    monkeypatch.setattr(admin.platform, "machine", lambda: "armv7l")                      # a 32-bit system: no library for it
     r = await client.post(URL, json={"confirm": True}, headers=root.h)
-    assert r.status == 409 and "64-bit ARM" in await r.text() and arm_pi["calls"] == []
+    assert r.status == 409 and "64-bit" in await r.text() and arm_pi["calls"] == []
+    assert (await (await client.get("/api/freedv")).json())["rade_installable"] is False
+    monkeypatch.setattr(admin.platform, "machine", lambda: "x86_64")                       # a 64-bit PC is fine
+    assert (await (await client.get("/api/freedv")).json())["rade_installable"] is True
     monkeypatch.setattr(admin.platform, "machine", lambda: "aarch64")
     await admin._rade_lock.acquire()                                                              # an installation is already running
     try:

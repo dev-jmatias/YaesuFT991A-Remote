@@ -15,7 +15,23 @@ on:
     tags: ["v*"]
 
 jobs:
+  # RADE library for a 64-bit PC (the image job below builds the one for ARM). Built in a Debian 12 container so it also runs on Debian 12 and newer.
+  rade-x86:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the RADE library for x86_64 (Debian 12 container, with a load test)
+        run: bash scripts/build_rade_container.sh rade-out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rade-x86_64
+          path: rade-out/radio-remote-rade-linux-x86_64.tar.xz
+          if-no-files-found: error
+          retention-days: 3
+
   image:
+    needs: rade-x86
     # native arm64 runner (free for public repositories, no emulation). A private repository has none: pick ubuntu-24.04 by hand
     runs-on: ${{ inputs.runner || 'ubuntu-24.04-arm' }}
     timeout-minutes: 240
@@ -30,11 +46,16 @@ jobs:
 
       # RADE (neural FreeDV mode): built from source for this architecture (about 5 minutes) and shipped as its own optional download.
       # Building it first lets the tests below run against the real library on the real (arm64) hardware, together with libcodec2.
-      - name: Build the RADE library
+      - name: Build the RADE library for ARM (Debian 12 container, with a load test)
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq cmake build-essential autoconf automake libtool curl git libcodec2-dev
-          bash scripts/build_rade.sh rade-out
+          sudo apt-get install -y -qq libcodec2-dev
+          bash scripts/build_rade_container.sh rade-out
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: rade-x86_64
+          path: rade-out
 
       - name: Run the tests
         env:
@@ -46,7 +67,7 @@ jobs:
       - name: Build the manual and stage the program
         run: |
           python scripts/build_docs.py
-          bash image/stage_program.sh
+          RADE_FILE=rade-out/radio-remote-rade-linux-aarch64.tar.xz bash image/stage_program.sh
 
       - name: Build the image
         id: build
@@ -75,6 +96,7 @@ jobs:
           python scripts/build_imager_repo.py --image "${{ steps.build.outputs.image-path }}" --tag "$TAG" \
             --repo "$GITHUB_REPOSITORY" --out os-list.json
           python scripts/build_release_assets.py --tag "$TAG" --out release-assets --installer --skip-docs \
+            --rade-file rade-out/radio-remote-rade-linux-aarch64.tar.xz \
             --extra "${{ steps.build.outputs.image-path }}" image/first-boot-settings.ps1 os-list.json rade-out/radio-remote-rade-linux-*.tar.xz
           cat release-assets/SHA256SUMS
 

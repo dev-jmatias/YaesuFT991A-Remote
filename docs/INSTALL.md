@@ -1,10 +1,11 @@
-# Installation guide (Raspberry Pi)
+# Installation guide (Raspberry Pi, or a Debian PC)
 
-Three ways to the same result:
+Four ways to the same result:
 
 * **Route A: the ready-made image** (easiest). You write one image to the SD card and answer a few questions in Raspberry Pi Imager.
 * **Route B: the installer pack** on top of the official Raspberry Pi OS. Everything is in one folder, including the Python libraries.
 * **Route C: from the source code** (advanced).
+* **Route D: a Debian 12 or 13 PC** instead of a Pi (see section 4b).
 
 Download the files from the **[latest release](https://github.com/dev-jmatias/YaesuFT991A-Remote/releases/latest)**.
 
@@ -81,9 +82,42 @@ cd radio-remote
 sudo bash install.sh --dry-run                    # prints every action, changes nothing
 sudo bash install.sh --model ft991a               # real install (downloads the Python libraries; several minutes on a Pi)
 ```
-Options: `--model NAME`, `--hostname NAME`, `--no-caddy`, `--with-hamlib`, `--with-tailscale`, `--wheels DIR`, `--force-arch`.
+Options: `--model NAME`, `--hostname NAME`, `--no-caddy`, `--with-hamlib`, `--with-tailscale`, `--wheels DIR`, `--no-rade`, `--rade-file FILE`, `--force-arch`.
+`install.sh` also installs the RADE library (the neural FreeDV mode) by itself; a failure there only prints a hint and the install carries on.
 Use `bash install.sh` (not `./install.sh`) when the files came from a Windows PC: the executable flag is lost there. A git checkout does not
 contain the built manual; run `python scripts/build_docs.py` first if you want it on the Pi.
+
+## 4b. Route D: a Debian PC (not a Raspberry Pi)
+
+Radio Remote also runs on a normal 64-bit PC (an old laptop or a mini PC next to the radio) with **Debian 12 ("bookworm")** or **Debian 13 ("trixie")**. It uses the same
+installer as route C. This route has been prepared from the Pi installation and checked in test mode on Debian; a real install on a PC is new, so tell us what you meet.
+
+**What you need:** a 64-bit PC (`x86_64`), a *minimal / server* Debian install (no desktop: a desktop's PipeWire or PulseAudio can grab the radio's USB sound card and
+block the audio), a wired network connection, internet access during the install, and the USB cable to the radio.
+
+```bash
+# 1. get the program: download radio-remote-vX.Y.Z.tar.gz from the release page (NOT the installer pack zip: its Python libraries are for the Pi)
+tar xzf radio-remote-vX.Y.Z.tar.gz && cd radio-remote
+# 2. install (the Python libraries are downloaded from PyPI; a few minutes)
+sudo bash install.sh --model ft991a --hostname radio.local
+```
+
+Then continue with **First run** below. Things that differ from a Pi:
+
+* **Name on the network:** the installer adds `avahi-daemon`, so `https://<hostname>.local` works from phones and PCs that understand `.local` names. Otherwise use the PC's IP address
+  or its normal network name (`--hostname` sets the name Caddy answers to).
+* **Python:** Debian 12 has Python 3.11 and Debian 13 has 3.13; both are fine (3.11 or newer is needed).
+* **Audio:** use plain ALSA. The program picks the radio's USB sound card ("USB Audio CODEC") by itself; on a desktop system that also runs PipeWire/PulseAudio, stop it for that
+  card or use a server install. The service user is added to the `audio` and `dialout` groups by the installer.
+* **FreeDV:** the installer also installs `libcodec2` (package `libcodec2-1.2` on Debian 13, `libcodec2-1.0` on Debian 12) for the modes 1600, 700D and 700E.
+* **RADE** (the neural FreeDV mode) is installed by `install.sh` itself: it downloads the library for your CPU from the release page and checks it (use `--no-rade` to skip it, `--rade-file FILE` for a local copy).
+  If that step could not run (no internet, or your release has no file for your CPU), install it later from the web page (**Admin > Config > RADE > Install RADE**), as long as the release you run offers a library for your CPU
+  (`x86_64` and `aarch64` are built). It needs nothing else installed. The library is built on Debian 12, so it works on Debian 12 and on Debian 13. Without internet, or if your release has
+  no `x86_64` file: download `radio-remote-rade-linux-x86_64.tar.xz` on another computer and run `sudo /opt/radio-remote/current/scripts/install_rade.sh --file <file>`, or build it yourself on
+  the PC with `sudo apt install git cmake build-essential autoconf automake libtool curl` and `bash scripts/build_rade.sh` (about 5 minutes; it downloads the sources and model weights)
+  and install the resulting `librade-rr.so` with `install_rade.sh --file`.
+* **Updates** work the same way: the **Update now** button, or `sudo /opt/radio-remote/current/scripts/self_update.sh`.
+* Firewall: if the PC runs `ufw` or `nftables`, allow TCP port 443 from your network (and 22 for SSH).
 
 ## 5. First run (all routes)
 
