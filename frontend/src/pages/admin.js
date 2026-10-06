@@ -159,6 +159,16 @@ export function openSheet(root, { user, tab, sock }) {
             <button type="button" id="rig-save" ${info.writable ? "" : "disabled"}>Apply</button></div>
           <p data-rigline></p>
         </div>
+        <div class="card2 syscard"><h3>System</h3>
+          <p class="dim">Restart the Radio Remote service (the radio link and the audio drop for a few seconds) or reboot the whole machine (about a minute). A transmission in progress is stopped.</p>
+          <div class="row"><button type="button" id="sys-restart" class="danger" hidden>Restart the service…</button>
+            <button type="button" id="sys-reboot" class="danger" hidden>Reboot the system…</button></div>
+          <form id="sys-form" class="row" hidden>
+            <span class="dim">Reboot the whole machine? Radio Remote is unavailable until it is back.</span>
+            <input name="password" type="password" placeholder="Your password" autocomplete="current-password" required>
+            <button class="danger">Reboot now</button></form>
+          <p class="dim" id="sys-msg" hidden></p>
+        </div>
         <p class="dim"><b>Not editable here, on purpose:</b> ${info.locked.filter((k) => k !== "safety.allow_ptt").map(esc).join(", ")}.</p>
         <div id="restart"></div>`;
       let lastU = null, polling = false;
@@ -264,6 +274,34 @@ export function openSheet(root, { user, tab, sock }) {
         c.updates.check = e.target.checked;
         paintUpd(await api("/api/admin/update"));
         note(e.target.checked ? "Update check is on." : "Update check is off.");
+      });
+      // System card: restart the service (always, under systemd) and reboot the machine (needs the root helper and the password again)
+      const sys = await api("/api/admin/power").catch(() => ({ restart: false, reboot: false }));
+      const sysMsg = body.querySelector("#sys-msg"), sysForm = body.querySelector("#sys-form");
+      const comeBack = async (what, maxSeconds) => {                // wait until the page answers again, then reload it
+        sysMsg.hidden = false;
+        sysMsg.textContent = `${what}… this page reloads by itself when it is back.`;
+        const t0 = Date.now();
+        await new Promise((r) => setTimeout(r, 4000));
+        while (Date.now() - t0 < maxSeconds * 1000) {
+          try { const r = await fetch("/", { cache: "no-store" }); if (r.ok) { location.reload(); return; } } catch { /* still down */ }
+          await new Promise((r) => setTimeout(r, 3000));
+        }
+        sysMsg.textContent = "It has not come back yet: check the machine, then reload this page.";
+      };
+      body.querySelector("#sys-restart").hidden = !sys.restart;
+      body.querySelector("#sys-reboot").hidden = !sys.reboot;
+      body.querySelector("#sys-restart").onclick = guard(async () => {
+        if (!confirm("Restart the Radio Remote service now? The radio link and the audio drop for a few seconds, and a transmission in progress is stopped.")) return;
+        await api("/api/admin/restart", "POST", { confirm: true });
+        comeBack("Restarting the service", 120);
+      });
+      body.querySelector("#sys-reboot").onclick = () => { sysForm.hidden = false; sysForm.querySelector("input").focus(); };
+      sysForm.onsubmit = guard(async (e) => {
+        e.preventDefault();
+        await api("/api/admin/reboot", "POST", { confirm: true, password: sysForm.password.value });
+        sysForm.reset(); sysForm.hidden = true;
+        comeBack("Rebooting the system", 420);
       });
       const showRestart = () => {
         const b = el(`<button class="danger">Restart service now</button>`);

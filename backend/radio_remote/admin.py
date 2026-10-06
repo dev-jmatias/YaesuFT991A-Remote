@@ -489,6 +489,50 @@ def _flatten_over(current: dict, body: dict) -> dict:
     return out
 
 
+# ---- "Reboot the system": like "Update now", the page only drops a request file; a root helper started by systemd (radio-remote-power.path) reboots
+POWER_UNIT = Path("/etc/systemd/system/radio-remote-power.path")             # present when the helper is installed (install.sh / update.sh put it there)
+
+
+async def power_state(request):
+    """What the System card can offer: the service restart works when running under systemd, the reboot needs the root helper."""
+    require_admin(request)
+    return web.json_response({"restart": request.app.get(K_RESTART) is not None, "reboot": POWER_UNIT.is_file()})
+
+
+async def reboot_start(request):
+    """Reboot the whole machine. Needs the administrator's password again and a radio that is not transmitting; the root helper does it after a few seconds."""
+    admin = require_admin(request)
+    app, auth, ip = request.app, request.app[K_AUTH], client_ip(request)
+    body = await read_json(request)
+    if body.get("confirm") is not True or not isinstance(body.get("password"), str):
+        raise web.HTTPBadRequest(text="your password and a confirmation are required")
+    if not POWER_UNIT.is_file():
+        raise web.HTTPConflict(text="the reboot helper is not installed on this system (run update.sh once, or use self_update.sh)")
+    drv = app[K_DRIVER]
+    if drv.state.get("tx") or drv.state.get("tuning"):
+        raise web.HTTPConflict(text="the radio is transmitting: stop the transmission first")
+    key = f"reboot:{admin.username}"
+    wait = auth.retry_after(ip, key)
+    if wait > 0:
+        raise web.HTTPTooManyRequests(text=f"too many attempts; retry in {int(wait) + 1}s")
+    if not await _run(auth.check_password, admin.user_id, body["password"]):
+        auth._record_fail(ip, key)
+        auth.audit("reboot_denied", admin.username, ip, "wrong password")
+        raise web.HTTPForbidden(text="wrong password")
+    auth._fails.pop((ip, key.lower()), None)
+    d = Path(app[K_CFG]["storage"]["data_dir"])
+    try:
+        req = d / "power-request"
+        tmp = req.with_name(req.name + ".tmp")
+        tmp.write_text(f"action=reboot\nuser={admin.username}\n", encoding="utf-8")
+        tmp.replace(req)
+    except OSError as e:
+        raise web.HTTPConflict(text=f"could not ask for the reboot: {e}") from None
+    auth.audit("reboot_requested", admin.username, ip, "")
+    log.warning("system reboot requested by %s", admin.username)
+    return web.json_response({"ok": True}, status=202)
+
+
 async def restart(request):
     admin = require_admin(request)
     b = await read_json(request)
@@ -543,4 +587,6 @@ def add_routes(app: web.Application) -> None:
     r.add_get("/api/admin/backup", backup_config)
     r.add_post("/api/admin/restore", restore_config)
     r.add_post("/api/admin/restart", restart)
+    r.add_get("/api/admin/power", power_state)
+    r.add_post("/api/admin/reboot", reboot_start)
     r.add_get("/api/diagnostics", diagnostics)

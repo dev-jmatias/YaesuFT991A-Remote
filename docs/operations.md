@@ -21,6 +21,11 @@ change on purpose: `server.*`, `storage.*`. The transmit permission (`safety.all
 Other changes need `sudo systemctl restart radio-remote` (the log level and audio gains apply live). The UI's
 "Restart service now" button does the same.
 
+**System card (Admin > Config).** Two buttons that are always there: **Restart the service…** (confirmation, then the page reloads by itself when the service is back) and
+**Reboot the system…** (needs your password again; refused while the radio transmits; it only appears when the root helper `radio-remote-power.path` is installed, which `install.sh` and
+`update.sh` do). Like *Update now*, the page itself cannot reboot anything: it only drops `/var/lib/radio-remote/power-request`, and a root helper (`scripts/power_from_request.sh`,
+started by systemd) reboots the machine after about 3 seconds, and does nothing else. Both actions are written to the audit log.
+
 | Key | Meaning | Default |
 |---|---|---|
 | `server.host` / `port` | where the app listens. **Keep `127.0.0.1`**; Caddy/Tailscale face the network | `127.0.0.1` / 8080 |

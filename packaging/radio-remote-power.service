@@ -1,0 +1,8 @@
+[Unit]
+Description=Reboot the machine (asked for in the Radio Remote web page)
+
+[Service]
+Type=oneshot
+# runs as root: power_from_request.sh only ever reboots, and only when the request file says so
+ExecStart=/opt/radio-remote/current/scripts/power_from_request.sh
+TimeoutStartSec=60

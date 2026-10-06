@@ -42,6 +42,14 @@ and goes back by itself if the new version does not start. Settings and accounts
 | `radio-remote-rade-linux-aarch64.tar.xz` | the optional RADE library (FreeDV neural mode), installed with `install_rade.sh` |
 | `SHA256SUMS` | checksums of all of the above |
 
+### What is new in 1.1.13
+
+- **FreeDV no longer freezes after PTT** (fix for a problem seen over WebSocket audio): the page sends microphone audio only while PTT is held and nothing at all after it is released, so the server never learned
+  that the transmission had ended; the receiver stayed muted, the tuning scope frozen, and FreeDV had to be switched off and on. The server now ends the transmit state by itself when no microphone frame has
+  arrived for half a second (and the receiver restarts, as in 1.1.12). The FreeDV Reporter's "transmitting" flag ends the same way.
+- **System card in Admin > Config**: **Restart the service…** (the page reloads by itself when it is back) and **Reboot the system…** (asks for your password again, is refused while the radio transmits, and is
+  written to the audit log). The page only drops a request file; a small root helper started by systemd (`radio-remote-power.path`, installed by `install.sh` and `update.sh`) reboots the machine and does nothing else.
+
 ### What is new in 1.1.12
 
 - **FreeDV receives again by itself after every transmission.** After you released PTT the receiver went on with a decoder that had seen a gap, and on one PC it never found the signal again until FreeDV

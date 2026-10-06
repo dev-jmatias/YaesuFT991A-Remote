@@ -1,0 +1,9 @@
+[Unit]
+Description=Reboot the machine when an administrator asks for it in the Radio Remote web page
+
+[Path]
+PathExists=/var/lib/radio-remote/power-request
+Unit=radio-remote-power.service
+
+[Install]
+WantedBy=multi-user.target

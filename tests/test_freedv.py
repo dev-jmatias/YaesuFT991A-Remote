@@ -114,7 +114,7 @@ async def test_own_transmission_is_never_decoded_and_replayed(svc):
     svc.set_freedv(True, "700D")
     await svc._ensure_capture()
     await until(lambda: svc._rx_q and svc._rx_q[-1] == SPEECH)
-    svc._tx_gate_open = True                                            # this connection is transmitting
+    svc._tx_gate_open, svc._gate_seen = True, float("inf")              # this connection is transmitting (and never goes idle in this test)
     await until(lambda: svc._rx_q and svc._rx_q[-1] == bytes(FRAME_BYTES))
     svc._tx_gate_open = False
     await until(lambda: svc._rx_q and svc._rx_q[-1] == SPEECH)
@@ -127,15 +127,38 @@ async def test_the_receiver_restarts_once_after_every_transmission(svc):
     await svc._ensure_capture()
     await until(lambda: svc._rx_q and svc._rx_q[-1] == SPEECH)
     assert FakeRx.restarts == 0
-    svc._tx_gate_open = True
+    svc._tx_gate_open, svc._gate_seen = True, float("inf")
     await until(lambda: svc._rx_q and svc._rx_q[-1] == bytes(FRAME_BYTES))
     svc._tx_gate_open = False
     await until(lambda: svc._rx_q and svc._rx_q[-1] == SPEECH)           # decoding again after the hold-off
     assert FakeRx.restarts == 1                                          # one fresh modem for the whole transmission, not one per frame
-    svc._tx_gate_open = True
+    svc._tx_gate_open, svc._gate_seen = True, float("inf")
     await until(lambda: svc._rx_q and svc._rx_q[-1] == bytes(FRAME_BYTES))
     svc._tx_gate_open = False
     await until(lambda: FakeRx.restarts == 2 and svc._rx_q and svc._rx_q[-1] == SPEECH)
+
+
+async def test_the_receiver_comes_back_when_the_page_stops_sending_microphone_frames_after_ptt(svc, monkeypatch):
+    """Over WebSocket the page sends NO microphone frames once PTT is released, so the old code never learned that the transmission had ended:
+    the receiver stayed muted and the FreeDV scope frozen until FreeDV was switched off and on (seen on a friend's PC)."""
+    from radio_remote.audio import service as service_mod
+
+    monkeypatch.setattr(service_mod, "GATE_IDLE_S", 0.15)
+    FakeRx.restarts = 0
+    svc.set_freedv(True, "700D")
+    await svc._ensure_capture()
+    await until(lambda: svc._rx_q and svc._rx_q[-1] == SPEECH)
+    svc.gate["open"] = True                                              # PTT held: the page sends microphone frames
+    peer = type("P", (), {"conn_id": "c1"})()
+    for _ in range(10):
+        svc._mic_frame(peer, bytes(FRAME_BYTES))
+        await asyncio.sleep(0.02)
+    assert svc._tx_gate_open
+    await until(lambda: svc._rx_q and svc._rx_q[-1] == bytes(FRAME_BYTES))     # the receiver is muted while transmitting
+    svc.gate["open"] = False                                             # PTT released: and no more microphone frames arrive at all
+    await until(lambda: not svc._tx_gate_open, timeout=3)               # the gate closes by itself
+    await until(lambda: svc._rx_q and svc._rx_q[-1] == SPEECH, timeout=3)      # and decoding comes back
+    assert FakeRx.restarts == 1
 
 
 async def test_transmit_only_passes_modem_tones_while_the_ptt_owner_is_keyed(svc):

@@ -28,6 +28,7 @@ log = logging.getLogger("audio")
 TX_QUEUE_MAX = 6                 # frames (120 ms) of jitter buffer; older audio is dropped to bound latency
 TX_QUEUE_FREEDV = 24             # frames (480 ms) while FreeDV is on: its modem hands over whole blocks at once
 LEVEL_INTERVAL_S = 0.1
+GATE_IDLE_S = 0.5               # seconds without a microphone frame after which the transmit state ends by itself (over WebSocket the page sends nothing once PTT is released)
 RX_HOLD_FRAMES = 15              # frames (300 ms) of silence after a transmission before the FreeDV receiver restarts: the radio is still switching back to receive
 
 
@@ -116,6 +117,7 @@ class AudioService:
         self._pump_task: asyncio.Task | None = None
         self._tx_q: collections.deque[bytes] = collections.deque(maxlen=TX_QUEUE_MAX)
         self._tx_gate_open = False
+        self._gate_seen = 0.0                            # when the gate last let a microphone frame through
         self._levels = {"audio_rx_level": 0, "audio_tx_level": 0, "audio_tx_frames": 0, "audio_tx_error": "",
                         "freedv_on": False, "freedv_mode": "", "freedv_sync": 0, "freedv_snr": 0.0,
                         "freedv_spec": [], "freedv_offset": 0, "freedv_hint": None, "freedv_afc": "", "freedv_level": -120, "freedv_clip": False}
@@ -322,6 +324,10 @@ class AudioService:
                 await src.start()
                 self.capture_error, backoff = None, 0.5
                 while True:
+                    if self._tx_gate_open and time.monotonic() - self._gate_seen > GATE_IDLE_S:
+                        # BENCH-FOUND on a friend's PC (WebSocket audio): the page sends no microphone frames once PTT is released, so nothing ever told the
+                        # server the transmission had ended; the receiver stayed muted and the tuning scope frozen until FreeDV was switched off and on.
+                        self._tx_gate_open = False
                     self._check_fd_tx()
                     pcm = apply_gain(await src.read_frame(), self.rx_gain, limit=self.rx_gain > 1.0)      # a boost must not clip hard
                     self._level("audio_rx_level", level_pct(pcm))                # the meter shows what the radio sends (the modem tones)
@@ -426,6 +432,7 @@ class AudioService:
         """One 20 ms mic frame from a peer (either transport). THE GATE: it only passes while this peer owns an active transmission."""
         self.frames_in += 1
         if self.tx_gate(peer.conn_id):
+            self._gate_seen = time.monotonic()
             if not self._tx_gate_open:
                 self._tx_q.clear()                       # never send stale audio from before PTT
                 self._tx_gate_open = True
