@@ -28,6 +28,7 @@ log = logging.getLogger("audio")
 TX_QUEUE_MAX = 6                 # frames (120 ms) of jitter buffer; older audio is dropped to bound latency
 TX_QUEUE_FREEDV = 24             # frames (480 ms) while FreeDV is on: its modem hands over whole blocks at once
 LEVEL_INTERVAL_S = 0.1
+RX_HOLD_FRAMES = 15              # frames (300 ms) of silence after a transmission before the FreeDV receiver restarts: the radio is still switching back to receive
 
 
 class AudioUnavailable(Exception):
@@ -125,6 +126,7 @@ class AudioService:
         self.on_freedv_state = None                    # callbacks (FreeDV Reporter): (on, mode) and (transmitting)
         self.on_freedv_tx = None
         self._fd_tx_reported = False
+        self._rx_hold = 0                                # frames still to skip after a transmission before the FreeDV receiver restarts
         self.freedv_mode = "700D"                       # the app sets these from [freedv] in the config
         self.freedv_tx_gain = db_to_gain(-6.0)
         self._last_emit = 0.0
@@ -325,6 +327,16 @@ class AudioService:
                     self._level("audio_rx_level", level_pct(pcm))                # the meter shows what the radio sends (the modem tones)
                     if self._fd_rx is not None and self._tx_gate_open:
                         pcm = bytes(FRAME_BYTES)                                 # transmitting: never decode (and replay) our own signal
+                        self._rx_hold = RX_HOLD_FRAMES
+                    elif self._fd_rx is not None and self._rx_hold > 0:
+                        self._rx_hold -= 1                                       # the radio is switching back to receive: nothing to decode yet
+                        pcm = bytes(FRAME_BYTES)
+                        if self._rx_hold == 0 and hasattr(self._fd_rx, "restart"):
+                            try:
+                                self._fd_rx.restart()                            # a fresh modem for the first clean receive audio (the tuning is kept)
+                            except Exception:
+                                log.exception("FreeDV could not restart after a transmission; switching it off")
+                                self.set_freedv(False)
                     elif self._fd_rx is not None:                                # FreeDV: listeners get the decoded speech instead
                         try:
                             pcm = self._fd_rx.process(pcm)

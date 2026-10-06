@@ -30,6 +30,7 @@ class SimulatedFT991A:
                          99: (28_400_000, "USB", "")}
         self.label_001 = False     # True: MT/MR answers always carry channel 001 (what a real FT-991A was seen to do)
         self.mem_ch = 0            # 0 = VFO mode, else the recalled memory channel
+        self.mc_keeps_vfo = False  # True: a recall changes the channel only, IF keeps answering with the VFO frequency (seen on a friend's FT-991A)
         self.vfo_freq = None       # the VFO frequency while a memory is recalled
         self.levels = {"AG0": 80, "RG0": 255, "MG": 50, "PC": 50}
         self.meters = {"1": 40, "3": 0, "4": 0, "5": 0, "6": 0}
@@ -207,7 +208,8 @@ class SimulatedFT991A:
             if not self.mem_ch:
                 self.vfo_freq = (self.freq, self.mode)
             self.mem_ch = ch
-            self.freq, self.mode = self.memories[ch][0], self.memories[ch][1]
+            if not self.mc_keeps_vfo:
+                self.freq, self.mode = self.memories[ch][0], self.memories[ch][1]
             return
         if name == "VM" and not p:
             if self.mem_ch:

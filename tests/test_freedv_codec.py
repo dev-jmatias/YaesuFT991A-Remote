@@ -82,3 +82,25 @@ def test_software_tuning_finds_a_mistuned_signal_and_holds_it(mode, off):
     assert first is not None and first < 40, f"{mode} at {off:+d} Hz never locked"
     assert good_after / max(1, n - int((first + 5) / 0.02)) > 0.7                  # and it keeps the lock
     assert abs(rx.afc.offset - off) <= 120                                         # the offset it settled on is close to the real one
+
+@pytest.mark.parametrize("mode", ["1600", "700D", "700E", "RADE"])
+def test_the_modem_locks_again_after_a_restart_and_keeps_its_tuning(mode):
+    """After every transmission the receiver gets a fresh modem (restart); the lock must come back on the same signal and the tuning found must survive."""
+    if mode == "RADE" and not freedv.mode_status().get("RADE") == "":
+        pytest.skip("the RADE library is not installed")
+    tx, rx = freedv.TxChain(mode, level=0.5), freedv.RxChain(mode)
+    mic = speechlike(500)
+    tones = []
+    for i in range(500):
+        tones += tx.process(mic[i * FRAME_SAMPLES:(i + 1) * FRAME_SAMPLES].tobytes())
+    for f in tones[:250]:
+        rx.process(f)
+    assert rx.sync == 1
+    shift_before = rx.shifter.shift
+    rx.restart()                                                         # what the capture loop does after a transmission
+    assert rx.shifter.shift == shift_before                              # the tuning is kept
+    locked = False
+    for f in tones[250:]:                                                # the same signal goes on: a fresh modem must find it
+        rx.process(f)
+        locked = locked or rx.sync == 1
+    assert locked

@@ -42,6 +42,16 @@ and goes back by itself if the new version does not start. Settings and accounts
 | `radio-remote-rade-linux-aarch64.tar.xz` | the optional RADE library (FreeDV neural mode), installed with `install_rade.sh` |
 | `SHA256SUMS` | checksums of all of the above |
 
+### What is new in 1.1.12
+
+- **FreeDV receives again by itself after every transmission.** After you released PTT the receiver went on with a decoder that had seen a gap, and on one PC it never found the signal again until FreeDV
+  was switched off and on. The receiver now restarts its modem about 0.3 s after each transmission (keeping the tuning it had found), for all FreeDV modes.
+- **Memories on an FT-991A that answers `IF` with the VFO frequency in memory mode**: the page kept showing the VFO frequency after a recall (only the MEM label changed). While in memory mode, the stored
+  frequency and mode of the recalled channel (read from the radio's own memory list) are now shown when the radio only repeats the VFO. A radio that reports the channel's own frequency is trusted as before.
+- **Installer for a Debian PC**: it installs `libnss-mdns` and `avahi-utils` (so the PC resolves `.local` names itself) and, at the end, warns when the name the web page answers to does not match the PC's own hostname,
+  which is what other devices find on the network, with the commands to fix it. `docs/INSTALL.md` has a new section, "If the page does not open" (name problems, routers holding old names, the hosts file, changing the name later).
+- No crash when the RADE library folder is not readable by the user who runs `freedv_probe.py`; it says RADE is not installed.
+
 ### What is new in 1.1.11
 
 - The *experimental* banner is gone for the **FTDX101D** (tested on a real radio) and the **FTDX101MP** (the same commands as the D; its ID and its 5 to 200 W power range are the only differences, and no MP has been

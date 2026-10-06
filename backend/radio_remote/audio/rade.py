@@ -79,7 +79,13 @@ def _load():
     with _LOCK:
         if _LIB is not None or _ERR:
             return _LIB
-        path = next((p for p in _candidates() if p.is_file()), None)
+        def _readable_file(p: Path) -> bool:
+            try:
+                return p.is_file()
+            except OSError:                                                    # for example a library folder this user may not look into
+                return False
+
+        path = next((p for p in _candidates() if _readable_file(p)), None)
         if path is None:
             _ERR = f"RADE is not installed ({INSTALL_HINT})"
             return None

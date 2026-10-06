@@ -103,7 +103,7 @@ export RR_WHEELS="$WHEELS"
 
 # ---- packages ---------------------------------------------------------------------------------------------------
 echo "==> Installing system packages"
-PKGS="python3 python3-venv python3-pip alsa-utils libopus0 curl ca-certificates avahi-daemon"      # avahi: so <hostname>.local resolves on a plain Debian too (Raspberry Pi OS has it)
+PKGS="python3 python3-venv python3-pip alsa-utils libopus0 curl ca-certificates avahi-daemon libnss-mdns avahi-utils"      # avahi announces <hostname>.local on a plain Debian too (Raspberry Pi OS has it); libnss-mdns lets this machine resolve .local names itself; avahi-utils is the test tool (avahi-resolve-host-name)
 [ "$WITH_CADDY" = 1 ] && PKGS="$PKGS caddy"
 [ "$WITH_HAMLIB" = 1 ] && PKGS="$PKGS libhamlib-utils"
 run apt-get update
@@ -209,3 +209,18 @@ Done.
   Docs:   https://$HOST_NAME/docs/   (the manual is installed on the Pi, no internet needed)
   Help:   sudo $PREFIX/current/scripts/doctor.sh      (paste its output when asking for help)
 EOF
+
+# avahi announces the machine's own hostname; Caddy answers only to $HOST_NAME. If they differ, other devices cannot find the page.
+case "$HOST_NAME" in
+  *.local)
+    if [ "$DRY" != 1 ] && [ "$HOST_NAME" != "$(hostname).local" ]; then
+      cat <<EOF
+
+NOTE:   the web page answers to $HOST_NAME, but this machine announces itself on the network as $(hostname).local,
+        so phones and PCs will NOT find $HOST_NAME. Either run this installer again with  --hostname $(hostname).local ,
+        or give the machine the matching name (then restart avahi):
+          sudo hostnamectl set-hostname ${HOST_NAME%.local} && sudo sed -i 's/$(hostname)/${HOST_NAME%.local}/g' /etc/hosts && sudo systemctl restart avahi-daemon
+        If a device is still sent to the wrong address, the router may hold an old record for that name: docs/INSTALL.md, "If the page does not open".
+EOF
+    fi ;;
+esac

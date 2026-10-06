@@ -66,6 +66,8 @@ class YaesuCatDriver(RadioDriver):
         self._wake: asyncio.Event | None = None
         self._mem_cache: list[dict] | None = None             # memory channels read from the radio (re-read on request)
         self._mem_lock = asyncio.Lock()
+        self._last_vfo_freq: int | None = None                  # the VFO frequency and mode last seen outside memory mode (see _on_frame)
+        self._last_vfo_mode: str | None = None
         self.state.update(connected=False, model=model, tx=False, tx_source=None)
 
     def diagnostics(self) -> dict:
@@ -257,6 +259,23 @@ class YaesuCatDriver(RadioDriver):
         except frame.FrameError as e:
             log.warning("bad frame from radio: %s (frame %r)", e, f)
             return
+        # BENCH-FOUND on a friend's FT-991A: in memory mode its IF answer carries the channel number but still the VFO's frequency (MC009 and MC001 both answered
+        # 14.236000), so the page kept showing the VFO frequency. While the radio is in memory mode and only repeats the VFO frequency we last saw, the stored
+        # frequency and mode of that channel (read from the radio's own memory list) are shown instead. A frequency that differs from the VFO's is trusted as before.
+        in_memory = fields.get("vfo_memory", self.state.get("vfo_memory")) == "memory"
+        if not in_memory:
+            if "frequency" in fields:
+                self._last_vfo_freq = fields["frequency"]
+            if "mode" in fields:
+                self._last_vfo_mode = fields["mode"]
+        elif self._mem_cache:
+            ch = fields.get("memory_channel", self.state.get("memory_channel"))
+            stored = next((m for m in self._mem_cache if m["channel"] == ch), None)
+            if stored:
+                if "frequency" in fields and fields["frequency"] == self._last_vfo_freq and stored["frequency"] != fields["frequency"]:
+                    fields["frequency"] = stored["frequency"]
+                if "mode" in fields and fields["mode"] == self._last_vfo_mode and stored["mode"] != fields["mode"]:
+                    fields["mode"] = stored["mode"]
         if "frequency" in fields:
             fields["band"] = band_for(fields["frequency"])
         if "frequency_b" in fields:

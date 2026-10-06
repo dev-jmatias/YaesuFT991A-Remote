@@ -131,6 +131,33 @@ async def test_recall_a_channel_and_go_back_to_the_vfo(rig):
         await d.memory_select(100)
 
 
+async def test_recall_shows_the_channels_frequency_when_the_radio_only_repeats_the_vfo(rig):
+    """A friend's FT-991A answers IF with the channel number but the VFO's frequency in memory mode (MC009 and MC001 both said 14.236000).
+    The page must then show the stored frequency and mode of the recalled channel, and the VFO again after Back to VFO."""
+    d, sim = rig.driver, rig.sim
+    sim.mc_keeps_vfo = True
+    await d.memory_channels()
+    await wait_for(lambda: d.state.get("frequency") == 14_200_000)
+    await d.memory_select(6)                                                       # channel 6 stores 7.100 MHz LSB
+    await wait_for(lambda: d.state.get("vfo_memory") == "memory")
+    await wait_for(lambda: d.state.get("frequency") == 7_100_000)
+    assert d.state["mode"] == "LSB" and d.state["band"] == "40m" and d.state["memory_channel"] == 6
+    await d.memory_select(11)                                                      # a second recall: 145.5 MHz FM
+    await wait_for(lambda: d.state.get("memory_channel") == 11 and d.state.get("frequency") == 145_500_000)
+    assert d.state["mode"] == "FM" and d.state["band"] == "2m"
+    await d.memory_to_vfo()
+    await wait_for(lambda: d.state.get("vfo_memory") == "vfo")
+    await wait_for(lambda: d.state.get("frequency") == 14_200_000)
+    assert d.state["mode"] == "USB"
+
+
+async def test_a_radio_that_reports_the_channels_own_frequency_is_trusted(rig):
+    d = rig.driver
+    await d.memory_channels()
+    await d.memory_select(6)                                                       # the simulator's default: IF carries the memory's frequency
+    assert d.state["frequency"] == 7_100_000 and d.state["mode"] == "LSB"
+
+
 async def test_no_channel_change_while_transmitting(rig):
     d = rig.driver
     await d.memory_channels()

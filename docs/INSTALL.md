@@ -104,8 +104,9 @@ sudo bash install.sh --model ft991a --hostname radio.local
 
 Then continue with **First run** below. Things that differ from a Pi:
 
-* **Name on the network:** the installer adds `avahi-daemon`, so `https://<hostname>.local` works from phones and PCs that understand `.local` names. Otherwise use the PC's IP address
-  or its normal network name (`--hostname` sets the name Caddy answers to).
+* **Name on the network:** the installer adds `avahi-daemon` (it announces the PC) and `libnss-mdns` (so the PC can look up `.local` names itself), so `https://<hostname>.local` works from phones and PCs that understand `.local` names.
+  **Important:** the name announced on the network is the **PC's own hostname**. `--hostname` only sets the name the web server answers to, so the two must match: install with the default name, or with `--hostname <the PC's hostname>.local`,
+  or rename the PC (`sudo hostnamectl set-hostname NAME`, then replace the old name by NAME in `/etc/hosts`, then `sudo systemctl restart avahi-daemon`). Using the PC's IP address in the browser does not work, because the web server answers only to its name.
 * **Python:** Debian 12 has Python 3.11 and Debian 13 has 3.13; both are fine (3.11 or newer is needed).
 * **Audio:** use plain ALSA. The program picks the radio's USB sound card ("USB Audio CODEC") by itself; on a desktop system that also runs PipeWire/PulseAudio, stop it for that
   card or use a server install. The service user is added to the `audio` and `dialout` groups by the installer.
@@ -119,6 +120,17 @@ Then continue with **First run** below. Things that differ from a Pi:
 * **Updates** work the same way: the **Update now** button, or `sudo /opt/radio-remote/current/scripts/self_update.sh`.
 * Firewall: if the PC runs `ufw` or `nftables`, allow TCP port 443 from your network (and 22 for SSH).
 
+### If the page does not open (Debian PC or any install)
+
+* **Check the server on the PC itself:** `systemctl is-active caddy radio-remote avahi-daemon` (all `active`), then
+  `curl -k -sI --resolve NAME:443:127.0.0.1 https://NAME | head -1` (`HTTP/2 200`; NAME is the name from `--hostname`, e.g. `radio.local`).
+* **Is the name announced?** `hostname` must be NAME without `.local`; `avahi-resolve-host-name NAME` should print the PC's address (`sudo apt install avahi-utils` if it is missing).
+* **Windows says "This site can't be reached":** run `ping NAME` in PowerShell. If it answers from a **different address** than the PC's (the router keeps old records of names from earlier devices, for example an earlier Raspberry Pi
+  called `ft991a`), Windows asks the router first and never finds the PC. Fix: use a name nobody has used, or tell that PC the address by hand: add `PC-ADDRESS NAME` to
+  `C:\Windows\System32\drivers\etc\hosts` (Notepad as administrator), then `ipconfig /flushdns`. For good, give the PC a fixed address on the router (a DHCP reservation) and delete the old names from the router's list.
+* **Changing the name later:** `sudo python3 /opt/radio-remote/current/scripts/rr_admin.py render-caddy --host NEWNAME --out /tmp/Caddyfile.new`, then `sudo caddy validate --config /tmp/Caddyfile.new --adapter caddyfile`,
+  `sudo install -m 0644 /tmp/Caddyfile.new /etc/caddy/Caddyfile`, `sudo systemctl reload caddy`.
+* Android phones often cannot resolve `.local` names at all; try a PC first.
 ## 5. First run (all routes)
 
 1. Browse to `https://<hostname>.local`. Your browser warns about the certificate until you trust the Pi's local certificate once per

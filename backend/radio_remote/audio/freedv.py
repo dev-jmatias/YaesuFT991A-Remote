@@ -207,6 +207,7 @@ class RxChain:
     MAX_FIFO = 20                                    # frames (400 ms): a stalled consumer never builds up unbounded delay
 
     def __init__(self, mode: str):
+        self.mode = mode
         self.fd = open_core(mode)
         self.dec = Decimator(RATE // self.fd.modem_rate, 0.45 * self.fd.modem_rate)           # radio audio -> the modem rate
         self.up = Interpolator(RATE // self.fd.speech_rate, 0.45 * self.fd.speech_rate)       # decoded speech -> 48 kHz
@@ -240,6 +241,19 @@ class RxChain:
             while len(self.fifo) > self.MAX_FIFO:
                 self.fifo.popleft()
         return self.fifo.popleft() if self.fifo else bytes(FRAME_BYTES)
+
+    def restart(self) -> None:
+        """After a transmission: a fresh modem and fresh filters (the old modem saw a gap of silence, and on a friend's PC RADE did not find the signal again until FreeDV was
+        switched off and on), but the tuning found so far (shifter and AFC) is kept, so the lock comes back as soon as the signal does."""
+        fresh = open_core(self.mode)
+        self.fd.close()
+        self.fd = fresh
+        self.dec = Decimator(RATE // self.fd.modem_rate, 0.45 * self.fd.modem_rate)
+        self.up = Interpolator(RATE // self.fd.speech_rate, 0.45 * self.fd.speech_rate)
+        self.spec = Spectrum(self.mode)
+        self.spec_fresh = False
+        self.fifo.clear()
+        self._rest = b""
 
     def tune_state(self) -> str:
         return "locked" if self.afc.locked else "searching" if self.afc.searching else "idle"

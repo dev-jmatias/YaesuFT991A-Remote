@@ -98,3 +98,21 @@ def test_a_library_installed_later_is_found_without_a_restart(tmp_path, monkeypa
     rade.reset()                                                                                  # ... until the install resets it
     ok, why = rade.available()
     assert ok is False and "could not be loaded" in why                                           # it looked again and found the file
+
+
+def test_an_unreadable_library_folder_means_unavailable_not_a_crash(monkeypatch):
+    """A friend ran the probe as a normal user: /var/lib/radio-remote/lib is not readable for him and Path.is_file() raised PermissionError."""
+    from pathlib import Path
+
+    monkeypatch.setattr(rade, "_LIB", None)
+    monkeypatch.setattr(rade, "_PATH", "")
+    monkeypatch.setattr(rade, "_ERR", "")
+
+    def denied(self):
+        raise PermissionError(13, "Permission denied", str(self))
+
+    monkeypatch.setattr(Path, "is_file", denied)
+    ok, why = rade.available()
+    assert ok is False and "not installed" in why
+    monkeypatch.undo()
+    rade.reset()

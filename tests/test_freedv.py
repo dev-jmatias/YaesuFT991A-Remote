@@ -24,9 +24,13 @@ TONES = b"\x09\x00" * (FRAME_BYTES // 2)             # what the fake transmit mo
 
 class FakeRx:
     sync, snr = 1, 8.5
+    restarts = 0
 
     def __init__(self, mode):
         self.mode = mode
+
+    def restart(self):
+        FakeRx.restarts += 1
 
     def process(self, pcm):
         return SPEECH
@@ -114,6 +118,24 @@ async def test_own_transmission_is_never_decoded_and_replayed(svc):
     await until(lambda: svc._rx_q and svc._rx_q[-1] == bytes(FRAME_BYTES))
     svc._tx_gate_open = False
     await until(lambda: svc._rx_q and svc._rx_q[-1] == SPEECH)
+
+
+async def test_the_receiver_restarts_once_after_every_transmission(svc):
+    """A friend had to switch FreeDV off and on after every PTT: the old RADE modem saw a gap and never found the signal again."""
+    FakeRx.restarts = 0
+    svc.set_freedv(True, "700D")
+    await svc._ensure_capture()
+    await until(lambda: svc._rx_q and svc._rx_q[-1] == SPEECH)
+    assert FakeRx.restarts == 0
+    svc._tx_gate_open = True
+    await until(lambda: svc._rx_q and svc._rx_q[-1] == bytes(FRAME_BYTES))
+    svc._tx_gate_open = False
+    await until(lambda: svc._rx_q and svc._rx_q[-1] == SPEECH)           # decoding again after the hold-off
+    assert FakeRx.restarts == 1                                          # one fresh modem for the whole transmission, not one per frame
+    svc._tx_gate_open = True
+    await until(lambda: svc._rx_q and svc._rx_q[-1] == bytes(FRAME_BYTES))
+    svc._tx_gate_open = False
+    await until(lambda: FakeRx.restarts == 2 and svc._rx_q and svc._rx_q[-1] == SPEECH)
 
 
 async def test_transmit_only_passes_modem_tones_while_the_ptt_owner_is_keyed(svc):
