@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""How hard does FreeDV work this machine? Runs each available mode (codec2 and RADE) as a transmit -> receive loopback on 20 s of synthetic
-speech and prints the CPU time as a percentage of real time (the share of ONE core the server needs to keep up).
+"""How hard does FreeDV work this machine? Runs each available mode (RADE V1 and V2) as a transmit -> receive loopback on 20 s of synthetic
+speech and prints the CPU time as a percentage of real time (the share of ONE core the server needs to keep up) and the slowest single
+20 ms step (a step much longer than 20 ms can make the audio stutter on a slow PC).
 
 On the Pi:   /opt/radio-remote/venv/bin/python /opt/radio-remote/current/scripts/freedv_probe.py
 """
@@ -35,17 +36,22 @@ def main() -> int:
         mic = speech(n)
         tx, rx = freedv.TxChain(mode, 0.5), freedv.RxChain(mode)
         t0 = time.process_time()
-        tones = []
+        tones, worst_tx = [], 0.0
         for i in range(n):
+            t1 = time.perf_counter()
             tones += tx.process(mic[i * FRAME_SAMPLES:(i + 1) * FRAME_SAMPLES].tobytes())
+            worst_tx = max(worst_tx, time.perf_counter() - t1)
         t_tx = time.process_time() - t0
         t0 = time.process_time()
-        synced = False
+        synced, worst_rx = False, 0.0
         for f in tones:
+            t1 = time.perf_counter()
             rx.process(f)
+            worst_rx = max(worst_rx, time.perf_counter() - t1)
             synced = synced or rx.sync == 1
         t_rx = time.process_time() - t0
-        print(f"{mode:5s} transmit {100 * t_tx / SECONDS:5.1f}%   receive {100 * t_rx / SECONDS:5.1f}%   of one core   (loopback locked: {'yes' if synced else 'NO'})")
+        print(f"{mode:5s} transmit {100 * t_tx / SECONDS:5.1f}% (slowest step {1000 * worst_tx:4.0f} ms)   receive {100 * t_rx / SECONDS:5.1f}% (slowest step {1000 * worst_rx:4.0f} ms)   "
+              f"of one core   (loopback locked: {'yes' if synced else 'NO'})")
     return 0
 
 

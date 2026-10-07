@@ -95,7 +95,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def test_install_sh_installs_rade_unless_told_not_to():
     sh = (ROOT / "install.sh").read_text(encoding="utf-8")
     assert "--no-rade" in sh and "--rade-file" in sh and 'fetch-rade "${RADE_ARGS[@]}"' in sh
-    assert sh.index("ensure_codec2") < sh.index("fetch-rade")                              # after the system packages
+    assert sh.index("apt-get install") < sh.index("fetch-rade")                          # after the system packages
     block = sh[sh.index("==> RADE library"):][:900]
     assert "else" in block and "could not be installed now" in block                       # a failure only prints a hint
     assert 'WITH_RADE=1' in sh                                                             # on by default

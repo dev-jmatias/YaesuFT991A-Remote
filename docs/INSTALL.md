@@ -110,7 +110,6 @@ Then continue with **First run** below. Things that differ from a Pi:
 * **Python:** Debian 12 has Python 3.11 and Debian 13 has 3.13; both are fine (3.11 or newer is needed).
 * **Audio:** use plain ALSA. The program picks the radio's USB sound card ("USB Audio CODEC") by itself; on a desktop system that also runs PipeWire/PulseAudio, stop it for that
   card or use a server install. The service user is added to the `audio` and `dialout` groups by the installer.
-* **FreeDV:** the installer also installs `libcodec2` (package `libcodec2-1.2` on Debian 13, `libcodec2-1.0` on Debian 12) for the modes 1600, 700D and 700E.
 * **RADE** (the neural FreeDV mode) is installed by `install.sh` itself: it downloads the library for your CPU from the release page and checks it (use `--no-rade` to skip it, `--rade-file FILE` for a local copy).
   If that step could not run (no internet, or your release has no file for your CPU), install it later from the web page (**Admin > Config > RADE > Install RADE**), as long as the release you run offers a library for your CPU
   (`x86_64` and `aarch64` are built). It needs nothing else installed. The library is built on Debian 12, so it works on Debian 12 and on Debian 13. Without internet, or if your release has

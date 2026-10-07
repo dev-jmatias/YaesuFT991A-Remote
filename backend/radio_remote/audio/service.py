@@ -27,6 +27,10 @@ log = logging.getLogger("audio")
 
 TX_QUEUE_MAX = 6                 # frames (120 ms) of jitter buffer; older audio is dropped to bound latency
 TX_QUEUE_FREEDV = 24             # frames (480 ms) while FreeDV is on: its modem hands over whole blocks at once
+TX_PREFILL_FRAMES = 10           # FreeDV: frames (200 ms) of modem tones that must be waiting before they start going to the radio (and again after a gap). The modem hands over
+                                 # its tones in bursts (RADE: 120 ms at a time) that arrive with the network's jitter; without this cushion a burst that is a few ms late made the
+                                 # sender write 20 ms of silence into the middle of the signal, and RADE cannot follow a signal with holes in it
+SLOW_FRAME_MS = 20.0             # a FreeDV receive step that takes longer than one frame (20 ms) can make the capture fall behind on a slow PC
 LEVEL_INTERVAL_S = 0.1
 GATE_IDLE_S = 0.5               # seconds without a microphone frame after which the transmit state ends by itself (over WebSocket the page sends nothing once PTT is released)
 RX_HOLD_FRAMES = 15              # frames (300 ms) of silence after a transmission before the FreeDV receiver restarts: the radio is still switching back to receive
@@ -118,6 +122,14 @@ class AudioService:
         self._tx_q: collections.deque[bytes] = collections.deque(maxlen=TX_QUEUE_MAX)
         self._tx_gate_open = False
         self._gate_seen = 0.0                            # when the gate last let a microphone frame through
+        self._tx_primed = True                           # FreeDV transmit: the cushion (TX_PREFILL_FRAMES) is in place and the tones are flowing
+        self.tx_underruns = 0                            # FreeDV transmit: holes written into the tones because the queue ran dry in mid-over (all overs)
+        self._over_underruns = 0                         # the same, for the over in progress
+        self._over_frames = 0
+        self.rx_ms_avg = 0.0                             # FreeDV receive: time one 20 ms frame takes to process (average / worst), and how many frames took longer than 20 ms
+        self.rx_ms_max = 0.0
+        self.rx_slow = 0
+        self._tx_proc_ms_max = 0.0
         self._levels = {"audio_rx_level": 0, "audio_tx_level": 0, "audio_tx_frames": 0, "audio_tx_error": "",
                         "freedv_on": False, "freedv_mode": "", "freedv_sync": 0, "freedv_snr": 0.0,
                         "freedv_spec": [], "freedv_offset": 0, "freedv_hint": None, "freedv_afc": "", "freedv_level": -120, "freedv_clip": False}
@@ -129,7 +141,7 @@ class AudioService:
         self.on_freedv_tx = None
         self._fd_tx_reported = False
         self._rx_hold = 0                                # frames still to skip after a transmission before the FreeDV receiver restarts
-        self.freedv_mode = "700D"                       # the app sets these from [freedv] in the config
+        self.freedv_mode = "RADE"                       # the app sets these from [freedv] in the config
         self.freedv_tx_gain = db_to_gain(-6.0)
         self._last_emit = 0.0
         self.frames_in = self.frames_to_radio = 0
@@ -176,6 +188,8 @@ class AudioService:
             "peers": len(self.peers), "rx_capture": bool(self._cap_task), "tx_playback": bool(self._pump_task),
             "capture_error": self.capture_error, "playback_error": self.playback_error,
             "frames_to_radio": self.frames_to_radio,
+            "freedv_timing": {"rx_ms_avg": round(self.rx_ms_avg, 2), "rx_ms_max": round(self.rx_ms_max, 1), "rx_slow_frames": self.rx_slow,
+                              "tx_ms_max": round(self._tx_proc_ms_max, 1), "tx_underruns": self.tx_underruns},
         }
 
     # ------------------------------------------------------------- FreeDV
@@ -235,6 +249,9 @@ class AudioService:
         else:
             self._tx_q = collections.deque(self._tx_q, maxlen=TX_QUEUE_MAX)
         self._tx_gate_open = False
+        self._tx_primed = True
+        self.rx_ms_avg = self.rx_ms_max = 0.0
+        self.rx_slow = 0
         self._levels.update(freedv_on=on, freedv_mode=self.freedv_mode if on else "", freedv_sync=0, freedv_snr=0.0, freedv_spec=[], freedv_offset=0,
                             freedv_hint=None, freedv_afc="", freedv_level=-120, freedv_clip=False)
         self._last_emit = 0.0
@@ -345,7 +362,16 @@ class AudioService:
                                 self.set_freedv(False)
                     elif self._fd_rx is not None:                                # FreeDV: listeners get the decoded speech instead
                         try:
+                            t0 = time.perf_counter()
                             pcm = self._fd_rx.process(pcm)
+                            ms = (time.perf_counter() - t0) * 1000.0
+                            self.rx_ms_avg += (ms - self.rx_ms_avg) * 0.02
+                            self.rx_ms_max = max(self.rx_ms_max, ms)
+                            if ms > SLOW_FRAME_MS:
+                                self.rx_slow += 1
+                                if self.rx_slow in (1, 10, 100, 1000):
+                                    log.warning("FreeDV receive: a 20 ms audio frame took %.0f ms to process (%d such frames so far; average %.1f ms): the PC may be too slow for this mode",
+                                                ms, self.rx_slow, self.rx_ms_avg)
                             ch = self._fd_rx
                             self._levels.update(freedv_sync=ch.sync, freedv_snr=round(ch.snr, 1))
                             if hasattr(ch, "afc"):                                   # the tuning aid (freedv_tune.py): spectrum, level, where the signal is, what was corrected
@@ -393,8 +419,27 @@ class AudioService:
                 self.playback_error, backoff = None, 0.5
                 self._level("audio_tx_error", "")
                 nxt = loop.time()
+                was_fd = False
                 while True:
-                    pcm = self._tx_q.popleft() if self._tx_q else silence
+                    fd = self._fd_tx is not None and self._tx_gate_open
+                    if was_fd and not fd:
+                        self._over_finished()
+                    was_fd = fd
+                    if fd and not self._tx_primed and len(self._tx_q) >= TX_PREFILL_FRAMES:
+                        self._tx_primed = True                                 # the cushion is in place: the tones start (or carry on)
+                    if fd and not self._tx_primed:
+                        pcm = silence                                          # filling the cushion
+                    elif self._tx_q:
+                        pcm = self._tx_q.popleft()
+                    else:
+                        pcm = silence
+                        if fd and self._tx_primed:                             # ran dry in the middle of an over: a hole in the tones; refill before going on
+                            self._tx_primed = False
+                            self.tx_underruns += 1
+                            self._over_underruns += 1
+                            self._level("freedv_tx_underruns", self._over_underruns)
+                    if fd and pcm is not silence:
+                        self._over_frames += 1
                     await sink.write_frame(pcm)
                     if pcm is not silence:
                         self.frames_to_radio += 1
@@ -413,6 +458,14 @@ class AudioService:
                 await asyncio.shield(sink.stop())
             await asyncio.sleep(backoff)
             backoff = min(backoff * 2, 5.0)
+
+    def _over_finished(self) -> None:
+        """A FreeDV transmission ended: say in the log whether the tones went out without holes (the thing to look at when others cannot decode us)."""
+        if self._over_underruns:
+            log.warning("FreeDV transmit: the tones had %d hole(s) in %d frames (%.1f s); the audio reaching the server was too uneven (network/Wi-Fi?) or the PC too slow (slowest step %.0f ms)",
+                        self._over_underruns, self._over_frames, self._over_frames * FRAME_SAMPLES / RATE, self._tx_proc_ms_max)
+        else:
+            log.info("FreeDV transmit: %d frames, no holes (slowest step %.0f ms)", self._over_frames, self._tx_proc_ms_max)
 
     def _push_ws_peers(self, pcm: bytes) -> None:
         for p in self.peers.values():
@@ -436,6 +489,10 @@ class AudioService:
             if not self._tx_gate_open:
                 self._tx_q.clear()                       # never send stale audio from before PTT
                 self._tx_gate_open = True
+                self._tx_primed = self._fd_tx is None    # FreeDV: wait for the cushion before the tones start
+                self._over_underruns = self._over_frames = 0
+                self._tx_proc_ms_max = 0.0
+                self._level("freedv_tx_underruns", 0)
                 if self._fd_tx is not None:              # a fresh modem for every transmission: nothing left over from the last one
                     self._fd_tx.close()
                     self._fd_tx = freedv.TxChain(self.freedv_mode, self.freedv_tx_gain)
@@ -443,7 +500,10 @@ class AudioService:
                 # FreeDV: the microphone speech becomes modem tones. The mic gain still applies; the limiter does not (it would distort the
                 # tones), the modem output level (freedv.tx_level_db) takes its place.
                 try:
-                    for tone in self._fd_tx.process(apply_gain(pcm, self.tx_gain)):
+                    t0 = time.perf_counter()
+                    tones = self._fd_tx.process(apply_gain(pcm, self.tx_gain))
+                    self._tx_proc_ms_max = max(self._tx_proc_ms_max, (time.perf_counter() - t0) * 1000.0)
+                    for tone in tones:
                         self._tx_q.append(tone)
                         self._level("audio_tx_level", level_pct(tone))
                 except Exception:

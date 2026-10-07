@@ -76,7 +76,7 @@ itself. Your settings and accounts are kept. (Switch the notice off in Admin > C
 
 Radio Remote is released under the [MIT licence](LICENSE), Copyright (c) 2026 Jorge Matias. It uses other open-source software with its own licences:
 the Python libraries it installs (aiohttp, aiortc, numpy, pyserial and others, all permissive), Caddy and Tailscale (installed as separate programs),
-**codec2** (LGPL, loaded from the system for FreeDV) and, if you install it, the **RADE** library built from `rade_c` and Opus (both BSD; their
+if you install it, the **RADE** library built from `rade_c` and Opus (both BSD; their
 licence texts come with the download). Remote operation of a transmitter must be allowed by your amateur radio licence.
 
 ## Documentation
@@ -90,7 +90,7 @@ The manual is installed on the Pi and served at `/docs/` (Help button in the app
 | [operations.md](docs/operations.md) | configuration, services, logs, updating, backup and restore |
 | [radio-connection.md](docs/radio-connection.md) | USB CAT and audio, the radio's own menu settings |
 | [troubleshooting.md](docs/troubleshooting.md) | symptom-by-symptom fixes |
-| [freedv.md](docs/freedv.md) | FreeDV digital voice (1600, 700D, 700E, RADE) with preset channels |
+| [freedv.md](docs/freedv.md) | FreeDV digital voice (RADE V1 and the experimental RADE V2) with preset channels |
 | [logbook.md](docs/logbook.md) | follow and tune the radio from Log4OM or another logbook (Hamlib rigctl) |
 | [tailscale.md](docs/tailscale.md), [06-security-remote.md](docs/06-security-remote.md) | remote access and the security model |
 | [08-other-radios.md](docs/08-other-radios.md) | FTDX101D/MP (tested / same commands), FTDX10 and FT-710 (experimental) |

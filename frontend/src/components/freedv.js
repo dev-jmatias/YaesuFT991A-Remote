@@ -2,16 +2,18 @@ import { api } from "../api.js";
 import { el } from "../util.js";
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
-// FreeDV digital voice (1600 / 700D / 700E with codec2, RADE with its own optional library). The Pi decodes the radio's modem tones into speech for every listener and encodes the operator's
+// FreeDV digital voice (RADE V1 and the experimental RADE V2, both from the optional RADE library). The Pi decodes the radio's modem tones into speech for every listener and encodes the operator's
 // microphone into modem tones while that connection holds PTT (see docs/freedv.md). This tab: on/off, the mode, the preset channels and the
 // transmit level. By the FreeDV convention frequencies below 10 MHz use LSB and above use USB.
 export const ssbFor = (hz) => (hz < 10_000_000 ? "LSB" : "USB");
+const MODE_LABEL = { RADE: "RADE V1", RADE2: "RADE V2 (experimental)" };
+const modeName = (m) => MODE_LABEL[m] || m;
 const fmtMHz = (hz) => (hz / 1e6).toFixed(hz % 1000 ? 4 : 3);
 
 export function createFreeDV(host, ctx) {
   const { S, send, toast, signal } = ctx;
   const admin = S.user.role === "admin";
-  let info = { channels: [], modes: ["1600", "700D", "700E"], tx_level_db: -6 };
+  let info = { channels: [], modes: ["RADE"], tx_level_db: -6 };
   const root = el(`<div class="fdv">
     <h2>FreeDV</h2>
     <div class="fdv-status" aria-live="polite"><i class="dot" id="fdv-dot"></i><span id="fdv-text">FreeDV is off</span></div>
@@ -31,6 +33,7 @@ export function createFreeDV(host, ctx) {
       <label class="fdv-mode">Mode <select id="fdv-mode" aria-label="FreeDV mode"></select></label>
     </div>
     <p class="dim fdv-note" id="fdv-note" hidden></p>
+    <p class="dim fdv-note" id="fdv-v2note" hidden><b>RADE V2 is experimental.</b> Upstream says its signal and software may still change without notice, and only a few stations use it today: most stations are on RADE V1, which cannot decode V2 and the other way round.</p>
     <div class="row fdv-rade" id="fdv-rade-row" hidden>
       <button type="button" id="fdv-rade-install" class="active" hidden>Install RADE</button>
       <span class="dim" id="fdv-rade-msg"></span>
@@ -87,7 +90,7 @@ export function createFreeDV(host, ctx) {
   function paintChannels() {
     const box = $("fdv-ch");
     box.replaceChildren(...info.channels.map((c) => {
-      const b = el(`<button class="led fdv-c" title="${esc(c.name)}: ${fmtMHz(c.hz)} MHz ${ssbFor(c.hz)}, FreeDV ${c.mode}">${esc(c.name)}<small>${fmtMHz(c.hz)} MHz · ${c.mode}</small></button>`);
+      const b = el(`<button class="led fdv-c" title="${esc(c.name)}: ${fmtMHz(c.hz)} MHz ${ssbFor(c.hz)}, FreeDV ${modeName(c.mode)}">${esc(c.name)}<small>${fmtMHz(c.hz)} MHz · ${modeName(c.mode)}</small></button>`);
       b.dataset.hz = c.hz; b.dataset.mode = c.mode;
       b.onclick = async () => {
         await send("set_mode", { mode: ssbFor(c.hz) });
@@ -104,7 +107,7 @@ export function createFreeDV(host, ctx) {
     rows.replaceChildren(...info.channels.map((c) => {
       const r = el(`<div class="row fdv-row"><input class="n" maxlength="40" aria-label="Channel name" value="${esc(c.name)}">
         <input class="f" inputmode="decimal" aria-label="Frequency in MHz" value="${(c.hz / 1e6).toFixed(4).replace(/0+$/, "").replace(/\.$/, "")}">
-        <select class="m" aria-label="Mode">${(info.all_modes || info.modes || ["1600", "700D", "700E", "RADE"]).map((m) => `<option ${m === c.mode ? "selected" : ""}>${m}</option>`).join("")}</select>
+        <select class="m" aria-label="Mode">${(info.all_modes || info.modes || ["RADE", "RADE2"]).map((m) => `<option value="${m}" ${m === c.mode ? "selected" : ""}>${modeName(m)}</option>`).join("")}</select>
         <button type="button" class="danger" aria-label="Remove">×</button></div>`);
       r.querySelector("button").onclick = () => r.remove();
       return r;
@@ -127,7 +130,7 @@ export function createFreeDV(host, ctx) {
   };
   $("fdv-add").onclick = () => {
     info.channels = readRows();
-    info.channels.push({ name: "new", hz: 14_236_000, mode: modeSel.value || "700D" });          // (the editor lists every mode, installed or not)
+    info.channels.push({ name: "new", hz: 14_236_000, mode: modeSel.value || "RADE" });          // (the editor lists every mode, installed or not)
     paintEditor();
   };
   function readRows() {
@@ -150,7 +153,8 @@ export function createFreeDV(host, ctx) {
     if (!["USB", "LSB"].includes(S.state.mode)) await send("set_mode", { mode: ssbFor(hz()) });
     await send("freedv", { on: true, mode: modeSel.value });
   };
-  modeSel.onchange = () => { if (on()) send("freedv", { on: true, mode: modeSel.value }); };
+  const paintV2note = () => { $("fdv-v2note").hidden = modeSel.value !== "RADE2"; };
+  modeSel.onchange = () => { paintV2note(); if (on()) send("freedv", { on: true, mode: modeSel.value }); };
 
   let lvTimer = 0;
   $("fdv-lvr").oninput = (e) => {
@@ -167,13 +171,14 @@ export function createFreeDV(host, ctx) {
       $("fdv-note").textContent = `Could not read the FreeDV settings from the server: ${e.message}`;
       return;
     }
-    modeSel.innerHTML = (info.modes || ["1600", "700D", "700E"]).map((m) => `<option>${m}</option>`).join("");
-    modeSel.value = S.state.freedv_mode || info.mode || "700D";
+    modeSel.innerHTML = (info.modes || ["RADE"]).map((m) => `<option value="${m}">${modeName(m)}</option>`).join("");
+    modeSel.value = S.state.freedv_mode || info.mode || "RADE";
     if (!(info.modes || []).includes(modeSel.value)) modeSel.value = (info.modes || [])[0] || "";
     const missing = Object.entries(info.unavailable || {});                  // modes whose library is not installed, with the reason
     $("fdv-note").hidden = !missing.length;
-    $("fdv-note").textContent = missing.map(([m, why]) => `${m}: ${why}`).join("  ");
+    $("fdv-note").textContent = missing.map(([m, why]) => `${modeName(m)}: ${why}`).join("  ");
     paintRadeRow();
+    paintV2note();
     $("fdv-lvr").value = info.tx_level_db; $("fdv-lv").textContent = info.tx_level_db;
     $("fdv-lvr").disabled = !admin;
     $("fdv-lvnote").textContent = admin ? "" : "(set by an administrator)";
@@ -201,9 +206,9 @@ export function createFreeDV(host, ctx) {
     if (rep.needs_callsign) line.textContent += " To be listed yourself, set a callsign and grid square in the settings.";
     box.replaceChildren(...rep.stations.map((st) => {
       const r = el(`<div class="fdv-rep-row${st.near ? " near" : ""}"><b>${esc(st.callsign)}</b> <span class="dim">${esc(st.grid)}</span>
-        <span class="fdv-rf">${(st.freq / 1e6).toFixed(4)} MHz</span> <span class="fdv-rm">${esc(st.mode)}</span>${st.tx ? `<span class="fdv-txb">TX</span>` : ""}${st.listening ? `<span class="dim"> (listening)</span>` : ""}
+        <span class="fdv-rf">${(st.freq / 1e6).toFixed(4)} MHz</span> <span class="fdv-rm">${esc(modeName(st.mode))}</span>${st.tx ? `<span class="fdv-txb">TX</span>` : ""}${st.listening ? `<span class="dim"> (listening)</span>` : ""}
         ${st.message ? `<span class="dim fdv-rmsg">${esc(st.message)}</span>` : ""}</div>`);
-      if (st.tunable) { const b = el(`<button type="button" class="fdv-tune-btn" title="Tune to this station: ${esc(st.callsign)} on ${(st.freq / 1e6).toFixed(4)} MHz, ${esc(st.mode)}">Tune</button>`); b.onclick = () => tuneTo(st); r.append(b); }
+      if (st.tunable) { const b = el(`<button type="button" class="fdv-tune-btn" title="Tune to this station: ${esc(st.callsign)} on ${(st.freq / 1e6).toFixed(4)} MHz, ${esc(modeName(st.mode))}">Tune</button>`); b.onclick = () => tuneTo(st); r.append(b); }
       return r;
     }));
   }
@@ -296,9 +301,9 @@ export function createFreeDV(host, ctx) {
     $("fdv-dot").className = "dot " + (!onNow ? "" : locked ? "ok" : "warn");
     const au = ctx.audio?.(), streaming = !!au && (au.hear || au.mic);          // the Pi only decodes while someone is listening
     $("fdv-text").textContent = !onNow ? "FreeDV is off"
-      : !streaming ? `FreeDV ${s.freedv_mode} is on. Tap the speaker icon (Listen) to hear and decode.`
-      : !["USB", "LSB"].includes(s.mode) ? `FreeDV ${s.freedv_mode} is on, but the radio is in ${s.mode}: use USB (LSB below 10 MHz)`
-      : locked ? `FreeDV ${s.freedv_mode} locked on a signal (SNR ${(+s.freedv_snr || 0).toFixed(1)} dB)` : `FreeDV ${s.freedv_mode} listening, no signal locked yet`;
+      : !streaming ? `FreeDV ${modeName(s.freedv_mode)} is on. Tap the speaker icon (Listen) to hear and decode.`
+      : !["USB", "LSB"].includes(s.mode) ? `FreeDV ${modeName(s.freedv_mode)} is on, but the radio is in ${s.mode}: use USB (LSB below 10 MHz)`
+      : locked ? `FreeDV ${modeName(s.freedv_mode)} locked on a signal (SNR ${(+s.freedv_snr || 0).toFixed(1)} dB)` : `FreeDV ${modeName(s.freedv_mode)} listening, no signal locked yet`;
     for (const c of $("fdv-ch").querySelectorAll(".fdv-c")) c.classList.toggle("active", onNow && Math.abs(hz() - +c.dataset.hz) < 500 && s.freedv_mode === c.dataset.mode);
     paintTune();
   }

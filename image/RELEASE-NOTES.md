@@ -39,8 +39,20 @@ and goes back by itself if the new version does not start. Settings and accounts
 | `first-boot-settings.ps1` | sets hostname, user, password and Wi-Fi on a freshly written card (route A, without the repository) |
 | `radio-remote-installer-….zip` | installer pack with the program, the manual and offline libraries (route B) |
 | `radio-remote-v….tar.gz` | the program only: used by `self_update.sh`, or by hand to update a running Pi |
-| `radio-remote-rade-linux-aarch64.tar.xz` | the optional RADE library (FreeDV neural mode), installed with `install_rade.sh` |
+| `radio-remote-rade-linux-aarch64.tar.xz` | the optional RADE library (FreeDV neural modes V1 and V2) for a Raspberry Pi, installed with `install_rade.sh` (the PC build is `…-x86_64.tar.xz`) |
 | `SHA256SUMS` | checksums of all of the above |
+
+### What is new in 1.1.14
+
+- **FreeDV is now RADE only: RADE V1 and the experimental RADE V2.** 1600, 700D and 700E (and the libcodec2 package) are removed. A configuration that still names one of them is read as RADE V1, so nothing needs editing.
+  **RADE V2 is experimental upstream**: its signal may still change, V1 and V2 stations cannot decode each other, and most stations are on V1. It needs the RADE library from this release:
+  if you update the program but keep an older library, V1 keeps working and the FreeDV tab tells you to press **Admin > Config > RADE > Reinstall RADE** to get V2. V2 locked across the whole ±300 Hz tried on ideal signals (V1 only within about ±50 Hz).
+- **Transmit tones no longer get holes in them** (a likely cause of RADE transmissions that other stations could not decode): the modem delivers its tones in bursts and the sender wrote 20 ms of silence whenever its queue ran dry,
+  so a burst that was a few milliseconds late punched a hole into the signal, which RADE cannot follow. The Pi now keeps about 0.2 s of tones queued before it starts (and again after a gap). The price: the last fraction of a second
+  of an over may not be sent, so hold PTT a moment after the last word. After every over the log says `FreeDV transmit: … no holes` or `the tones had N hole(s)`, and **Admin > Diagnostics** shows the slowest receive and transmit step
+  (it should stay well under 20 ms) and the number of holes.
+- Power on from the page (**Power on radio**, PS1) is now verified on a real FT-991A.
+- `scripts/freedv_probe.py` also prints the slowest single step of each mode.
 
 ### What is new in 1.1.13
 

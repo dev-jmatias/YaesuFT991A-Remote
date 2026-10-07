@@ -1,5 +1,5 @@
 /*
- * rade_glue.c - a small speech-in / audio-out wrapper around the RADE V1 C library (rade_c), for Radio Remote.
+ * rade_glue.c - a small speech-in / audio-out wrapper around the RADE V1 and V2 C library (rade_c), for Radio Remote.
  *
  * RADE itself works on FARGAN feature vectors, not on audio. Receive: modem audio (8 kHz, real) -> rade_rx -> features -> FARGAN ->
  * speech (16 kHz). Transmit: speech (16 kHz) -> LPCNet features -> rade_tx -> modem audio (8 kHz, real). This file does those two
@@ -55,11 +55,12 @@ static int g_init;
 
 RG_EXPORT int rg_abi_version(void) { return RG_ABI_VERSION; }
 
-RG_EXPORT rg *rg_open(void) {
+/* v2 = 0: RADE V1; v2 = 1: RADE V2 (experimental upstream). The library that has this function can do V2; an older one only has rg_open. */
+RG_EXPORT rg *rg_open_mode(int v2) {
     if (!g_init) { rade_initialize(); g_init = 1; }
     rg *g = calloc(1, sizeof(*g));
     if (!g) return NULL;
-    g->r = rade_open("", RADE_VERBOSE_0);
+    g->r = rade_open("", RADE_VERBOSE_0 | (v2 ? RADE_MODE_V2 : 0));
     if (!g->r) { free(g); return NULL; }
     g->arch = opus_select_arch();
     g->enc = lpcnet_encoder_create();
@@ -85,6 +86,8 @@ RG_EXPORT rg *rg_open(void) {
     }
     return g;
 }
+
+RG_EXPORT rg *rg_open(void) { return rg_open_mode(0); }
 
 RG_EXPORT void rg_close(rg *g) {
     if (!g) return;

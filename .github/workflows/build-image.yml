@@ -45,11 +45,9 @@ jobs:
           python-version: "3.12"
 
       # RADE (neural FreeDV mode): built from source for this architecture (about 5 minutes) and shipped as its own optional download.
-      # Building it first lets the tests below run against the real library on the real (arm64) hardware, together with libcodec2.
+      # Building it first lets the tests below run against the real library on the real (arm64) hardware, 
       - name: Build the RADE library for ARM (Debian 12 container, with a load test)
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq libcodec2-dev
           bash scripts/build_rade_container.sh rade-out
 
       - uses: actions/download-artifact@v4

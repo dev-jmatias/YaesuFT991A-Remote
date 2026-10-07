@@ -5,16 +5,15 @@ FreeDV sends speech as modem tones in an ordinary SSB channel. Radio Remote does
 * **Receive:** the Pi turns the radio's modem tones back into speech and plays that to every listener.
 * **Transmit:** your voice (browser microphone) is turned into modem tones by the Pi and sent to the radio, while you hold PTT.
 
-Modes: **700D**, **700E** (copes better with fast fading) and **1600** (the older, narrow mode; needs a stronger signal). The codec is the open-source **codec2** library (the same one the FreeDV program uses).
-**RADE** (the newer neural mode, see below) is an optional extra download. The other FreeDV modes are not included.
+Modes: **RADE V1** (the neural mode most stations use today) and **RADE V2** (experimental, see below). Both come from one optional library, the same one that has always held RADE.
+The older codec2 modes (1600, 700D, 700E) were removed from the program; a configuration file that still names one of them is read as RADE V1.
 
-> **Status:** the codec round trip (voice to tones to voice, noise rejected) is covered by automated tests. How well it works over the air with
+> **Status:** the modem round trip (voice to tones to voice, noise rejected) is covered by automated tests. How well it works over the air with
 > your radio, antenna and band has to be found out by trying it: start with receive, then transmit into a dummy load.
 
 ## What you need
 
-* The Pi needs the codec2 library: `sudo apt install libcodec2-1.2` (older systems: `libcodec2-1.0`). The installer and `update.sh` /
-  `self_update.sh` try to install it by themselves. If it is missing the FreeDV tab simply does not appear.
+* The RADE library (see below). It is installed by the installer; without it the FreeDV tab says so and offers no mode.
 * Remote audio working ([audio](04-audio.md)): FreeDV only decodes while someone is listening (speaker icon) and only transmits while
   the microphone is armed and you hold PTT.
 
@@ -34,7 +33,7 @@ Switching FreeDV off passes the radio's audio through as before (it does not cha
 ### The tuning aid: the Pi finds the tuning for you
 
 A FreeDV modem only locks when the signal is close to where it expects it, and a radio dial cannot be set that finely by hand. Measured with ideal
-signals: RADE and 700E lock only within about ±50 Hz, 700D and 1600 within about ±150 to 200 Hz. So the Pi does the fine tuning in software:
+signals: RADE V1 locks only within about ±50 Hz, so the Pi does the fine tuning in software (RADE V2 locked across the whole ±300 Hz tried, so for V2 the search is rarely needed):
 
 * While nothing is locked it shifts the received audio, step by step, within ±450 Hz around the dial frequency, until the modem locks, and then holds that shift.
   The strongest-looking spot in the spectrum is tried first. A short fade-out does not make it start again (it waits a few seconds).
@@ -56,10 +55,12 @@ signals: RADE and 700E lock only within about ±50 Hz, 700D and 1600 within abou
 * The receive level that goes to the Pi is the radio's menu 107 SSB OUT LEVEL ([radio connection](radio-connection.md)): the modem tones should
   be clearly present but never clipping.
 
-## RADE (the neural mode)
+## RADE (the neural modes)
+
+### RADE V1
 
 RADE V1 sends speech as an OFDM signal that is about 2.1 kHz wide and decodes at lower signal-to-noise ratios than 700D/700E (it still locks at about 0 dB
-on a fading path). It is the mode most new FreeDV activity uses. It comes from a separate library of about 24 MB.
+on a fading path). It is the mode most FreeDV activity uses. It comes from a separate library of about 24 MB.
 
 **A new installation already has it, you do not need to do anything:** the ready-made image and the installer pack contain the RADE library, and `install.sh` (Raspberry Pi or
 Debian PC) downloads and installs it as part of the install (`--no-rade` skips it). Ordinary updates do not carry it, so they stay small, and a library that is already installed is kept.
@@ -84,6 +85,29 @@ Then choose **RADE** in the mode list of the FreeDV tab (or in a channel). Until
   Audio > RX gain**. For transmit use the same **modem level** slider as the other modes and keep the ALC barely moving.
 * The speech it plays is the neural vocoder's voice (clean, but not your exact voice). A few hundred milliseconds of delay is normal.
 
+### RADE V2 (experimental)
+
+Choose **RADE V2 (experimental)** in the mode list. It is a newer version of the same idea with a narrower signal (about 1.1 to 1.9 kHz), its own level control on receive, and it follows a mistuned
+signal by itself. **Treat it as an experiment:** the RADE authors say the V2 signal and software may still change without notice and that other versions will not be able to decode it, and on-air use is not
+yet recommended by them. **A V1 station cannot decode a V2 station and the other way round**, and today most stations are on V1. Use V2 only with someone who is also on V2.
+
+* It needs a library built with V2 support (the one that comes with this version). If you updated the program but kept an older RADE library, V1 still works and the tab says that V2 needs the library to be reinstalled:
+  **Admin > Config > RADE > Reinstall RADE**.
+* The FreeDV Reporter lists V2 stations as "RADE V2"; whether the site uses exactly the name Radio Remote sends for V2 is not confirmed.
+
+### When your transmission is unreadable at the other station
+
+RADE needs a continuous stream of tones, with no holes in it. The Pi therefore keeps a small cushion (about 0.2 s) of modem tones queued before it starts sending them to the radio, so an uneven network (Wi-Fi, a remote connection)
+cannot put gaps into the signal; the price is that the last fraction of a second of an over may not be sent when you release PTT, so hold PTT a moment after the last word.
+After every over the service log says whether the tones went out whole:
+
+```bash
+journalctl -u radio-remote --since "10 min ago" | grep "FreeDV transmit"
+```
+
+`no holes` is good. `the tones had N hole(s)` means the audio reached the server unevenly or the PC is too slow: use a wired connection, close other programs, and send the line to the developers.
+**Admin > Diagnostics** (and `/api/diagnostics`) also shows the slowest processing step, which should stay well under 20 ms on the receive side. A PC that regularly needs longer than that for one 20 ms frame will stutter.
+
 ## FreeDV Reporter: be listed, and see who is on the air
 
 [qso.freedv.org](https://qso.freedv.org/) is the live list of FreeDV stations: callsign, grid square, frequency, mode, whether the station is transmitting right now, and a short message.
@@ -95,7 +119,7 @@ Radio Remote can join it. **It is off by default.**
   ("Radio Remote 1.x") once, then your dial frequency whenever it changes, your FreeDV mode, whether you are transmitting (it flips when you hold PTT with FreeDV on, and back when you let go)
   and your message. **Your callsign and grid square are public on that site.** Nothing else is sent: no audio, no accounts, no settings.
 * **Who is on the air:** the FreeDV tab lists the stations the site reports, those within 5 kHz of your frequency first (shaded), stations that are transmitting marked **TX**. **Tune** moves your
-  radio to that station (sideband, frequency and FreeDV mode) and switches FreeDV on. Stations in a mode this program cannot decode (for example RADE V2) have no Tune button.
+  radio to that station (sideband, frequency and FreeDV mode) and switches FreeDV on. Stations in a mode this program cannot decode (for example the old 700D) have no Tune button.
 * **Limits:** your callsign is not sent inside the FreeDV signal itself (other stations see you in the web list, not in their decoder), so say it by voice when you transmit as usual.
   Reports of the stations *you* hear (their callsign and SNR) are not sent yet. The site's protocol was taken from open-source clients, not from official documentation, so if the site changes,
   the link simply shows "cannot reach FreeDV Reporter" and everything else keeps working.
@@ -116,20 +140,19 @@ Settings (Admin > Config or the tab): `freedv.mode` (the mode used when FreeDV i
 * It is refused while the radio is transmitting.
 * Voice goes through the same server-side safeguards as ever (transmit permission, control, PTT heartbeat, time limit, lock). FreeDV changes what is
   sent to the radio, not who may transmit.
-* CPU: decoding and encoding 700D/700E is light (a few percent of one core on a PC); not yet measured on a Pi.
 * Operating rules: FreeDV is plain unencrypted amateur digital voice; use it only where your licence and the band plan allow it.
 
 ## How much CPU does it need?
 
 `python3 scripts/freedv_probe.py` (on the Pi: `/opt/radio-remote/venv/bin/python /opt/radio-remote/current/scripts/freedv_probe.py`) runs every installed mode as a
-transmit-to-receive loopback and prints the share of one CPU core each needs. On a PC the codec2 modes need about 1% and RADE about 1% to transmit and 5% to receive.
+transmit-to-receive loopback and prints the share of one CPU core each needs and its slowest single step. On a PC RADE needs about 1% to transmit and 5% to receive; on a small Intel Atom PC receive was measured at about 40% of one core.
 
 ## If it does not work
 
 | Symptom | Likely cause |
 |---|---|
-| No FreeDV tab | libcodec2 is not installed on the Pi (`sudo apt install libcodec2-1.2`, then restart the service) |
-| Status stays at "no signal locked yet" | wrong frequency or sideband, signal too weak, RX level too low or clipping, or it is another mode (700D and 700E signals do not decode as each other) |
+| The FreeDV tab offers no mode | the RADE library is not installed (Admin > Config > RADE > Install RADE) |
+| Status stays at "no signal locked yet" | wrong frequency or sideband, signal too weak, RX level too low or clipping, or it is another mode (RADE V1 and V2 signals do not decode as each other) |
 | "Tap the speaker icon" | the Pi only decodes while someone is listening |
 | Locks, but the speech is garbled | an overloaded receive level (lower menu 107) or a very weak signal |
 | Others cannot decode you | overdriven or too-weak transmit level, speech processor on, or the radio not in USB/LSB |

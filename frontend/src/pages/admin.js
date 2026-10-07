@@ -363,7 +363,7 @@ export function openSheet(root, { user, tab, sock }) {
         <div class="card2"><h3>Host</h3>${kv(sysd)}${mem ? `<div><span class="dim">memory</span> ${mem.used_pct}% of ${mem.total_mb} MB</div>` : ""}</div>
         <div class="card2"><h3>Radio / CAT</h3>${kv(d.radio)}${d.radio.port ? kv(d.radio.port) : ""}${d.radio.stats ? kv(d.radio.stats) : ""}</div>
         <div class="card2"><h3>PTT</h3>${kv(d.ptt)}</div>
-        <div class="card2"><h3>Audio</h3>${d.audio ? kv(d.audio) : "n/a"}</div>
+        <div class="card2"><h3>Audio</h3>${d.audio ? kv(d.audio) + (d.audio.freedv_timing ? kv(d.audio.freedv_timing) : "") : "n/a"}</div>
         <div class="card2"><h3>Clients (${d.clients.length})</h3>${d.clients.map((c) => `<div>${esc(c.user)} <span class="dim">${esc(c.ip)}</span> ${c.holder ? "<b>control</b>" : ""}</div>`).join("")}</div></div>
         <h3 class="mt14">Recent log</h3><pre class="log">${esc(d.log.join("\n"))}</pre>`;
     },

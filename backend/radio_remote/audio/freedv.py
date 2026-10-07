@@ -1,4 +1,4 @@
-"""FreeDV digital voice: the codec2 modes (1600 / 700D / 700E) through libcodec2 (LGPL, loaded with ctypes) and RADE through rade.py.
+"""FreeDV digital voice: RADE V1 ("RADE") and RADE V2 ("RADE2", experimental upstream), both through the library in rade.py.
 
 The radio's USB audio carries the modem tones. On receive this module turns them back into speech; on transmit it turns the
 operator's speech into modem tones. Audio inside the server is mono int16 at 48 kHz; the modems work at 8 kHz (RADE: speech at 16 kHz), so each
@@ -6,10 +6,7 @@ chain below resamples on the way in and out. Nothing here talks to the radio: it
 """
 from __future__ import annotations
 
-import ctypes
-import ctypes.util
 import logging
-import threading
 from collections import deque
 
 import numpy as np
@@ -19,70 +16,26 @@ from .levels import FRAME_BYTES, FRAME_SAMPLES, RATE
 
 log = logging.getLogger("freedv")
 
-MODES = {"1600": 0, "700D": 7, "700E": 13}                   # the codec2 modes: FREEDV_MODE_* values of freedv_api.h
-ALL_MODES = tuple(MODES) + ("RADE",)                 # RADE comes from its own optional library (rade.py)
+ALL_MODES = ("RADE", "RADE2")                        # RADE comes from its own optional library (rade.py); RADE2 needs a library built with V2 support
 MODEM_RATE = 8000
-_LIB = None
-_LIB_ERR = ""
-_LOCK = threading.Lock()
 
 
 class FreeDVUnavailable(Exception):
     pass
 
 
-def _load():
-    global _LIB, _LIB_ERR
-    with _LOCK:
-        if _LIB is not None or _LIB_ERR:
-            return _LIB
-        names = [ctypes.util.find_library("codec2"), "libcodec2.so.1.2", "libcodec2.so.1.1", "libcodec2.so.1.0", "libcodec2.so",
-                 "codec2.dll", "libcodec2.dylib"]
-        lib, last = None, ""
-        for n in dict.fromkeys(x for x in names if x):
-            try:
-                lib = ctypes.CDLL(n)
-                break
-            except OSError as e:
-                last = str(e)
-        if lib is None:
-            _LIB_ERR = f"libcodec2 is not installed ({last or 'not found'}); on the Pi: sudo apt install libcodec2-1.2"
-            return None
-        c_short_p, c_int_p, c_float_p = ctypes.POINTER(ctypes.c_short), ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_float)
-        try:
-            lib.freedv_open.argtypes, lib.freedv_open.restype = [ctypes.c_int], ctypes.c_void_p
-            lib.freedv_close.argtypes, lib.freedv_close.restype = [ctypes.c_void_p], None
-            lib.freedv_nin.argtypes, lib.freedv_nin.restype = [ctypes.c_void_p], ctypes.c_int
-            lib.freedv_rx.argtypes, lib.freedv_rx.restype = [ctypes.c_void_p, c_short_p, c_short_p], ctypes.c_int
-            lib.freedv_tx.argtypes, lib.freedv_tx.restype = [ctypes.c_void_p, c_short_p, c_short_p], None
-            lib.freedv_get_modem_stats.argtypes, lib.freedv_get_modem_stats.restype = [ctypes.c_void_p, c_int_p, c_float_p], None
-            for n in ("freedv_get_speech_sample_rate", "freedv_get_n_speech_samples", "freedv_get_n_max_speech_samples",
-                      "freedv_get_modem_sample_rate", "freedv_get_n_max_modem_samples", "freedv_get_n_nom_modem_samples",
-                      "freedv_get_n_tx_modem_samples", "freedv_get_sync"):
-                f = getattr(lib, n)
-                f.argtypes, f.restype = [ctypes.c_void_p], ctypes.c_int
-        except AttributeError as e:
-            _LIB_ERR = f"this libcodec2 is too old or incomplete ({e})"
-            return None
-        _LIB = lib
-        return lib
-
-
 def available() -> tuple[bool, str]:
-    """(usable, reason when not): is at least one FreeDV mode usable? (codec2 modes need libcodec2, RADE needs its own library)"""
-    if _load():
-        return True, ""
+    """(usable, reason when not): is at least one FreeDV mode usable? (RADE comes from its own library, see rade.py)"""
     from . import rade
-    ok, why = rade.available()
-    return (True, "") if ok else (False, _LIB_ERR)
+    return rade.available()
 
 
 def mode_status() -> dict[str, str]:
     """mode -> "" when usable, else the reason it is not (shown on the FreeDV tab)."""
     from . import rade
-    c2 = "" if _load() else _LIB_ERR
-    r = "" if rade.available()[0] else rade.available()[1]
-    return {**{m: c2 for m in MODES}, "RADE": r}
+    ok1, why1 = rade.available()
+    ok2, why2 = rade.v2_available()
+    return {"RADE": "" if ok1 else why1, "RADE2": "" if ok2 else why2}
 
 
 def available_modes() -> list[str]:
@@ -90,14 +43,14 @@ def available_modes() -> list[str]:
 
 
 def open_core(mode: str):
-    """The modem for a mode: the codec2 one (FreeDV) or the RADE one. Both have rx(), tx(), sync, snr and the sample rates."""
-    if mode == "RADE":
-        from . import rade
-        try:
-            return rade.RadeCore()
-        except rade.RadeUnavailable as e:
-            raise FreeDVUnavailable(str(e)) from None
-    return FreeDV(mode)
+    """The modem for a mode. It has rx(), tx(), sync, snr and the sample rates."""
+    from . import rade
+    if mode not in ALL_MODES:
+        raise FreeDVUnavailable(f"unsupported FreeDV mode {mode}")
+    try:
+        return rade.RadeCore(v2=(mode == "RADE2"))
+    except rade.RadeUnavailable as e:
+        raise FreeDVUnavailable(str(e)) from None
 
 
 def _lowpass(cutoff_hz: float, rate: float, taps: int = 129) -> np.ndarray:
@@ -138,69 +91,6 @@ def _to_i16(x: np.ndarray) -> np.ndarray:
     return np.clip(np.rint(x), -32768, 32767).astype("<i2")
 
 
-class FreeDV:
-    """One FreeDV modem (receive and transmit state) for 1600, 700D or 700E."""
-
-    def __init__(self, mode: str):
-        lib = _load()
-        if lib is None:
-            raise FreeDVUnavailable(_LIB_ERR)
-        if mode not in MODES:
-            raise FreeDVUnavailable(f"unsupported FreeDV mode {mode}")
-        self.lib, self.mode = lib, mode
-        self.speech_rate = self.modem_rate = MODEM_RATE
-        self.f = lib.freedv_open(MODES[mode])
-        if not self.f:
-            raise FreeDVUnavailable(f"libcodec2 could not open FreeDV {mode}")
-        self.n_speech = lib.freedv_get_n_speech_samples(self.f)
-        self.n_max_speech = lib.freedv_get_n_max_speech_samples(self.f)
-        self.n_max_modem = lib.freedv_get_n_max_modem_samples(self.f)
-        self.n_tx = lib.freedv_get_n_tx_modem_samples(self.f)
-        if lib.freedv_get_speech_sample_rate(self.f) != MODEM_RATE or lib.freedv_get_modem_sample_rate(self.f) != MODEM_RATE:
-            raise FreeDVUnavailable("unexpected FreeDV sample rate")
-        self._in = np.empty(0, dtype="<i2")
-        self._out = (ctypes.c_short * self.n_max_speech)()
-        self._demod = (ctypes.c_short * self.n_max_modem)()
-        self.sync, self.snr = 0, 0.0
-
-    def close(self) -> None:
-        if self.f:
-            self.lib.freedv_close(self.f)
-            self.f = None
-
-    def __del__(self):
-        try:
-            self.close()
-        except Exception:
-            pass
-
-    def rx(self, modem: np.ndarray) -> np.ndarray:
-        """8 kHz modem samples (any length) -> decoded 8 kHz speech (possibly empty until a whole frame has arrived)."""
-        self._in = np.concatenate([self._in, modem.astype("<i2")])
-        out = []
-        while True:
-            nin = self.lib.freedv_nin(self.f)
-            if len(self._in) < nin:
-                break
-            ctypes.memmove(self._demod, self._in[:nin].tobytes(), nin * 2)
-            self._in = self._in[nin:]
-            n = self.lib.freedv_rx(self.f, self._out, self._demod)
-            if n > 0 and self.lib.freedv_get_sync(self.f):          # speech only while the modem is locked on a signal
-                out.append(np.ctypeslib.as_array(self._out, shape=(self.n_max_speech,))[:n].copy())
-        sync, snr = ctypes.c_int(), ctypes.c_float()
-        self.lib.freedv_get_modem_stats(self.f, ctypes.byref(sync), ctypes.byref(snr))
-        self.sync, self.snr = int(sync.value), float(snr.value)
-        return np.concatenate(out) if out else np.empty(0, dtype="<i2")
-
-    def tx(self, speech: np.ndarray) -> np.ndarray:
-        """Exactly n_speech 8 kHz speech samples -> modem samples to send."""
-        spk = (ctypes.c_short * self.n_speech)()
-        ctypes.memmove(spk, speech.astype("<i2").tobytes(), self.n_speech * 2)
-        out = (ctypes.c_short * self.n_tx)()
-        self.lib.freedv_tx(self.f, out, spk)
-        return np.ctypeslib.as_array(out, shape=(self.n_tx,)).copy()
-
-
 class RxChain:
     """Radio audio (48 kHz frames of modem tones) -> speech frames (48 kHz) for the listeners."""
 
@@ -230,7 +120,7 @@ class RxChain:
         self.spec_fresh = self.spec.push(pcm)
         if self.spec_fresh:
             self.afc.hint = self.spec.hint
-        good = self.fd.sync == 1 and self.fd.snr >= PARAMS[self.fd.mode if self.fd.mode in PARAMS else "700D"]["min_snr"]
+        good = self.fd.sync == 1 and self.fd.snr >= PARAMS[self.mode]["min_snr"]
         self.shifter.shift = self.afc.update(good, FRAME_SAMPLES / RATE)          # nothing locked: step the shift until the modem locks, then hold it
         speech = self.fd.rx(_to_i16(self.shifter.process(self.dec.process(x))))
         if len(speech):
@@ -290,5 +180,5 @@ class TxChain:
         self.fd.close()
 
 
-__all__ = ["ALL_MODES", "Afc", "FreqShifter", "Spectrum", "FRAME_SAMPLES", "FreeDV", "FreeDVUnavailable", "MODES", "RxChain", "TxChain", "available", "available_modes",
+__all__ = ["ALL_MODES", "Afc", "FreqShifter", "Spectrum", "FRAME_SAMPLES", "FreeDVUnavailable", "RxChain", "TxChain", "available", "available_modes",
            "mode_status", "open_core"]

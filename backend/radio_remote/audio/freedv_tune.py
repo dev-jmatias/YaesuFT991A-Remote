@@ -1,7 +1,7 @@
 """Tuning help for FreeDV: a software frequency search (AFC), a spectrum of the received audio and a "where is the signal" estimate.
 
-Why: the FreeDV modems only lock when the signal is close to where they expect it (measured here with ideal signals: RADE and 700E about +-50 Hz, 700D about +-150 Hz,
-1600 about +-150..200 Hz), and a radio dial cannot be set that finely by hand. So the received audio is shifted in software: when no signal is locked the shift is
+Why: the FreeDV modems only lock when the signal is close to where they expect it (measured here with ideal signals: RADE V1 about +-50 Hz, RADE V2 at least +-300 Hz),
+and a radio dial cannot be set that finely by hand. So the received audio is shifted in software: when no signal is locked the shift is
 stepped through the possible offsets until the modem locks, and then held. Nothing here touches the radio.
 
 Offset convention: "offset" is how far ABOVE its nominal place in the audio the signal is (Hz). The applied shift is the opposite (shift = -offset).
@@ -19,12 +19,9 @@ FLOOR_DB, CEIL_DB = -100.0, -20.0               # spectrum scale: dBFS mapped to
 # nominal centre of the modem's carriers in the audio (Hz), their width, the search step (about the width of the lock range), the dwell per step
 PARAMS = {
     "RADE": {"centre": 1465, "width": 900, "step": 70, "dwell": 2.0, "min_snr": -5.0},
-    "700E": {"centre": 1500, "width": 1400, "step": 70, "dwell": 2.0, "min_snr": 3.0},
-    "700D": {"centre": 1500, "width": 1100, "step": 140, "dwell": 1.5, "min_snr": 0.0},
-    "1600": {"centre": 1500, "width": 1200, "step": 200, "dwell": 1.2, "min_snr": 4.0},
+    "RADE2": {"centre": 1490, "width": 850, "step": 400, "dwell": 2.0, "min_snr": 0.0},      # measured with ideal signals: V2 locked across the whole +-300 Hz tried, so a wide step is enough
 }
-# "min_snr": the modems also report "sync" on noise or a badly mistuned signal, but with an SNR estimate near 0 dB or below (measured: 700E about 1, 700D about -3,
-# 1600 about 0..2 dB), while a real lock shows 8..30 dB. Only sync together with an SNR above this counts as a lock for the search.
+# "min_snr": the modems can also report "sync" on noise or a badly mistuned signal, but with a low SNR estimate. Only sync together with an SNR above this counts as a lock for the search.
 SEARCH_RANGE_HZ = 450
 HOLD_S = 3.0                                    # a locked signal that goes quiet for this long starts the search again (RADE's sync flag flickers)
 
@@ -128,7 +125,7 @@ class Afc:
 class Spectrum:
     """Rolling spectrum of the received audio (48 kHz int16 frames): 80 bands of 50 Hz, level, and the signal-position estimate."""
 
-    def __init__(self, mode: str = "700D"):
+    def __init__(self, mode: str = "RADE"):
         self.mode = mode
         self.buf = np.zeros(SPEC_N)
         self.win = np.hanning(SPEC_N)

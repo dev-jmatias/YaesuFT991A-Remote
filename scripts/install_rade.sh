@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install (or remove) the optional RADE library, the neural FreeDV mode. Without it FreeDV still offers 1600, 700D and 700E.
+# Install (or remove) the optional RADE library, the neural FreeDV mode. Without it the FreeDV tab has no mode to offer.
 #
 #   sudo /opt/radio-remote/current/scripts/install_rade.sh                  # download it from the matching GitHub release and install it
 #   sudo /opt/radio-remote/current/scripts/install_rade.sh --file F.tar.xz  # install from a file you copied to the Pi (no internet needed)

@@ -73,14 +73,14 @@ def make_reporter(site, **over):
 async def test_it_stays_silent_until_enabled_and_freedv_is_on(site):
     r = make_reporter(site, enabled=False)
     r.start()
-    r.set_active(True, "700D")
+    r.set_active(True, "RADE")
     await asyncio.sleep(0.4)
     assert site["connections"] == 0 and r.status()["wanted"] == ""
     r.cfg["reporter"]["enabled"] = True
     r.set_active(False)
     await asyncio.sleep(0.3)
     assert site["connections"] == 0                                                  # FreeDV off: not connected
-    r.set_active(True, "700D")
+    r.set_active(True, "RADE")
     await until(lambda: r.connected)
     assert site["connections"] == 1
     await r.stop()
@@ -89,13 +89,13 @@ async def test_it_stays_silent_until_enabled_and_freedv_is_on(site):
 async def test_announce_and_watch(site):
     r = make_reporter(site)
     r.start()
-    r.set_active(True, "700E")
+    r.set_active(True, "RADE2")
     await until(lambda: r.connected and len(r.stations) == 4)
     a = site["auth"]
     assert a == {"protocol_version": 2, "role": "report", "callsign": "G4ABC", "grid_square": "IO91wm", "version": "Radio Remote 9.9.9", "rx_only": False, "os": "Linux"}
     await until(lambda: len(site["received"]) >= 3)
     assert ["freq_change", {"freq": 14236000}] in site["received"]                   # where we are
-    assert ["tx_report", {"mode": "700E", "transmitting": False}] in site["received"]
+    assert ["tx_report", {"mode": "RADEV2", "transmitting": False}] in site["received"]
     assert ["message_update", {"message": "hello"}] in site["received"]
     await until(lambda: site["pongs"] >= 1)                                          # the server's ping was answered
     st = r.status(near_hz=14_236_000)
@@ -105,8 +105,9 @@ async def test_announce_and_watch(site):
     vk = st["stations"][0]
     assert vk["tx"] is True and vk["mode"] == "RADE" and vk["tunable"] is True and vk["message"] == "CQ FreeDV" and vk["freq"] == 14236000
     ja = next(s for s in st["stations"] if s["callsign"] == "JA1XYZ")
-    assert ja["mode"] == "RADEV2" and ja["tunable"] is False                          # a mode we cannot decode
-    assert next(s for s in st["stations"] if s["callsign"] == "W1AW")["listening"] is True
+    assert ja["mode"] == "RADE2" and ja["tunable"] is True                            # RADE V2 (experimental) is a mode we can decode
+    w1 = next(s for s in st["stations"] if s["callsign"] == "W1AW")
+    assert w1["listening"] is True and w1["mode"] == "700D" and w1["tunable"] is False      # a mode this program no longer has
     await r.stop()
 
 
@@ -133,7 +134,7 @@ async def test_changes_are_reported(site):
 async def test_roles(site, over, role):
     r = make_reporter(site, **over)
     r.start()
-    r.set_active(True, "700D")
+    r.set_active(True, "RADE")
     if not role:
         await asyncio.sleep(0.4)
         assert site["connections"] == 0
@@ -154,12 +155,12 @@ async def test_roles(site, over, role):
 async def test_switching_freedv_off_or_changing_the_identity_reconnects(site):
     r = make_reporter(site)
     r.start()
-    r.set_active(True, "700D")
+    r.set_active(True, "RADE")
     await until(lambda: r.connected and r.stations)
     r.set_active(False)
     await until(lambda: not r.connected)
     assert r.stations == {}
-    r.set_active(True, "700D")
+    r.set_active(True, "RADE")
     await until(lambda: r.connected)
     assert site["connections"] == 2
     r.cfg["reporter"]["callsign"] = "M0XYZ"
@@ -172,7 +173,7 @@ async def test_switching_freedv_off_or_changing_the_identity_reconnects(site):
 async def test_removals_and_a_refusal(site, monkeypatch):
     r = make_reporter(site)
     r.start()
-    r.set_active(True, "700D")
+    r.set_active(True, "RADE")
     await until(lambda: len(r.stations) == 4)
     await site["ws"].send_str('42["remove_connection",{"sid":"s2"}]')
     await site["ws"].send_str('42["unknown_event",{"sid":"s2"}]')
@@ -183,7 +184,7 @@ async def test_removals_and_a_refusal(site, monkeypatch):
     site["refuse"] = True
     r2 = make_reporter(site)
     r2.start()
-    r2.set_active(True, "700D")
+    r2.set_active(True, "RADE")
     await until(lambda: "refused" in r2.error and site["connections"] >= 3)             # it reports the reason and keeps trying
     assert r2.connected is False and r2.status()["error"].startswith("the server refused")
     await r2.stop()
@@ -192,7 +193,7 @@ async def test_removals_and_a_refusal(site, monkeypatch):
 async def test_an_unreachable_site_is_just_an_error(site):
     r = make_reporter(site, host="127.0.0.1:1")
     r.start()
-    r.set_active(True, "700D")
+    r.set_active(True, "RADE")
     await until(lambda: r.error != "")
     assert r.connected is False
     await r.stop()
@@ -218,8 +219,8 @@ async def test_wiring_into_the_app(make_app, fake_modem):
     await admin_user(client)
     rep, audio = client.app[K_REPORTER], client.app[K_AUDIO]
     audio.freedv_ok = True
-    audio.set_freedv(True, "700E")
-    assert rep.active and rep.mode == "700E"
+    audio.set_freedv(True, "RADE2")
+    assert rep.active and rep.mode == "RADEV2"
     audio._fd_tx_reported = False
     audio._tx_gate_open = True
     audio._check_fd_tx()

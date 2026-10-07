@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build the RADE V1 library for Radio Remote: rade_c (the C port of RADE, BSD) plus native/rade/rade_glue.c, as ONE shared library.
+# Build the RADE (V1 and V2) library for Radio Remote: rade_c (the C port of RADE, BSD) plus native/rade/rade_glue.c, as ONE shared library.
 #
 #   scripts/build_rade.sh [OUT_DIR]        default OUT_DIR = ./dist/rade
 #
@@ -38,7 +38,7 @@ cp "$WORK/rade_c/LICENSE" "$OUT/LICENSE-rade_c"
 OPUS_COPYING="$(find "$WORK/rade_c/build" -maxdepth 4 -name COPYING -path '*build_opus*' | head -1)"
 if [ -n "$OPUS_COPYING" ]; then cp "$OPUS_COPYING" "$OUT/LICENSE-opus"; else echo "Opus: BSD-3-Clause, see https://github.com/xiph/opus" > "$OUT/LICENSE-opus"; fi
 cat > "$OUT/RADE-INFO.txt" <<EOF
-RADE V1 library for Radio Remote
+RADE V1 + V2 library for Radio Remote
 rade_c: $RADE_C_URL @ $RADE_C_REF
 built: $(date -u +%Y-%m-%dT%H:%M:%SZ) on $(uname -m)
 glue ABI version: 1

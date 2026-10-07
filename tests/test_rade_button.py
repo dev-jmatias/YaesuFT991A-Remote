@@ -18,7 +18,7 @@ def arm_pi(monkeypatch):
     monkeypatch.setattr(rade, "loaded_path", lambda: "")                                   # (a machine that has the real library must not leak into these tests)
     monkeypatch.setattr(freedv, "available", lambda: (True, ""))
     monkeypatch.setattr(freedv, "mode_status",
-                        lambda: {"1600": "", "700D": "", "700E": "", "RADE": "" if state["installed"] else "RADE is not installed"})
+                        lambda: {"RADE": "" if state["installed"] else "RADE is not installed", "RADE2": "" if state["installed"] else "RADE is not installed"})
 
     async def fake_install(dest, repo):
         state["calls"].append((str(dest), repo))
@@ -35,7 +35,7 @@ async def test_install_makes_rade_available_at_once(make_app, arm_pi):
     client = await make_app()
     root = await admin_user(client)
     info = await (await client.get("/api/freedv")).json()
-    assert info["unavailable"] == {"RADE": "RADE is not installed"} and info["rade_installable"] is True and "RADE" not in info["modes"]
+    assert set(info["unavailable"]) == {"RADE", "RADE2"} and info["rade_installable"] is True and info["modes"] == []
     assert info["arch"] == "aarch64" and info["rade_path"] == ""
     r = await client.post(URL, json={"confirm": True}, headers=root.h)
     body = await r.json()
@@ -45,7 +45,7 @@ async def test_install_makes_rade_available_at_once(make_app, arm_pi):
     assert "RADE" in info["modes"] and info["unavailable"] == {}
     events = [e["event"] for e in (await (await client.get("/api/audit")).json())["events"]]
     assert "rade_installed" in events
-    assert client.app[K_AUDIO].freedv_state()["modes"] == ["1600", "700D", "700E", "RADE"]
+    assert client.app[K_AUDIO].freedv_state()["modes"] == ["RADE", "RADE2"]
     await close_all(root)
 
 

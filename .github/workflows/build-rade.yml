@@ -25,8 +25,6 @@ jobs:
 
       - name: Build the RADE library (Debian 12 container, with a load test)
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq libcodec2-dev
           bash scripts/build_rade_container.sh rade-out
 
       - name: FreeDV tests against the real libraries, and the CPU cost on this hardware

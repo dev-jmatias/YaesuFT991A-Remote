@@ -44,8 +44,8 @@ def test_shifter_is_continuous_when_the_shift_changes():
 
 
 def test_candidates_cover_the_range_nearest_first():
-    c = candidates("700D", 0.0)
-    assert c[0] == 0.0 and c[1:3] == [140.0, -140.0] and max(abs(v) for v in c) <= freedv_tune.SEARCH_RANGE_HZ
+    c = candidates("RADE", 0.0)
+    assert c[0] == 0.0 and c[1:3] == [70.0, -70.0] and max(abs(v) for v in c) <= freedv_tune.SEARCH_RANGE_HZ
     assert len(set(c)) == len(c)
     c2 = candidates("RADE", 210.0)
     assert c2[0] == 210.0 and all(abs(v) <= freedv_tune.SEARCH_RANGE_HZ for v in c2)
@@ -61,8 +61,8 @@ def run_afc(afc, script, dt=0.02):
 
 
 def test_afc_holds_a_lock_rides_out_a_dropout_and_searches_afterwards():
-    a = Afc("700D")
-    shifts = run_afc(a, [(2.0, False)])                                          # nothing there: it steps through the offsets
+    a = Afc("RADE")
+    shifts = run_afc(a, [(2.5, False)])                                          # nothing there: it steps through the offsets
     assert len(set(shifts)) > 1 and a.searching and not a.locked
     a.shift = 140.0
     run_afc(a, [(1.0, True)])                                                    # lock
@@ -73,7 +73,7 @@ def test_afc_holds_a_lock_rides_out_a_dropout_and_searches_afterwards():
 
 
 def test_afc_tries_the_spectrum_hint_first_and_stays_on_a_lock():
-    a = Afc("700E")
+    a = Afc("RADE2")
     a.hint = 200.0                                                               # the spectrum says: signal 200 Hz above its place
     first = a.update(False, 0.02)
     assert first == -200.0                                                       # so the audio is shifted down by 200 Hz first
@@ -102,7 +102,7 @@ def band_noise(low, high, level=1.0, seed=1):
     return p
 
 
-@pytest.mark.parametrize("mode", ["700D", "700E", "1600", "RADE"])
+@pytest.mark.parametrize("mode", ["RADE", "RADE2"])
 @pytest.mark.parametrize("off", [-300, -100, 0, 150, 350])
 def test_the_estimate_finds_where_the_signal_is(mode, off):
     pr = freedv_tune.PARAMS[mode]
@@ -113,13 +113,13 @@ def test_the_estimate_finds_where_the_signal_is(mode, off):
 
 def test_the_estimate_says_nothing_for_noise_or_silence():
     rng = np.random.default_rng(3)
-    assert estimate_offset(rng.random(N_BANDS) * 1e-6, "700D") is None
-    assert estimate_offset(np.zeros(N_BANDS), "700D") is None
-    assert estimate_offset(band_noise(1000, 2000, level=1e-6), "700D") is None                  # a signal far below -85 dBFS is not trusted
+    assert estimate_offset(rng.random(N_BANDS) * 1e-6, "RADE") is None
+    assert estimate_offset(np.zeros(N_BANDS), "RADE") is None
+    assert estimate_offset(band_noise(1000, 2000, level=1e-6), "RADE") is None                  # a signal far below -85 dBFS is not trusted
 
 
 def test_spectrum_shows_a_tone_in_its_band_and_flags_clipping():
-    sp = Spectrum("700D")
+    sp = Spectrum("RADE")
     t = np.arange(FRAME_SAMPLES * 30) / RATE
     x = (20000 * np.sin(2 * np.pi * 1030 * t)).astype("<i2")
     fresh = [sp.push(x[i * FRAME_SAMPLES:(i + 1) * FRAME_SAMPLES].tobytes()) for i in range(30)]
@@ -164,7 +164,7 @@ async def tsvc(fake_modem, monkeypatch):  # noqa: F811
 
 
 async def test_the_tuning_aid_values_reach_the_published_state(tsvc):
-    tsvc.set_freedv(True, "700D")
+    tsvc.set_freedv(True, "RADE")
     await tsvc._ensure_capture()
     await until(lambda: tsvc._levels["freedv_spec"])
     lv = tsvc._levels
@@ -175,7 +175,7 @@ async def test_the_tuning_aid_values_reach_the_published_state(tsvc):
 
 
 async def test_moving_the_dial_keeps_the_software_tuning(tsvc):
-    tsvc.set_freedv(True, "700D")
+    tsvc.set_freedv(True, "RADE")
     afc = tsvc._fd_rx.afc
     tsvc.freedv_dial_moved(14_236_000, 14_236_100, "USB")                       # upper sideband: every audio frequency moved down by 100 Hz
     assert afc.shift == -120.0 + 100.0

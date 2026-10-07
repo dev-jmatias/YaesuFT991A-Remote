@@ -610,7 +610,7 @@ class YaesuCatDriver(RadioDriver):
 
     async def power_on(self) -> None:
         """PS1; (manual p.15): the radio must first receive dummy data, and PS1; follows after one but before two seconds.
-        The supervisor does it (it owns the serial port while the radio is off); NOT bench-verified."""
+        The supervisor does it (it owns the serial port while the radio is off). Bench-verified on an FT-991A (power off, power on, back online in about 3 s)."""
         if not self.caps.has("power_on_cat"):
             raise RadioError("power on is not enabled for this radio profile")
         if self.state.get("connected"):

@@ -1,11 +1,11 @@
-"""The real codec2 modem: transmit chain -> receive chain loopback (needs libcodec2; skipped where it is not installed)."""
+"""The real RADE V1 and V2 modems: transmit chain -> receive chain loopback (needs the RADE library; skipped where it is not installed)."""
 import numpy as np
 import pytest
 
 from radio_remote.audio import freedv
 from radio_remote.audio.levels import FRAME_SAMPLES, RATE
 
-pytestmark = pytest.mark.skipif(not freedv.available()[0], reason="libcodec2 is not installed")
+pytestmark = pytest.mark.skipif(not freedv.available()[0], reason="the RADE library is not installed")
 
 
 def speechlike(n_frames, seed=1):
@@ -17,24 +17,46 @@ def speechlike(n_frames, seed=1):
     return (x / np.abs(x).max() * 12000).astype("<i2")
 
 
-@pytest.mark.parametrize("mode", ["1600", "700D", "700E"])
+@pytest.mark.parametrize("mode", ["RADE", "RADE2"])
 def test_loopback_decodes_speech_and_noise_does_not(mode):
+    if mode not in freedv.available_modes():
+        pytest.skip(f"{mode} is not available in this RADE library")
     tx, rx = freedv.TxChain(mode, level=0.5), freedv.RxChain(mode)
-    mic = speechlike(400)
+    mic = speechlike(600)
     out, tone_peak, synced = [], 0, False
-    for i in range(400):
+    for i in range(600):
         for f in tx.process(mic[i * FRAME_SAMPLES:(i + 1) * FRAME_SAMPLES].tobytes()):
             tone_peak = max(tone_peak, int(np.abs(np.frombuffer(f, dtype="<i2")).max()))
             out.append(rx.process(f))
             synced = synced or rx.sync == 1
+    for _ in range(30):                                                  # let the last frames come out
+        out.append(rx.process(bytes(FRAME_SAMPLES * 2)))
     speech = np.frombuffer(b"".join(out), dtype="<i2")
     assert synced and tone_peak > 2000
-    assert np.abs(speech).max() > 3000                                   # decoded speech, not silence
+    assert np.abs(speech).max() > 2000                                   # decoded speech, not silence
     rng = np.random.default_rng(2)
     quiet = freedv.RxChain(mode)
     noise = (rng.standard_normal(RATE * 4) * 3000).astype("<i2")
     heard = b"".join(quiet.process(noise[i * FRAME_SAMPLES:(i + 1) * FRAME_SAMPLES].tobytes()) for i in range(200))
-    assert np.abs(np.frombuffer(heard, dtype="<i2")).max() == 0         # no signal: no speech, no noise passed on
+    assert np.abs(np.frombuffer(heard, dtype="<i2")).max() < 1500        # no signal: no speech (at most a little start-up residue)
+
+
+def test_an_old_library_without_v2_still_does_v1_and_says_why_v2_is_missing(monkeypatch):
+    from radio_remote.audio import rade
+    lib = rade._load()
+    if lib is None or not hasattr(lib, "rg_open_mode"):
+        pytest.skip("this library has no V2 to hide")
+
+    class V1Only:                                                    # what a library built before V2 support looks like to the loader
+        def __getattr__(self, name):
+            if name == "rg_open_mode":
+                raise AttributeError(name)
+            return getattr(lib, name)
+    monkeypatch.setattr(rade, "_LIB", V1Only())
+    assert rade.v2_available()[0] is False and "reinstall" in rade.v2_available()[1].lower()
+    assert freedv.mode_status()["RADE"] == "" and "no V2" in freedv.mode_status()["RADE2"]
+    with pytest.raises(freedv.FreeDVUnavailable):
+        freedv.open_core("RADE2")
 
 
 def test_resamplers_keep_the_band_and_the_frame_size():
@@ -58,11 +80,11 @@ def ssb_shift(x, hz):
     return np.real(np.fft.ifft(np.fft.fft(x) * h) * np.exp(2j * np.pi * hz * np.arange(n) / RATE))
 
 
-@pytest.mark.parametrize("mode", ["1600", "700D", "700E", "RADE"])
+@pytest.mark.parametrize("mode", ["RADE", "RADE2"])
 @pytest.mark.parametrize("off", [-250, 200])
 def test_software_tuning_finds_a_mistuned_signal_and_holds_it(mode, off):
     if mode not in freedv.available_modes():
-        pytest.skip(f"{mode} is not installed")
+        pytest.skip(f"{mode} is not available in this RADE library")
     tx = freedv.TxChain(mode, level=1.0)
     mic = speechlike(50 * 60)                                       # 60 s of speech
     tones = []
@@ -81,13 +103,14 @@ def test_software_tuning_finds_a_mistuned_signal_and_holds_it(mode, off):
             good_after += rx.afc.locked
     assert first is not None and first < 40, f"{mode} at {off:+d} Hz never locked"
     assert good_after / max(1, n - int((first + 5) / 0.02)) > 0.7                  # and it keeps the lock
-    assert abs(rx.afc.offset - off) <= 120                                         # the offset it settled on is close to the real one
+    if mode == "RADE":                                                            # V1 needs the software shift; V2 follows the offset by itself (it locked with no shift)
+        assert abs(rx.afc.offset - off) <= 120                                     # the offset it settled on is close to the real one
 
-@pytest.mark.parametrize("mode", ["1600", "700D", "700E", "RADE"])
+@pytest.mark.parametrize("mode", ["RADE", "RADE2"])
 def test_the_modem_locks_again_after_a_restart_and_keeps_its_tuning(mode):
     """After every transmission the receiver gets a fresh modem (restart); the lock must come back on the same signal and the tuning found must survive."""
-    if mode == "RADE" and not freedv.mode_status().get("RADE") == "":
-        pytest.skip("the RADE library is not installed")
+    if mode not in freedv.available_modes():
+        pytest.skip(f"{mode} is not available in this RADE library")
     tx, rx = freedv.TxChain(mode, level=0.5), freedv.RxChain(mode)
     mic = speechlike(500)
     tones = []

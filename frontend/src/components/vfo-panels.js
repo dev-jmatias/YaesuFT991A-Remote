@@ -2,6 +2,7 @@ import { el } from "../util.js";
 import { createFreqDisplay } from "./freq-display.js";
 import { createSMeter, createTxMeters } from "./meters.js";
 import { getLights } from "../prefs.js";
+const FDV_NAME = { RADE: "RADE V1", RADE2: "RADE V2" };
 
 // One VFO block: VFO A (main, receiving) with the signal meter and the TX meters, and VFO B as a smaller tab attached below.
 // VFO B shows its frequency and whether it is the transmit VFO (split). The CAT commands of this radio give no signal strength
@@ -123,9 +124,9 @@ export function createVfoPanels(host, ctx) {
       const fdv = q("[data-fdv]");                                       // FreeDV indicator under the frequency, before the MEM tag
       fdv.hidden = !s.freedv_on;
       if (s.freedv_on) {
-        fdv.textContent = `FreeDV ${s.freedv_mode || ""}`.trim();
+        fdv.textContent = `FreeDV ${FDV_NAME[s.freedv_mode] || s.freedv_mode || ""}`.trim();
         fdv.classList.toggle("on", s.freedv_sync === 1);
-        fdv.title = s.freedv_sync === 1 ? `FreeDV ${s.freedv_mode}: locked on a signal (SNR ${(+s.freedv_snr || 0).toFixed(1)} dB)` : `FreeDV ${s.freedv_mode}: on, no signal locked`;
+        fdv.title = s.freedv_sync === 1 ? `FreeDV ${FDV_NAME[s.freedv_mode] || s.freedv_mode}: locked on a signal (SNR ${(+s.freedv_snr || 0).toFixed(1)} dB)` : `FreeDV ${FDV_NAME[s.freedv_mode] || s.freedv_mode}: on, no signal locked`;
       }
       const memb = q("[data-memb]"), inMem = s.vfo_memory === "memory";
       memb.hidden = !inMem;

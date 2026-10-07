@@ -15,7 +15,7 @@ OUT="$(cd "$OUT" && pwd)"
 docker run --rm -v "$HERE":/src:ro -v "$OUT":/out debian:12 bash -ec '
   export DEBIAN_FRONTEND=noninteractive
   apt-get update -qq
-  apt-get install -y -qq cmake build-essential autoconf automake libtool curl git ca-certificates xz-utils python3 python3-numpy libcodec2-1.0 >/dev/null
+  apt-get install -y -qq cmake build-essential autoconf automake libtool curl git ca-certificates xz-utils python3 python3-numpy >/dev/null
   mkdir /build && cd /src && tar --exclude=.git --exclude=.venv --exclude=dist -cf - . | tar -xf - -C /build
   cd /build
   bash scripts/build_rade.sh /out

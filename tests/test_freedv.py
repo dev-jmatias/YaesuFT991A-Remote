@@ -1,5 +1,5 @@
-"""FreeDV (700D/700E): config, the on/off command, and how the audio service routes receive and transmit audio through the modem.
-The real libcodec2 round trip is in test_freedv_codec.py (skipped where the library is missing); here the modem chains are stand-ins."""
+"""FreeDV (RADE V1 / RADE V2): config, the on/off command, and how the audio service routes receive and transmit audio through the modem.
+The real library round trip is in test_freedv_codec.py (skipped where the library is missing); here the modem chains are stand-ins."""
 import asyncio
 import copy
 import json
@@ -58,7 +58,7 @@ class FakeTx:
 def fake_modem(monkeypatch):
     FakeTx.made = []
     monkeypatch.setattr(freedv, "available", lambda: (True, ""))
-    monkeypatch.setattr(freedv, "mode_status", lambda: {"1600": "", "700D": "", "700E": "", "RADE": "RADE is not installed"})
+    monkeypatch.setattr(freedv, "mode_status", lambda: {"RADE": "", "RADE2": ""})
     monkeypatch.setattr(service.freedv, "RxChain", FakeRx)
     monkeypatch.setattr(service.freedv, "TxChain", FakeTx)
 
@@ -77,32 +77,44 @@ async def svc(fake_modem):
 
 
 def test_config_and_codec_mode_lists_agree():
-    assert set(config.FREEDV_MODES) == set(freedv.ALL_MODES) == set(freedv.MODES) | {"RADE"}
+    assert set(config.FREEDV_MODES) == set(freedv.ALL_MODES) == {"RADE", "RADE2"}
 
 
 def test_config_defaults_and_validation():
     cfg = config.load(None)
-    assert cfg["freedv"]["mode"] == "700D" and "20m|14236000|700D" in cfg["freedv"]["channels"]
-    for bad in (["no pipes"], ["x|abc|700D"], ["x|14236000|RADE2"], ["a|b|c|700D"], [f"n{i}|7177000|700D" for i in range(41)]):
+    assert cfg["freedv"]["mode"] == "RADE" and "20m|14236000|RADE" in cfg["freedv"]["channels"]
+    for bad in (["no pipes"], ["x|abc|RADE"], ["x|14236000|FOO"], ["a|b|c|RADE"], [f"n{i}|7177000|RADE" for i in range(41)]):
         c = copy.deepcopy(cfg)
         c["freedv"]["channels"] = bad
         with pytest.raises(config.ConfigError):
             config.validate(c)
     c = copy.deepcopy(cfg)
-    c["freedv"]["mode"] = "RADE2"
+    c["freedv"]["mode"] = "FOO"
     with pytest.raises(config.ConfigError):
         config.validate(c)
-    c["freedv"]["mode"], c["freedv"]["tx_level_db"] = "700E", 3
+    c["freedv"]["mode"], c["freedv"]["tx_level_db"] = "RADE2", 3
     with pytest.raises(config.ConfigError):
         config.validate(c)
+    c["freedv"]["mode"], c["freedv"]["tx_level_db"] = "RADE2", -6                        # RADE V2 is a mode like any other
+    config.validate(c)
+
+
+def test_a_config_that_still_names_a_removed_mode_is_read_as_rade():
+    """1600, 700D and 700E were removed; an existing config file must still start the service."""
+    c = copy.deepcopy(config.load(None))
+    c["freedv"]["mode"] = "700D"
+    c["freedv"]["channels"] = ["20m|14236000|700D", "40m|7177000|1600", "80m|3643000|700E", "17m|18118000|RADE2"]
+    config.validate(c)
+    assert c["freedv"]["mode"] == "RADE"
+    assert c["freedv"]["channels"] == ["20m|14236000|RADE", "40m|7177000|RADE", "80m|3643000|RADE", "17m|18118000|RADE2"]
 
 
 async def test_receive_audio_is_replaced_by_the_decoded_speech_and_stats_are_published(svc):
     await svc._ensure_capture()
     await until(lambda: svc._rx_q)
     assert svc._rx_q[-1] != SPEECH                                      # off: the radio's own audio (the test tone)
-    svc.set_freedv(True, "700E")
-    assert svc.freedv_state()["on"] and svc.freedv_mode == "700E"
+    svc.set_freedv(True, "RADE2")
+    assert svc.freedv_state()["on"] and svc.freedv_mode == "RADE2"
     await until(lambda: svc._rx_q and svc._rx_q[-1] == SPEECH)          # on: listeners get the decoded speech
     await until(lambda: svc._levels["freedv_sync"] == 1 and svc._levels["freedv_snr"] == 8.5)
     svc.set_freedv(False)
@@ -111,7 +123,7 @@ async def test_receive_audio_is_replaced_by_the_decoded_speech_and_stats_are_pub
 
 
 async def test_own_transmission_is_never_decoded_and_replayed(svc):
-    svc.set_freedv(True, "700D")
+    svc.set_freedv(True, "RADE")
     await svc._ensure_capture()
     await until(lambda: svc._rx_q and svc._rx_q[-1] == SPEECH)
     svc._tx_gate_open, svc._gate_seen = True, float("inf")              # this connection is transmitting (and never goes idle in this test)
@@ -123,7 +135,7 @@ async def test_own_transmission_is_never_decoded_and_replayed(svc):
 async def test_the_receiver_restarts_once_after_every_transmission(svc):
     """A friend had to switch FreeDV off and on after every PTT: the old RADE modem saw a gap and never found the signal again."""
     FakeRx.restarts = 0
-    svc.set_freedv(True, "700D")
+    svc.set_freedv(True, "RADE")
     await svc._ensure_capture()
     await until(lambda: svc._rx_q and svc._rx_q[-1] == SPEECH)
     assert FakeRx.restarts == 0
@@ -145,7 +157,7 @@ async def test_the_receiver_comes_back_when_the_page_stops_sending_microphone_fr
 
     monkeypatch.setattr(service_mod, "GATE_IDLE_S", 0.15)
     FakeRx.restarts = 0
-    svc.set_freedv(True, "700D")
+    svc.set_freedv(True, "RADE")
     await svc._ensure_capture()
     await until(lambda: svc._rx_q and svc._rx_q[-1] == SPEECH)
     svc.gate["open"] = True                                              # PTT held: the page sends microphone frames
@@ -162,7 +174,7 @@ async def test_the_receiver_comes_back_when_the_page_stops_sending_microphone_fr
 
 
 async def test_transmit_only_passes_modem_tones_while_the_ptt_owner_is_keyed(svc):
-    svc.set_freedv(True, "700D")
+    svc.set_freedv(True, "RADE")
     peer = types.SimpleNamespace(conn_id="c1")
     mic = b"\x10\x00" * (FRAME_BYTES // 2)
     svc._mic_frame(peer, mic)
@@ -186,14 +198,15 @@ async def test_speech_passes_through_the_normal_path_when_freedv_is_off(svc):
 
 
 async def test_unavailable_library_refuses_to_switch_on(svc):
-    svc.freedv_ok, svc.freedv_reason = False, "libcodec2 is not installed"
-    with pytest.raises(AudioUnavailable, match="libcodec2"):
+    svc.freedv_ok, svc.freedv_reason = False, "RADE is not installed"
+    with pytest.raises(AudioUnavailable, match="not installed"):
         svc.set_freedv(True)
     assert svc.freedv_state()["on"] is False
 
 
-async def test_command_api_and_settings(make_app, fake_modem):
+async def test_command_api_and_settings(make_app, fake_modem, monkeypatch):
     from test_phase8 import admin_user
+    monkeypatch.setattr(freedv, "mode_status", lambda: {"RADE": "", "RADE2": "the installed RADE library has no V2"})
     client = await make_app()
     root = await admin_user(client)
     audio = client.server.app[K_AUDIO]
@@ -202,23 +215,23 @@ async def test_command_api_and_settings(make_app, fake_modem):
     assert hello["audio"]["freedv"]["available"] is True and hello["audio"]["freedv"]["on"] is False
     h = root.h
     info = await (await client.get("/api/freedv")).json()
-    assert {"name": "20m", "hz": 14236000, "mode": "700D"} in info["channels"] and info["modes"] == ["1600", "700D", "700E"] and info["unavailable"] == {"RADE": "RADE is not installed"} and "RADE" in info["all_modes"]
+    assert {"name": "20m", "hz": 14236000, "mode": "RADE"} in info["channels"] and info["modes"] == ["RADE"] and info["unavailable"] == {"RADE2": "the installed RADE library has no V2"} and info["all_modes"] == ["RADE", "RADE2"]
 
-    await ws.send_json({"id": 1, "type": "freedv", "on": True, "mode": "RADE2"})
+    await ws.send_json({"id": 1, "type": "freedv", "on": True, "mode": "700D"})
     assert (await recv_until(ws, lambda m: m["t"] == "ack"))["ok"] is False                            # not a mode at all
-    await ws.send_json({"id": 11, "type": "freedv", "on": True, "mode": "RADE"})
+    await ws.send_json({"id": 11, "type": "freedv", "on": True, "mode": "RADE2"})
     nak = await recv_until(ws, lambda m: m["t"] == "ack" and m["id"] == 11)
-    assert nak["ok"] is False and "not installed" in nak["error"]                                      # a real mode whose library is missing
-    await ws.send_json({"id": 2, "type": "freedv", "on": True, "mode": "700E"})
+    assert nak["ok"] is False and "no V2" in nak["error"]                                              # a real mode this library cannot do
+    await ws.send_json({"id": 2, "type": "freedv", "on": True, "mode": "RADE"})
     assert (await recv_until(ws, lambda m: m["t"] == "ack" and m["id"] == 2))["ok"] is True
-    assert audio.freedv_state()["on"] and audio.freedv_mode == "700E"
+    assert audio.freedv_state()["on"] and audio.freedv_mode == "RADE"
     patch = await recv_until(ws, lambda m: m["t"] == "patch" and m["d"].get("freedv_on") is True)
-    assert patch["d"]["freedv_mode"] == "700E"
+    assert patch["d"]["freedv_mode"] == "RADE"
 
-    r = await client.put("/api/config", json={"freedv": {"tx_level_db": -12, "channels": ["test|7100000|700E"]}}, headers=h)
+    r = await client.put("/api/config", json={"freedv": {"tx_level_db": -12, "channels": ["test|7100000|RADE2"]}}, headers=h)
     assert r.status == 200
     assert abs(audio.freedv_tx_gain - 0.2512) < 0.001 and audio._fd_tx.level == audio.freedv_tx_gain       # applies at once
-    assert (await (await client.get("/api/freedv")).json())["channels"] == [{"name": "test", "hz": 7100000, "mode": "700E"}]
+    assert (await (await client.get("/api/freedv")).json())["channels"] == [{"name": "test", "hz": 7100000, "mode": "RADE2"}]
     r = await client.put("/api/config", json={"freedv": {"channels": ["broken"]}}, headers=h)
     assert r.status == 400
 
@@ -243,3 +256,47 @@ async def test_a_viewer_or_a_connection_without_control_cannot_switch_it(make_ap
     assert client.server.app[K_AUDIO].freedv_state()["on"] is False
     await close_all(root, v)
 
+
+
+async def test_the_tones_wait_for_a_cushion_and_a_hole_in_the_tones_is_counted(svc):
+    """The modem hands its tones over in bursts. Without a cushion a burst a few ms late made the sender write 20 ms of silence into the middle of the signal,
+    and RADE cannot follow a signal with holes in it (a friend's transmissions were unreadable at the other station)."""
+    svc.set_freedv(True, "RADE")
+    peer = types.SimpleNamespace(conn_id="c1")
+    mic = b"\x10\x00" * (FRAME_BYTES // 2)
+    await svc._ensure_tx_sink()
+    svc.gate["open"] = True
+    for _ in range(service.TX_PREFILL_FRAMES - 1):
+        svc._mic_frame(peer, mic)                                        # one tone frame short of the cushion
+    await asyncio.sleep(0.12)
+    assert TONES not in svc.sink.frames and svc.tx_underruns == 0         # only silence goes out while the cushion fills; that is not a hole
+    svc._mic_frame(peer, mic)                                            # the cushion is complete: the tones start
+    await until(lambda: svc.sink.frames.count(TONES) == service.TX_PREFILL_FRAMES)
+    await until(lambda: svc.tx_underruns == 1)                           # and then the queue ran dry in mid-over: one hole, counted once
+    await asyncio.sleep(0.12)
+    assert svc.tx_underruns == 1                                         # (it waits for a new cushion; it does not count again for every frame of silence)
+    assert svc._levels["freedv_tx_underruns"] == 1 and svc.status()["freedv_timing"]["tx_underruns"] == 1
+    for _ in range(3):
+        svc._mic_frame(peer, mic)
+    svc.gate["open"] = False
+    svc._mic_frame(peer, mic)                                            # PTT released before the cushion was full
+    await until(lambda: svc.sink.frames.count(TONES) == service.TX_PREFILL_FRAMES + 3)      # what was already queued still goes out
+    await svc._stop_tx_sink()
+
+
+async def test_an_over_with_no_holes_is_logged_as_such(svc, caplog):
+    import logging
+    caplog.set_level(logging.INFO, logger="audio")
+    svc.set_freedv(True, "RADE")
+    peer = types.SimpleNamespace(conn_id="c1")
+    mic = b"\x10\x00" * (FRAME_BYTES // 2)
+    await svc._ensure_tx_sink()
+    svc.gate["open"] = True
+    for _ in range(2 * service.TX_PREFILL_FRAMES):
+        svc._mic_frame(peer, mic)
+        await asyncio.sleep(0.02)                                        # the microphone keeps up with the clock: the cushion is never used up
+    svc.gate["open"] = False
+    svc._mic_frame(peer, mic)
+    await until(lambda: any("no holes" in r.getMessage() for r in caplog.records))
+    assert svc.tx_underruns == 0
+    await svc._stop_tx_sink()

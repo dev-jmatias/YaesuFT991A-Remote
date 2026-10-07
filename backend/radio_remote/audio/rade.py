@@ -1,4 +1,4 @@
-"""RADE V1 (Radio Autoencoder) digital voice through the shared library built by scripts/build_rade.sh (rade_c + native/rade/rade_glue.c).
+"""RADE V1 and RADE V2 (Radio Autoencoder; V2 is experimental upstream) digital voice through the shared library built by scripts/build_rade.sh (rade_c + native/rade/rade_glue.c).
 
 The library is optional and is NOT part of the normal install: it is a separate download (see scripts/install_rade.sh). Without it the
 FreeDV tab simply does not offer RADE. Interface: the same "core" shape as the codec2 modes in freedv.py (rx / tx on int16 arrays), but the
@@ -97,6 +97,8 @@ def _load():
                 return None
             P16, PI, PF = ctypes.POINTER(ctypes.c_int16), ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_float)
             lib.rg_open.restype, lib.rg_open.argtypes = ctypes.c_void_p, []
+            if hasattr(lib, "rg_open_mode"):                               # libraries built from this version on can also do RADE V2; an older one does V1 only
+                lib.rg_open_mode.restype, lib.rg_open_mode.argtypes = ctypes.c_void_p, [ctypes.c_int]
             lib.rg_close.restype, lib.rg_close.argtypes = None, [ctypes.c_void_p]
             lib.rg_rx.restype, lib.rg_rx.argtypes = ctypes.c_int, [ctypes.c_void_p, P16, ctypes.c_int, P16, ctypes.c_int, PI, PF]
             lib.rg_rx_max_out.restype, lib.rg_rx_max_out.argtypes = ctypes.c_int, [ctypes.c_void_p, ctypes.c_int]
@@ -112,6 +114,16 @@ def _load():
 
 def available() -> tuple[bool, str]:
     return (True, "") if _load() else (False, _ERR)
+
+
+def v2_available() -> tuple[bool, str]:
+    """RADE V2 needs a library built from this version of Radio Remote on (an older V1-only library still works for V1)."""
+    lib = _load()
+    if lib is None:
+        return False, _ERR
+    if not hasattr(lib, "rg_open_mode"):
+        return False, "the installed RADE library has no V2: reinstall it (Admin > Config > RADE > Reinstall RADE)"
+    return True, ""
 
 
 class _QuietStderr:
@@ -138,17 +150,19 @@ class RadeCore:
 
     speech_rate, modem_rate, n_speech = SPEECH_RATE, MODEM_RATE, SPEECH_BLOCK
 
-    def __init__(self):
+    def __init__(self, v2: bool = False):
         lib = _load()
         if lib is None:
             raise RadeUnavailable(_ERR)
+        if v2 and not v2_available()[0]:
+            raise RadeUnavailable(v2_available()[1])
         self.lib = lib
         with _QuietStderr():
-            self.g = lib.rg_open()
+            self.g = lib.rg_open_mode(1) if v2 else lib.rg_open()
         if not self.g:
             raise RadeUnavailable("the RADE library could not open a modem")
         self.sync, self.snr = 0, 0.0
-        self.mode = "RADE"
+        self.mode = "RADE2" if v2 else "RADE"
 
     def close(self) -> None:
         if self.g:

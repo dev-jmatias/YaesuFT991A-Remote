@@ -110,9 +110,7 @@ run apt-get update
 # shellcheck disable=SC2086
 run env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends $PKGS
 
-ensure_codec2
-
-# ---- RADE: the neural FreeDV mode. A separate library (see docs/freedv.md); never fatal: without it FreeDV still offers 1600, 700D and 700E ---------
+# ---- RADE: the neural FreeDV mode. A separate library (see docs/freedv.md); never fatal: without it the FreeDV tab says RADE is not installed ---------
 if [ "$WITH_RADE" = 1 ]; then
   echo "==> RADE library (the neural FreeDV mode; optional)"
   RADE_ARGS=(--dest "$PREFIX/lib")

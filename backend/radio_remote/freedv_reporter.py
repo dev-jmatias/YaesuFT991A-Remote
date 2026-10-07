@@ -22,7 +22,7 @@ import aiohttp
 log = logging.getLogger("reporter")
 
 PROTOCOL_VERSION = 2
-MODE_NAMES = {"RADE": "RADEV1", "700D": "700D", "700E": "700E", "1600": "1600"}          # our mode -> the name the site uses
+MODE_NAMES = {"RADE": "RADEV1", "RADE2": "RADEV2"}          # our mode -> the name the site uses (RADEV1 is what FreeDV 2.x sends; RADEV2 is a guess: not confirmed against the site)
 OUR_MODE = {v: k for k, v in MODE_NAMES.items()}
 MAX_STATIONS = 2000
 BACKOFF = (5, 10, 20, 40, 60)
@@ -32,7 +32,7 @@ class FreeDVReporter:
     def __init__(self, cfg: Callable[[], dict], version: str, get_frequency: Callable[[], int]):
         self._cfg, self._version, self._get_freq = cfg, version, get_frequency
         self.active = False                       # FreeDV is switched on
-        self.mode = ""                            # our mode name ("700D" ...)
+        self.mode = ""                            # our mode name ("RADE" ...)
         self.transmitting = False
         self.freq = 0
         self.connected = False
