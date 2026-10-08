@@ -43,6 +43,13 @@ class AudioUnavailable(Exception):
     pass
 
 
+def _decode_timed(chain, pcm: bytes):
+    """Runs in the decoding worker thread: the decoded frame and how long the decoder itself took (ms)."""
+    t0 = time.perf_counter()
+    out = chain.process(pcm)
+    return out, (time.perf_counter() - t0) * 1000.0
+
+
 class OpusCodec:
     """One Opus encoder + decoder for a WebSocket audio peer (PyAV/libopus; 48 kHz mono, 20 ms packets)."""
 
@@ -132,6 +139,7 @@ class AudioService:
         self._over_frames = 0
         self.rx_ms_avg = 0.0                             # FreeDV receive: time one 20 ms frame takes to process (average / worst), and how many frames took longer than 20 ms
         self.rx_ms_max = 0.0
+        self.rx_work_avg = self.rx_work_max = 0.0                # the same, but only the time INSIDE the decoder (the total above also counts waiting for the worker thread and for the event loop)
         self.rx_slow = 0
         self._tx_proc_ms_max = 0.0
         self._levels = {"audio_rx_level": 0, "audio_tx_level": 0, "audio_tx_frames": 0, "audio_tx_error": "",
@@ -193,7 +201,7 @@ class AudioService:
             "peers": len(self.peers), "rx_capture": bool(self._cap_task), "tx_playback": bool(self._pump_task),
             "capture_error": self.capture_error, "playback_error": self.playback_error,
             "frames_to_radio": self.frames_to_radio,
-            "freedv_timing": {"rx_ms_avg": round(self.rx_ms_avg, 2), "rx_ms_max": round(self.rx_ms_max, 1), "rx_slow_frames": self.rx_slow,
+            "freedv_timing": {"rx_ms_avg": round(self.rx_ms_avg, 2), "rx_ms_max": round(self.rx_ms_max, 1), "rx_work_ms_avg": round(self.rx_work_avg, 2), "rx_work_ms_max": round(self.rx_work_max, 1), "rx_slow_frames": self.rx_slow,
                               "tx_ms_max": round(self._tx_proc_ms_max, 1), "tx_underruns": self.tx_underruns},
         }
 
@@ -257,7 +265,7 @@ class AudioService:
             self._tx_q = collections.deque(self._tx_q, maxlen=TX_QUEUE_MAX)
         self._tx_gate_open = False
         self._tx_primed = True
-        self.rx_ms_avg = self.rx_ms_max = 0.0
+        self.rx_ms_avg = self.rx_ms_max = self.rx_work_avg = self.rx_work_max = 0.0
         self.rx_slow = 0
         self._levels.update(freedv_on=on, freedv_mode=self.freedv_mode if on else "", freedv_sync=0, freedv_snr=0.0, freedv_spec=[], freedv_offset=0,
                             freedv_hint=None, freedv_afc="", freedv_level=-120, freedv_clip=False)
@@ -373,7 +381,7 @@ class AudioService:
                             chain = self._fd_rx
                             # The decoder takes 60-100 ms per modem frame on a small PC (an Atom: 60 ms every 120 ms). Run in the event loop it stalled the whole server (web page, audio to
                             # the listeners, PTT) for that long, eight times a second; in a worker thread (the C library releases the GIL) the loop stays free.
-                            out = await asyncio.get_running_loop().run_in_executor(self._fd_pool, chain.process, pcm)
+                            out, work = await asyncio.get_running_loop().run_in_executor(self._fd_pool, _decode_timed, chain, pcm)
                             ms = (time.perf_counter() - t0) * 1000.0
                             if self._fd_rx is not chain:                                 # FreeDV was switched off or changed while this frame was being decoded
                                 self._rx_q.append(bytes(FRAME_BYTES))
@@ -382,11 +390,13 @@ class AudioService:
                             pcm = out
                             self.rx_ms_avg += (ms - self.rx_ms_avg) * 0.02
                             self.rx_ms_max = max(self.rx_ms_max, ms)
+                            self.rx_work_avg += (work - self.rx_work_avg) * 0.02
+                            self.rx_work_max = max(self.rx_work_max, work)
                             if ms > SLOW_FRAME_MS:
                                 self.rx_slow += 1
                                 if self.rx_slow in (1, 10, 100, 1000):
-                                    log.warning("FreeDV receive: a 20 ms audio frame took %.0f ms to process (%d such frames so far; average %.1f ms): the PC may be too slow for this mode",
-                                                ms, self.rx_slow, self.rx_ms_avg)
+                                    log.warning("FreeDV receive: a 20 ms audio frame took %.0f ms (%.0f ms of it inside the decoder; %d such frames so far; averages: %.1f ms in total, %.1f ms decoding): "
+                                                "if the decoding is the long part the PC is too slow for this mode, otherwise something else keeps the server busy", ms, work, self.rx_slow, self.rx_ms_avg, self.rx_work_avg)
                             ch = self._fd_rx
                             self._levels.update(freedv_sync=ch.sync, freedv_snr=round(ch.snr, 1))
                             if hasattr(ch, "afc"):                                   # the tuning aid (freedv_tune.py): spectrum, level, where the signal is, what was corrected

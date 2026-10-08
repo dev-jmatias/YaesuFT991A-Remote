@@ -42,6 +42,13 @@ and goes back by itself if the new version does not start. Settings and accounts
 | `radio-remote-rade-linux-aarch64.tar.xz` | the optional RADE library (FreeDV neural modes V1 and V2) for a Raspberry Pi, installed with `install_rade.sh` (the PC build is `…-x86_64.tar.xz`) |
 | `SHA256SUMS` | checksums of all of the above |
 
+### What is new in 1.1.20
+
+- **FreeDV receive timing is split in two** (Admin > Diagnostics and the log): the time a 20 ms audio frame takes in total, and the time spent inside the decoder itself. On a small PC the total was far above the decoder's own time,
+  and until now nothing said whether the decoder or the busy server was the slow part. The warning in the log now names both.
+- **Advice for small PCs** in the FreeDV chapter of the manual: an Intel Atom changes its CPU clock down to 480 MHz when it looks idle, and RADE's short bursts of work then run slowly; the "performance" governor, set permanently with a small
+  systemd unit (the exact commands are in the manual), helps. RADE V2 is lighter for the decoder on such a PC.
+
 ### What is new in 1.1.19
 
 - **Squelch.** A **Squelch** slider under the mode buttons on the Radio tab, shown in FM, AM and C4FM modes and on the AIR band, and always in the Levels tab. It is the radio's own squelch level (`SQ`, 0 to 100, 0 = open).

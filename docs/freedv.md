@@ -162,6 +162,29 @@ Settings (Admin > Config or the tab): `freedv.mode` (the mode used when FreeDV i
 
 ## How much CPU does it need?
 
+**Small PCs (an Intel Atom mini PC, for example):** RADE V1 receive needs about 40% of one core and the decoder has single steps of 60 to 100 ms. Such a PC also changes its CPU clock all the time (down to 480 MHz when it looks
+idle), and RADE's short bursts of work then run slowly. Keep the clock up with the "performance" governor, permanently:
+
+```bash
+sudo tee /etc/systemd/system/radio-remote-cpu-performance.service >/dev/null <<'EOF'
+[Unit]
+Description=Radio Remote: CPU governor performance
+After=sysinit.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/sh -c "for g in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do echo performance > $g; done"
+
+[Install]
+WantedBy=multi-user.target
+EOF
+sudo systemctl daemon-reload && sudo systemctl enable --now radio-remote-cpu-performance.service
+```
+
+(undo: `sudo systemctl disable --now radio-remote-cpu-performance.service`). On the Atom tested the clock still swung between 1.0 and 1.9 GHz (its power limit), but the worst decoder step fell from 107 to 68 ms.
+RADE V2 is lighter for the decoder on such a PC (about 30% of a core, worst step 19 ms). **Admin > Diagnostics** shows the receive timing: the time per 20 ms frame in total and the time inside the decoder; the total must stay under 20 ms on average.
+
 `python3 scripts/freedv_probe.py` (on the Pi: `/opt/radio-remote/venv/bin/python /opt/radio-remote/current/scripts/freedv_probe.py`) runs every installed mode as a
 transmit-to-receive loopback and prints the share of one CPU core each needs and its slowest single step. On a PC RADE needs about 1% to transmit and 5% to receive; on a small Intel Atom PC receive was measured at about 40% of one core.
 
