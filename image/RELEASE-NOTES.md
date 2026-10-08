@@ -42,6 +42,13 @@ and goes back by itself if the new version does not start. Settings and accounts
 | `radio-remote-rade-linux-aarch64.tar.xz` | the optional RADE library (FreeDV neural modes V1 and V2) for a Raspberry Pi, installed with `install_rade.sh` (the PC build is `…-x86_64.tar.xz`) |
 | `SHA256SUMS` | checksums of all of the above |
 
+### What is new in 1.1.17
+
+- **FreeDV receive no longer freezes the server on a small PC.** The RADE decoder takes 60 to 100 ms for every modem frame on an Intel Atom (about 64% of a core in the live service), and it ran inside the single loop that also serves
+  the web page, the audio to the listeners and PTT, so all of those stalled for that long eight times a second. The decoding now runs in a worker thread (the library releases the Python lock), and switching FreeDV off or changing mode while a frame is being
+  decoded is guarded, so the modem is never closed underneath a running decode. On a PC like that this should make the received audio and the page much smoother.
+- Tested with a decoder that takes 120 ms per frame: the loop keeps running while it works.
+
 ### What is new in 1.1.16
 
 - **Fix in the 1.1.15 memory editor: editing a channel that uses a tone no longer resets its tone frequency.** The radio's `MT` write copies the tone number VFO-A holds at that moment into the channel (found on a real FT-991A), so the

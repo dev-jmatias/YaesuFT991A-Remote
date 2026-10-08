@@ -366,3 +366,78 @@ async def test_drain_does_nothing_for_ordinary_voice_or_when_not_transmitting(sv
     svc.set_freedv(True, "RADE")
     await svc.drain_freedv_tx()                                                      # FreeDV on but nothing is being transmitted
     assert time.monotonic() - t0 < 0.2
+
+
+class SlowRx(FakeRx):
+    """A decoder that takes a long time per frame, like RADE on a small PC (60-100 ms per modem frame)."""
+    delay = 0.12
+
+    def process(self, pcm):
+        import time as _t
+        _t.sleep(self.delay)
+        return SPEECH
+
+
+async def test_a_slow_decoder_does_not_stall_the_event_loop(svc, monkeypatch):
+    """On an Atom the decode took 60 ms every 120 ms inside the event loop, stalling the web page, the listeners' audio and PTT eight times a second.
+    It now runs in a worker thread: while it works, the loop keeps ticking."""
+    monkeypatch.setattr(service.freedv, "RxChain", SlowRx)
+    svc.set_freedv(True, "RADE")
+    await svc._ensure_capture()
+    ticks, stop = [], asyncio.Event()
+
+    async def ticker():
+        while not stop.is_set():
+            ticks.append(1)
+            await asyncio.sleep(0.01)
+
+    task = asyncio.create_task(ticker())
+    await asyncio.sleep(0.8)                                              # about six slow frames of 0.12 s
+    stop.set()
+    await task
+    assert len(ticks) > 40, len(ticks)                                    # run inline the loop would have ticked only a handful of times
+    assert svc._rx_q and svc._rx_q[-1] == SPEECH
+
+
+async def test_switching_freedv_off_while_a_frame_is_being_decoded_is_safe(svc, monkeypatch, caplog):
+    monkeypatch.setattr(service.freedv, "RxChain", SlowRx)
+    svc.set_freedv(True, "RADE")
+    await svc._ensure_capture()
+    await asyncio.sleep(0.3)                                              # a decode is in progress
+    svc.set_freedv(False)
+    await until(lambda: svc._rx_q and svc._rx_q[-1] != SPEECH, timeout=3)  # the listeners get the radio's own audio again, and nothing blew up
+    assert not any("FreeDV receive failed" in r.getMessage() for r in caplog.records)
+
+
+def test_closing_a_chain_waits_for_a_decode_in_progress_and_a_closed_chain_is_silent(monkeypatch):
+    import threading
+    import time
+
+    import numpy as np
+
+    class SlowCore:
+        modem_rate, speech_rate, n_speech, sync, snr, mode = 8000, 16000, 160, 0, 0.0, "RADE"
+
+        def __init__(self):
+            self.closed, self.busy = False, threading.Event()
+
+        def rx(self, x):
+            self.busy.set()
+            time.sleep(0.25)
+            assert not self.closed, "the modem was closed underneath a running decode"
+            return np.empty(0, dtype="<i2")
+
+        def close(self):
+            self.closed = True
+
+    monkeypatch.setattr(freedv, "open_core", lambda mode: SlowCore())
+    ch = freedv.RxChain("RADE")
+    core = ch.fd
+    t = threading.Thread(target=ch.process, args=(bytes(FRAME_BYTES),))
+    t.start()
+    assert core.busy.wait(2)
+    ch.close()                                                            # must wait for the 0.25 s decode, then close
+    assert core.closed
+    t.join()
+    assert ch.process(bytes(FRAME_BYTES)) == bytes(FRAME_BYTES)           # a closed chain answers with silence
+    ch.restart()                                                          # and cannot be restarted

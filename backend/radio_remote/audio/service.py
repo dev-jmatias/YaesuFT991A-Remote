@@ -14,6 +14,7 @@ import fractions
 import logging
 import secrets
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Callable
 
@@ -138,6 +139,7 @@ class AudioService:
                         "freedv_spec": [], "freedv_offset": 0, "freedv_hint": None, "freedv_afc": "", "freedv_level": -120, "freedv_clip": False}
         # FreeDV (see freedv.py): decode the radio's modem tones to speech for the listeners, encode the operator's speech to modem tones
         self.freedv_ok, self.freedv_reason = freedv.available()
+        self._fd_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="freedv-rx")     # one worker: frames are decoded strictly in order
         self._fd_rx: freedv.RxChain | None = None
         self._fd_tx: freedv.TxChain | None = None
         self.on_freedv_state = None                    # callbacks (FreeDV Reporter): (on, mode) and (transmitting)
@@ -368,8 +370,16 @@ class AudioService:
                     elif self._fd_rx is not None:                                # FreeDV: listeners get the decoded speech instead
                         try:
                             t0 = time.perf_counter()
-                            pcm = self._fd_rx.process(pcm)
+                            chain = self._fd_rx
+                            # The decoder takes 60-100 ms per modem frame on a small PC (an Atom: 60 ms every 120 ms). Run in the event loop it stalled the whole server (web page, audio to
+                            # the listeners, PTT) for that long, eight times a second; in a worker thread (the C library releases the GIL) the loop stays free.
+                            out = await asyncio.get_running_loop().run_in_executor(self._fd_pool, chain.process, pcm)
                             ms = (time.perf_counter() - t0) * 1000.0
+                            if self._fd_rx is not chain:                                 # FreeDV was switched off or changed while this frame was being decoded
+                                self._rx_q.append(bytes(FRAME_BYTES))
+                                self._rx_event.set()
+                                continue
+                            pcm = out
                             self.rx_ms_avg += (ms - self.rx_ms_avg) * 0.02
                             self.rx_ms_max = max(self.rx_ms_max, ms)
                             if ms > SLOW_FRAME_MS:

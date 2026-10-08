@@ -8,6 +8,8 @@ Offset convention: "offset" is how far ABOVE its nominal place in the audio the 
 """
 from __future__ import annotations
 
+import threading
+
 import numpy as np
 
 AUDIO_RATE = 8000
@@ -77,6 +79,7 @@ class Afc:
         self._dwell = 0.0
         self._todo: list[float] = []
         self.hint: float | None = None           # signal offset estimated from the spectrum (Hz), or None
+        self._lk = threading.Lock()              # update() runs in the decoding thread, nudge() and reset() in the event loop: they are tiny, so one lock keeps them apart
 
     @property
     def offset(self) -> float:
@@ -84,17 +87,23 @@ class Afc:
 
     def nudge(self, hz: float) -> None:
         """The radio's dial moved: every audio frequency moved by hz, so the shift that was right needs the same change."""
-        self.shift = max(-SEARCH_RANGE_HZ * 2.0, min(SEARCH_RANGE_HZ * 2.0, self.shift + hz))
-        self.last_good = self.shift
-        self._todo = []
+        with self._lk:
+            self.shift = max(-SEARCH_RANGE_HZ * 2.0, min(SEARCH_RANGE_HZ * 2.0, self.shift + hz))
+            self.last_good = self.shift
+            self._todo = []
 
     def reset(self) -> None:
-        self.shift = self.last_good = 0.0
-        self._lost = self._dwell = 0.0
-        self._todo = []
-        self.locked = self.searching = False
+        with self._lk:
+            self.shift = self.last_good = 0.0
+            self._lost = self._dwell = 0.0
+            self._todo = []
+            self.locked = self.searching = False
 
     def update(self, synced: bool, dt: float) -> float:
+        with self._lk:
+            return self._update(synced, dt)
+
+    def _update(self, synced: bool, dt: float) -> float:
         if synced:
             self.locked, self.searching = True, False
             self._lost = self._dwell = 0.0

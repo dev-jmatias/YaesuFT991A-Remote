@@ -7,6 +7,7 @@ chain below resamples on the way in and out. Nothing here talks to the radio: it
 from __future__ import annotations
 
 import logging
+import threading
 from collections import deque
 
 import numpy as np
@@ -105,6 +106,8 @@ class RxChain:
         self.spec_fresh = False
         self.fifo: deque[bytes] = deque()
         self._rest = b""
+        self._lk = threading.Lock()                  # process() runs in a worker thread (the decoder takes 60-100 ms on a small PC and must not stall the web server); close() and
+        self._closed = False                         # restart() wait for a decode in progress, so the modem is never closed underneath it
 
     @property
     def sync(self) -> int:
@@ -116,6 +119,12 @@ class RxChain:
 
     def process(self, pcm: bytes) -> bytes:
         """One 20 ms frame in, one 20 ms frame out (silence until speech has been decoded)."""
+        with self._lk:
+            if self._closed:
+                return bytes(FRAME_BYTES)
+            return self._process(pcm)
+
+    def _process(self, pcm: bytes) -> bytes:
         x = np.frombuffer(pcm, dtype="<i2")
         self.spec_fresh = self.spec.push(pcm)
         if self.spec_fresh:
@@ -135,21 +144,26 @@ class RxChain:
     def restart(self) -> None:
         """After a transmission: a fresh modem and fresh filters (the old modem saw a gap of silence, and on a friend's PC RADE did not find the signal again until FreeDV was
         switched off and on), but the tuning found so far (shifter and AFC) is kept, so the lock comes back as soon as the signal does."""
-        fresh = open_core(self.mode)
-        self.fd.close()
-        self.fd = fresh
-        self.dec = Decimator(RATE // self.fd.modem_rate, 0.45 * self.fd.modem_rate)
-        self.up = Interpolator(RATE // self.fd.speech_rate, 0.45 * self.fd.speech_rate)
-        self.spec = Spectrum(self.mode)
-        self.spec_fresh = False
-        self.fifo.clear()
-        self._rest = b""
+        with self._lk:
+            if self._closed:
+                return
+            fresh = open_core(self.mode)
+            self.fd.close()
+            self.fd = fresh
+            self.dec = Decimator(RATE // self.fd.modem_rate, 0.45 * self.fd.modem_rate)
+            self.up = Interpolator(RATE // self.fd.speech_rate, 0.45 * self.fd.speech_rate)
+            self.spec = Spectrum(self.mode)
+            self.spec_fresh = False
+            self.fifo.clear()
+            self._rest = b""
 
     def tune_state(self) -> str:
         return "locked" if self.afc.locked else "searching" if self.afc.searching else "idle"
 
     def close(self) -> None:
-        self.fd.close()
+        with self._lk:                               # waits for a decode that is running in the worker thread
+            self._closed = True
+            self.fd.close()
 
 
 class TxChain:
