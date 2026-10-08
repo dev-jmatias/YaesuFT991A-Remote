@@ -29,6 +29,11 @@ class SimulatedFT991A:
         self.memories = {5: (14_200_000, "USB", "20m DX"), 6: (7_100_000, "LSB", "40m net"), 11: (145_500_000, "FM", "2m calling"),
                          99: (28_400_000, "USB", "")}
         self.label_001 = False     # True: MT/MR answers always carry channel 001 (what a real FT-991A was seen to do)
+        self.mem_extra = {}        # channel -> (tone mode digit, shift digit); absent = off / simplex
+        self.write_misdirect = 0   # non-zero: an MT write goes to THIS channel instead of the one asked for (a faulty radio, for the safety test)
+        self.mem_writes = 0
+        self.mem_check = 0         # 1 or 2: the radio is in memory check / memory tune mode: MC does nothing and IF reports P7 = 2 until the V/M key (VM;) is pressed
+        self.refuse_writes = False  # True: an MT write is answered with ?; and stores nothing
         self.mem_ch = 0            # 0 = VFO mode, else the recalled memory channel
         self.mc_keeps_vfo = False  # True: a recall changes the channel only, IF keeps answering with the VFO frequency (seen on a friend's FT-991A)
         self.vfo_freq = None       # the VFO frequency while a memory is recalled
@@ -89,7 +94,7 @@ class SimulatedFT991A:
         code = MODE_CODES[self.mode]
         sign = "-" if self.clar < 0 else "+"
         return (f"IF{self.mem_ch:03d}{self.freq:09d}{sign}{abs(self.clar):04d}{self.reg['RT']}{self.reg['XT']}{code}"
-                f"{1 if self.mem_ch else 0}0000;")
+                f"{2 if self.mem_check else (1 if self.mem_ch else 0)}0000;")
 
     async def _run(self) -> None:
         buf = bytearray()
@@ -193,14 +198,32 @@ class SimulatedFT991A:
                 return await self._send("?;")
             hz, md, tag = self.memories[ch]
             label = 1 if self.label_001 else ch               # a real FT-991A writes 001 in the answer whatever channel was asked
-            return await self._send(f"MT{label:03d}{hz:09d}+000000{MODE_CODES[md]}100000{tag.ljust(12)};")
+            tone, shift = self.mem_extra.get(ch, ("0", "0"))
+            return await self._send(f"MT{label:03d}{hz:09d}+000000{MODE_CODES[md]}1{tone}00{shift}0{tag.ljust(12)};")
         if name == "MR" and len(p) == 3 and p.isdigit():             # memory read without the tag (read form only)
             ch = int(p)
             if ch not in self.memories:
                 return await self._send("?;")
             hz, md, _tag = self.memories[ch]
             label = 1 if self.label_001 else ch
-            return await self._send(f"MR{label:03d}{hz:09d}+000000{MODE_CODES[md]}10000;")
+            tone, shift = self.mem_extra.get(ch, ("0", "0"))
+            return await self._send(f"MR{label:03d}{hz:09d}+000000{MODE_CODES[md]}1{tone}00{shift};")
+        if name == "MT" and len(p) == 38 and p[:12].isdigit() and p[12] in "+-":       # memory WRITE: channel(3) freq(9) clar(5) rx tx mode P7 tone 00 shift 0 tag(12)
+            ch, hz = int(p[:3]), int(p[3:12])
+            mode = {v: k for k, v in MODE_CODES.items()}.get(p[19])
+            if not 1 <= ch <= 99 or mode is None or p[22:24] != "00" or self.refuse_writes:
+                return await self._send("?;")
+            ch = self.write_misdirect or ch
+            self.memories[ch] = (hz, mode, p[26:].strip())
+            self.mem_extra[ch] = (p[21], p[24])
+            self.mem_writes += 1
+            return
+        if name == "MC" and len(p) == 3 and p.isdigit() and self.mem_check:
+            return                                                                       # ignored, like a radio in memory check mode
+        if name == "VM" and not p and self.mem_check:
+            if self.mem_check == 1:
+                self.mem_check = 0                                                       # the V/M key brings it back to the normal memory mode (2 = a radio that stays stuck)
+            return
         if name == "MC" and len(p) == 3 and p.isdigit():
             ch = int(p)
             if ch not in self.memories:

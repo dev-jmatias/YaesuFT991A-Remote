@@ -33,7 +33,7 @@ LABELS = {                                    # key -> (group, label)
     "dnr": ("Receiver", "Noise reduction (DNR)"), "noise_blanker": ("Receiver", "Noise blanker"),
     "rit": ("Receiver", "RIT"), "xit": ("Receiver", "XIT"),
     "vfo_b": ("VFOs and memories", "VFO B (A=B, B=A, swap, set frequency)"), "split": ("VFOs and memories", "Split"),
-    "quick_split": ("VFOs and memories", "Quick split (QS)"), "memories": ("VFOs and memories", "Memory channels: list and recall"),
+    "quick_split": ("VFOs and memories", "Quick split (QS)"), "memories": ("VFOs and memories", "Memory channels: list and recall"), "memory_edit": ("VFOs and memories", "Memory channels: add and edit (MT write)"),
     "c4fm": ("Radio", "C4FM mode (mode select only)"), "dgid": ("Radio", "WIRES DG-ID menu value"),
     "vhf": ("Radio", "144 MHz band"), "uhf": ("Radio", "430 MHz band"),
     "power_off_cat": ("Radio", "Power off over CAT"), "power_on_cat": ("Radio", "Power on over CAT (from standby)"),

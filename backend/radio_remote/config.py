@@ -51,7 +51,7 @@ DEFAULTS: dict[str, dict[str, Any]] = {
     # frequency/mode (set = false makes it read-only); it can never transmit or power the radio off. allow = "private" (this machine and
     # the home-network ranges) or a comma-separated list of addresses / networks, e.g. "192.168.1.0/24, 100.64.0.0/10".
     "rigctl": {"enabled": False, "port": 4532, "allow": "private", "set": True},
-    # FreeDV digital voice (RADE V1 = "RADE", RADE V2 = "RADE2", experimental upstream; both from the optional RADE library) done on the Pi: see audio/freedv.py and docs/freedv.md.
+    # FreeDV digital voice (RADE V1 = "RADE", RADE V2 = "RADE2"; both from the optional RADE library) done on the Pi: see audio/freedv.py and docs/freedv.md.
     # mode = the one used when the FreeDV button is pressed; tx_level_db = level of the modem tones sent to the radio (keep the ALC barely moving); channels = the preset
     # list shown on the FreeDV tab, each "name|frequency in Hz|mode". Frequencies below 10 MHz use LSB, above use USB (the FreeDV convention).
     "freedv": {"mode": "RADE", "tx_level_db": -6.0, "channels": [

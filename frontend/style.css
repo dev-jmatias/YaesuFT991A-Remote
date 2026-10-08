@@ -1,3 +1,4 @@
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 /* Radio Remote - flat dark slate, LED-edge buttons (yellow = selected), labelled blocks, two VFO panels.
    Colour is kept for things that mean something: RX blue, TX red, signal/meters, selection yellow, active panel cyan. */
 :root {
@@ -111,7 +112,9 @@ button.icon { width: 34px; padding: 0; } button.icon.wide { width: auto; padding
 @keyframes pulse { 50% { opacity: .75; } }
 @media (prefers-reduced-motion: reduce) { .vbadge.txb.on, .chip.tune.tuning { animation: none; } * { transition: none !important; } }
 
-.freq { font: 600 clamp(1.7rem, 10.5cqw, 3.5rem)/1.05 ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace; white-space: nowrap; user-select: none; font-variant-numeric: tabular-nums; color: #fff; padding: 2px 0 4px; }
+.freq { font-family: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace; font-weight: 600; line-height: 1.05;
+  font-size: clamp(1.7rem, 9.5vw, 3.5rem); font-size: clamp(1.7rem, 10.5cqw, 3.5rem);        /* the vw line is for browsers without container units (Safari before 16): they ignore the cqw line */
+  white-space: nowrap; user-select: none; font-variant-numeric: tabular-nums; color: #fff; padding: 2px 0 4px; }
 .freq .digit { cursor: pointer; padding: 0 .02em; border-radius: 4px; }
 .freq.ro .digit { cursor: default; }
 .freq .digit.lead { opacity: .18; }
@@ -248,7 +251,7 @@ code { background: var(--panel2); padding: 1px 6px; border-radius: 6px; }
   .steprow, .vfob-ctl, .chips, .moderow, .bandrow { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; justify-content: flex-start; }
   .steprow > *, .vfob-ctl > *, .chips > *, .moderow > *, .bandrow > * { flex: 0 0 auto; }
   .bandwrap { display: block; } .setfreq { margin-top: 8px; }
-  .freq { font-size: clamp(1.8rem, 13.5cqw, 3.4rem); }
+  .freq { font-size: clamp(1.8rem, 12.2vw, 3.4rem); font-size: clamp(1.8rem, 13.5cqw, 3.4rem); }
 }
 .vfob-read { display: none !important; }
 
@@ -266,7 +269,7 @@ code { background: var(--panel2); padding: 1px 6px; border-radius: 6px; }
   .txmhost { padding: 0 12px 8px; background: #060a14; }
   .txmhost .txmeters { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px 8px; }
   .vfopanel.a .seg.big canvas { height: 38px; }                 /* slightly thinner signal meter */
-  .vfopanel.a .freq { font-size: clamp(1.6rem, 8.2cqw, 2.9rem); }  /* slightly smaller VFO A */
+  .vfopanel.a .freq { font-size: clamp(1.6rem, 7.4vw, 2.9rem); font-size: clamp(1.6rem, 8.2cqw, 2.9rem); }  /* slightly smaller VFO A */
   .txmhost { --seg-text: #c9d5ee; }
   .txmhost .seg.small canvas { height: 28px; }
   .txmhost .seg .seglbl { font-size: .74rem; font-weight: 600; color: #dbe5f8; margin-bottom: 1px; }
@@ -274,7 +277,7 @@ code { background: var(--panel2); padding: 1px 6px; border-radius: 6px; }
   .vfopanel.b { padding: 4px 12px 6px; border-top: 1px solid var(--line) !important; background: #0a101e !important; }
   .vfopanel.b.txvfo { border-top-color: var(--yellow) !important; }
   .vfopanel.b header { margin-bottom: 0; }
-  .vfopanel.b .freq { font-size: clamp(1.1rem, 4.2cqw, 1.7rem); padding: 0; }
+  .vfopanel.b .freq { font-size: clamp(1.1rem, 3.8vw, 1.7rem); font-size: clamp(1.1rem, 4.2cqw, 1.7rem); padding: 0; }
   .vfopanel.b { display: flex; align-items: center; gap: 14px; container-type: inline-size; }
   .vfopanel.b header { flex: 0 0 auto; }
   .vfopanel.b .freqhost { flex: 0 0 auto; }
@@ -326,7 +329,7 @@ code { background: var(--panel2); padding: 1px 6px; border-radius: 6px; }
   .vfopanel header { margin-bottom: 0; }
   .vfopanel .vl { font-size: .85rem; } .vfopanel .vband { font-size: .74rem; }
   .vmode { font-size: .9rem; margin: 0 0 3px; }
-  .freq { font-size: clamp(1.5rem, 10.8cqw, 2.4rem); padding: 0 0 2px; }
+  .freq { font-size: clamp(1.5rem, 9.7vw, 2.4rem); font-size: clamp(1.5rem, 10.8cqw, 2.4rem); padding: 0 0 2px; }
   .vfopanel .seg.big canvas { height: 34px; }
   .seg .seglbl { font-size: .62rem; }
   /* thinner tuning scale; the step text is shown in the Tuning step block anyway */
@@ -334,7 +337,7 @@ code { background: var(--panel2); padding: 1px 6px; border-radius: 6px; }
   .strip-info { display: none; }
   .strip-coarse { min-height: 20px; top: 2px; padding: 0 8px; font-size: .7rem; }
   /* same arrangement as large screens: A + signal + small TX meters, B as an attached tab; buttons smaller */
-  .vfopanel.a .freq { font-size: clamp(1.5rem, 10.2cqw, 2.3rem); }
+  .vfopanel.a .freq { font-size: clamp(1.5rem, 9.2vw, 2.3rem); font-size: clamp(1.5rem, 10.2cqw, 2.3rem); }
   .vfopanel.a .seg.big canvas { height: 32px; }
   .txmhost { padding: 0 10px 6px; }
   .txmhost .txmeters { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px 6px; }
@@ -342,7 +345,7 @@ code { background: var(--panel2); padding: 1px 6px; border-radius: 6px; }
   .txmhost .seg .seglbl { font-size: .62rem; }
   .txmhost .seg .seglbl b { font-size: .64rem; }
   .vfopanel.b { padding: 3px 10px 4px; gap: 8px; }
-  .vfopanel.b .freq { font-size: clamp(1rem, 6cqw, 1.3rem); }
+  .vfopanel.b .freq { font-size: clamp(1rem, 5.4vw, 1.3rem); font-size: clamp(1rem, 6cqw, 1.3rem); }
   .vfopanel.b .vl { font-size: .74rem; } .vfopanel.b .vbadge { font-size: .58rem; padding: 0 5px; }
   .block { padding: 5px 8px 7px; margin-top: 6px; }
   .blabel { margin-bottom: 4px; font-size: .58rem; }
@@ -552,6 +555,13 @@ button.lockbtn.on { background: var(--yellow); color: #1a1100; border-color: tra
 .memrow .mmode { color: var(--cyan); text-align: right; font-size: .85rem; }
 .memrow.cur { border-color: var(--purple); background: linear-gradient(180deg, #2a2050, #1b1438); }
 @media (max-width: 699px) { .memrow { grid-template-columns: 2.8em minmax(0, 1fr) auto; } .memrow .mmode { display: none; } }
+.memitem { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px; }
+.memedit-btn { min-height: 38px; padding: 4px 12px; }
+.memfields { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; margin: 8px 0; }
+.memfields label { display: flex; flex-direction: column; gap: 3px; font-size: .82rem; color: var(--dim); min-width: 0; }
+.memfields input, .memfields select { min-width: 0; }
+.memhint { font-size: .8rem; }
+.memedit h3 { margin: 4px 0; }
 
 /* top bar: an icon next to the words on wide screens, icons only on phones */
 .topbar .ti { display: none; }

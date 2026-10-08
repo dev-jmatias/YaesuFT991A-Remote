@@ -41,6 +41,7 @@ tuner = true                          # AC00x tuner on/off (does not transmit)
 tuner_tune = true                     # AC002 start/stop tune: KEYS the transmitter; goes through TxGuard. BENCH-VERIFIED (operator: "tuning works")
 mic_select = true                    # EX106 (menu 106 SSB MIC SELECT: 0 MIC / 1 REAR, manual p.9). Read at connect. BENCH-VERIFIED (REAR/MIC switch works)
 memories = true                       # MC select + MT read (p.11): list and recall stored channels; never written. BENCH-VERIFIED (the radio answers every MT with channel 001: handled)
+memory_edit = true                    # MT write (p.11): add / edit a channel (frequency, mode, name, shift direction, tone mode), read back and checked after every write. NEW: only simulator-tested until tried on a real radio
 dgid = true                         # EX153 (menu 153 WIRES DG-ID, p.9); one value, no separate TX/RX item in the CAT manual. Read only: the C4FM RX/TX DG-ID is not reachable over CAT
 split = true                          # FT (p.9): FT3; TX on B (split), FT2; TX on A. BENCH-VERIFIED (FT; -> FT0;, FT3; -> FT1;, FT2; -> FT0;)
 quick_split = true                    # QS; (p.15): sets B from A with the menu-035 offset and turns split on. NOT bench-verified

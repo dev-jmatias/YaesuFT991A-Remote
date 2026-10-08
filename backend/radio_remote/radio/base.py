@@ -153,5 +153,8 @@ class RadioDriver(ABC):
     async def memory_to_vfo(self) -> None:
         raise RadioError("memory channels are not supported by this radio profile")
 
+    async def memory_write(self, channel: int, frequency: int, mode: str, tone_mode: str = "off", shift: str = "simplex", name: str = "") -> dict:
+        raise RadioError("editing memory channels is not supported by this radio profile")
+
     async def power_off(self) -> None:
         raise RadioError("power off not supported")

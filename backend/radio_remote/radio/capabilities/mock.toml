@@ -34,6 +34,7 @@ tuner = true
 tuner_tune = true
 dgid = true
 memories = true
+memory_edit = true
 agc = true
 att_levels = true
 mic_select = true

@@ -1,4 +1,4 @@
-"""RADE V1 and RADE V2 (Radio Autoencoder; V2 is experimental upstream) digital voice through the shared library built by scripts/build_rade.sh (rade_c + native/rade/rade_glue.c).
+"""RADE V1 and RADE V2 (Radio Autoencoder) digital voice through the shared library built by scripts/build_rade.sh (rade_c + native/rade/rade_glue.c).
 
 The library is optional and is NOT part of the normal install: it is a separate download (see scripts/install_rade.sh). Without it the
 FreeDV tab simply does not offer RADE. Interface: the same "core" shape as the codec2 modes in freedv.py (rx / tx on int16 arrays), but the
@@ -50,12 +50,15 @@ def installable() -> bool:
     return platform.machine().lower() in ("aarch64", "arm64", "x86_64")
 
 
-def reset() -> None:
-    """Forget a failed load, so a library that has just been installed is picked up without restarting the service."""
-    global _LIB, _ERR
+def reset(force: bool = False) -> None:
+    """Forget a failed load, so a library that has just been installed is picked up without restarting the service. force=True also forgets a library that
+    loaded fine, so the next look re-resolves which file to use (a newer one installed from the page wins). Modems that are already open keep the copy they have."""
+    global _LIB, _ERR, _PATH
     with _LOCK:
         if _LIB is None:
             _ERR = ""
+        elif force:
+            _LIB, _PATH, _ERR = None, None, ""
 
 
 class RadeUnavailable(Exception):

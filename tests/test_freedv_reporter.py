@@ -105,7 +105,7 @@ async def test_announce_and_watch(site):
     vk = st["stations"][0]
     assert vk["tx"] is True and vk["mode"] == "RADE" and vk["tunable"] is True and vk["message"] == "CQ FreeDV" and vk["freq"] == 14236000
     ja = next(s for s in st["stations"] if s["callsign"] == "JA1XYZ")
-    assert ja["mode"] == "RADE2" and ja["tunable"] is True                            # RADE V2 (experimental) is a mode we can decode
+    assert ja["mode"] == "RADE2" and ja["tunable"] is True                            # RADE V2 is a mode we can decode
     w1 = next(s for s in st["stations"] if s["callsign"] == "W1AW")
     assert w1["listening"] is True and w1["mode"] == "700D" and w1["tunable"] is False      # a mode this program no longer has
     await r.stop()

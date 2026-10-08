@@ -2,11 +2,11 @@ import { api } from "../api.js";
 import { el } from "../util.js";
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
-// FreeDV digital voice (RADE V1 and the experimental RADE V2, both from the optional RADE library). The Pi decodes the radio's modem tones into speech for every listener and encodes the operator's
+// FreeDV digital voice (RADE V1 and RADE V2, both from the optional RADE library). The Pi decodes the radio's modem tones into speech for every listener and encodes the operator's
 // microphone into modem tones while that connection holds PTT (see docs/freedv.md). This tab: on/off, the mode, the preset channels and the
 // transmit level. By the FreeDV convention frequencies below 10 MHz use LSB and above use USB.
 export const ssbFor = (hz) => (hz < 10_000_000 ? "LSB" : "USB");
-const MODE_LABEL = { RADE: "RADE V1", RADE2: "RADE V2 (experimental)" };
+const MODE_LABEL = { RADE: "RADE V1", RADE2: "RADE V2" };
 const modeName = (m) => MODE_LABEL[m] || m;
 const fmtMHz = (hz) => (hz / 1e6).toFixed(hz % 1000 ? 4 : 3);
 
@@ -33,7 +33,6 @@ export function createFreeDV(host, ctx) {
       <label class="fdv-mode">Mode <select id="fdv-mode" aria-label="FreeDV mode"></select></label>
     </div>
     <p class="dim fdv-note" id="fdv-note" hidden></p>
-    <p class="dim fdv-note" id="fdv-v2note" hidden><b>RADE V2 is experimental.</b> Upstream says its signal and software may still change without notice, and only a few stations use it today: most stations are on RADE V1, which cannot decode V2 and the other way round.</p>
     <div class="row fdv-rade" id="fdv-rade-row" hidden>
       <button type="button" id="fdv-rade-install" class="active" hidden>Install RADE</button>
       <span class="dim" id="fdv-rade-msg"></span>
@@ -121,7 +120,7 @@ export function createFreeDV(host, ctx) {
     try {
       const r = await api("/api/admin/rade/install", "POST", { confirm: true });
       result = !r.ok ? (r.reason || "RADE was installed but could not be loaded.")
-        : had ? "RADE reinstalled. The new copy is used after the next restart of the service." : "RADE installed. Choose RADE in the mode list.";
+        : had ? "RADE reinstalled. The new copy is used the next time FreeDV is switched on (if RADE V2 is still missing from the list, restart the service)." : "RADE installed. Choose RADE in the mode list.";
     } catch (e) { result = `Could not install RADE: ${e.message}`; }
     b.disabled = false;
     toast(result);
@@ -153,8 +152,7 @@ export function createFreeDV(host, ctx) {
     if (!["USB", "LSB"].includes(S.state.mode)) await send("set_mode", { mode: ssbFor(hz()) });
     await send("freedv", { on: true, mode: modeSel.value });
   };
-  const paintV2note = () => { $("fdv-v2note").hidden = modeSel.value !== "RADE2"; };
-  modeSel.onchange = () => { paintV2note(); if (on()) send("freedv", { on: true, mode: modeSel.value }); };
+  modeSel.onchange = () => { if (on()) send("freedv", { on: true, mode: modeSel.value }); };
 
   let lvTimer = 0;
   $("fdv-lvr").oninput = (e) => {
@@ -178,7 +176,6 @@ export function createFreeDV(host, ctx) {
     $("fdv-note").hidden = !missing.length;
     $("fdv-note").textContent = missing.map(([m, why]) => `${modeName(m)}: ${why}`).join("  ");
     paintRadeRow();
-    paintV2note();
     $("fdv-lvr").value = info.tx_level_db; $("fdv-lv").textContent = info.tx_level_db;
     $("fdv-lvr").disabled = !admin;
     $("fdv-lvnote").textContent = admin ? "" : "(set by an administrator)";

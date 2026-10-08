@@ -82,8 +82,15 @@ PTT stays at the bottom on every tab so you can adjust a level while transmittin
 
 **Memories** (beside **Tune**; FT-991A and FTDX101D) lists the channels stored in the radio (001-099): number, name, frequency, mode. Type in the box to filter. Tap a
 channel to recall it. **Back to VFO** returns to the VFO. **Re-read** reads the list again after you changed memories on the radio.
-Memories are never created, changed or deleted from here; do that on the radio. The list is read in the background a few seconds after the
+**Export** saves the list as a CSV file (a backup, or to open in a spreadsheet). The list is read in the background a few seconds after the
 radio connects, so it opens at once; it is read again whenever the radio reconnects.
+
+**Adding and editing a channel (FT-991A, administrators):** **Add** stores a new channel and **Edit** (beside each row) changes one: name (up to 12 characters), frequency, mode,
+**shift direction** (simplex, plus, minus) and **tone mode** (off, CTCSS encode, CTCSS encode + decode, DCS). Saving asks for confirmation and takes about 20 seconds: the program writes the
+channel and then reads **all** channels back, and tells you if the radio did not store it exactly as sent. If a write ever changed a channel other than the one you edited, editing switches itself
+off (until the service is restarted) and the message names the channels, so put them back from your **Export** file. **Export first** if the list matters to you. Two limits of the radio's CAT
+commands: the **tone frequency** (for example 71.9 Hz) and the **repeater offset** (for example 600 kHz) are radio menu settings and cannot be stored per channel from here, so set them
+in the radio's menus; and **deleting** a channel is not offered yet (do it on the radio).
 
 ## 5. Transmitting
 
@@ -124,7 +131,7 @@ Rules that always apply:
 ## 7. Remote access
 
 * At home: `https://<pi-name>.local`. Your device must trust the Pi's certificate once (see [security and remote access](06-security-remote.md)).
-* **FreeDV** digital voice (RADE V1, and the experimental RADE V2): the FreeDV tab (beside Audio) switches it on and off and has preset channels; the Pi does the encoding and decoding. See [FreeDV](freedv.md).
+* **FreeDV** digital voice (RADE V1 and RADE V2): the FreeDV tab (beside Audio) switches it on and off and has preset channels; the Pi does the encoding and decoding. See [FreeDV](freedv.md).
 * A logbook on another computer (Log4OM and others) can follow and tune the radio over the home network: [logbook link](logbook.md).
 * Away from home: **Tailscale** ([guide](tailscale.md)). No port is opened on your router.
 

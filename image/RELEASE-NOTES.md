@@ -42,6 +42,21 @@ and goes back by itself if the new version does not start. Settings and accounts
 | `radio-remote-rade-linux-aarch64.tar.xz` | the optional RADE library (FreeDV neural modes V1 and V2) for a Raspberry Pi, installed with `install_rade.sh` (the PC build is `…-x86_64.tar.xz`) |
 | `SHA256SUMS` | checksums of all of the above |
 
+### What is new in 1.1.15
+
+- **Memory editor (FT-991A, administrators).** **Memories > Add** stores a new channel and **Edit** changes one: name (up to 12 characters), frequency, mode, shift direction (simplex, plus, minus) and tone mode (off, CTCSS encode,
+  CTCSS encode + decode, DCS). **Export** saves the list as a CSV file first (a backup). Every save asks for confirmation and is **proved**: the whole list is read before and after, the channel must read back as written, and if a write ever
+  changed another channel, editing switches itself off and the message names the channels. It takes about 20 seconds. Tested on a real FT-991A. Not offered: the tone **frequency** (e.g. 71.9 Hz) and the repeater offset, which the radio's CAT
+  commands cannot store per channel (set them in the radio's menus), and deleting a channel (do it on the radio).
+- **Memory recall is checked.** Some radios sometimes fall into a memory check / memory tune state where selecting a memory changes nothing (the Win4Yaesu manual describes it; two friends had to repeat the change until it took). The recall is now checked
+  against the radio's answer and, if it did not take, retried once (the V/M key is pressed first only when the radio reports that special state). What happened is written to the log (`memory recall: ...`).
+- **A reinstalled RADE library is used.** The copy installed from the page (Admin > Config > RADE) lives in the data folder and now wins over the one in `/opt`, and the service finds it the next time FreeDV is switched on, with no restart. Before, a PC kept loading the
+  older V1-only library, so RADE V2 never appeared in the mode list.
+- **The FreeDV tab stays visible while RADE can still be installed**, so its **Install RADE** button is reachable (the tab used to vanish on a machine without the library).
+- RADE V2 is listed as **RADE V2**; the "experimental" wording is gone from the page.
+- **Safari before version 16:** the frequency readout now has a fallback size for browsers that do not understand container query units (a phone showed the frequency falling apart and the page shaking). This is the likely cause and could not be tested on such a phone.
+- Admin > Diagnostics shows the new FreeDV timing counters from 1.1.14 (slowest step, holes in the transmitted tones); `freedv_probe.py` prints the slowest step too.
+
 ### What is new in 1.1.14
 
 - **FreeDV is now RADE only: RADE V1 and the experimental RADE V2.** 1600, 700D and 700E (and the libcodec2 package) are removed. A configuration that still names one of them is read as RADE V1, so nothing needs editing.

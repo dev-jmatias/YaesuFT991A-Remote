@@ -15,6 +15,13 @@ MODES = {
 }
 MODE_CODES = {v: k for k, v in MODES.items()}
 
+# memory channel P8 (tone mode) and P10 (shift direction), MT/MR p.11-12. The tone FREQUENCY is not part of these commands (P9 is fixed at 00).
+TONE_MODES = {"0": "off", "1": "ctcss_encdec", "2": "ctcss_enc", "3": "dcs_encdec", "4": "dcs_enc"}
+TONE_CODES = {v: k for k, v in TONE_MODES.items()}
+SHIFTS = {"0": "simplex", "1": "plus", "2": "minus"}
+SHIFT_CODES = {v: k for k, v in SHIFTS.items()}
+TAG_LEN = 12
+
 FREQ_MIN, FREQ_MAX = 30_000, 470_000_000     # FA/FB range (p.9)
 RADIO_ID = "0670"                            # ID; -> ID0670; (p.10)
 
@@ -142,10 +149,28 @@ def decode(frame: str) -> dict:
 
 def memory_read(channel: int) -> str:
     """MT P0P0P0; = read one memory channel including its tag (read command of MT, manual p.11 "MT MEMORY CHANNEL WRITE/TAG").
-    Only the READ form is ever built: this program never writes a memory."""
+    This builds the READ form only; memory_write() below builds the write."""
     if not 1 <= channel <= 99:
         raise FrameError(f"memory channel {channel} outside 1..99")
     return f"MT{channel:03d};"
+
+
+def memory_write(channel: int, hz: int, mode: str, tone_mode: str = "off", shift: str = "simplex", tag: str = "") -> str:
+    """MT P1..P12; = write one memory channel with its tag (manual p.11 "MT MEMORY CHANNEL WRITE/TAG"): channel(3) frequency(9) clarifier +0000 RX/TX clarifier off (0 0)
+    mode(1) P7 0 (fixed on write) tone mode(1) 00 (fixed) shift(1) 0 (fixed) tag (12, padded with spaces). Everything is checked here, so a bad value never reaches the radio."""
+    if not 1 <= channel <= 99:
+        raise FrameError(f"memory channel {channel} outside 1..99")
+    if isinstance(hz, bool) or not isinstance(hz, int) or not FREQ_MIN <= hz <= FREQ_MAX:
+        raise FrameError(f"frequency outside {FREQ_MIN}..{FREQ_MAX} Hz")
+    if mode not in MODE_CODES:
+        raise FrameError(f"unknown mode {mode!r}")
+    if tone_mode not in TONE_CODES:
+        raise FrameError(f"unknown tone mode {tone_mode!r}")
+    if shift not in SHIFT_CODES:
+        raise FrameError(f"unknown shift {shift!r}")
+    if not isinstance(tag, str) or len(tag) > TAG_LEN or not all(32 <= ord(c) < 127 and c != ";" for c in tag):
+        raise FrameError(f"the name must be at most {TAG_LEN} printable ASCII characters (no ';')")
+    return f"MT{channel:03d}{hz:09d}+000000{MODE_CODES[mode]}0{TONE_CODES[tone_mode]}00{SHIFT_CODES[shift]}0{tag.ljust(TAG_LEN)};"
 
 
 def memory_select(channel: int) -> str:
@@ -176,7 +201,8 @@ def decode_memory_notag(answer: str, modes: dict | None = None) -> dict | None:
     modes = modes or MODES
     if p[19] not in modes:
         raise FrameError("bad MR mode")
-    return {"channel": int(p[:3]), "frequency": hz, "mode": modes[p[19]], "tag": ""}
+    return {"channel": int(p[:3]), "frequency": hz, "mode": modes[p[19]], "tag": "",
+            "tone_mode": TONE_MODES.get(p[21], "off"), "shift": SHIFTS.get(p[24], "simplex")}
 
 
 def decode_memory(answer: str, modes: dict | None = None) -> dict | None:
@@ -193,4 +219,5 @@ def decode_memory(answer: str, modes: dict | None = None) -> dict | None:
     modes = modes or MODES
     if p[19] not in modes:
         raise FrameError("bad MT mode")
-    return {"channel": int(p[:3]), "frequency": hz, "mode": modes[p[19]], "tag": p[26:].strip()}
+    return {"channel": int(p[:3]), "frequency": hz, "mode": modes[p[19]], "tag": p[26:].strip(),
+            "tone_mode": TONE_MODES.get(p[21], "off"), "shift": SHIFTS.get(p[24], "simplex")}

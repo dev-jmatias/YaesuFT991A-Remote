@@ -267,8 +267,8 @@ export function renderRadio(root, { onLogout, onAuthLost }) {
     audio.mount(ap);
     parts.push({ update: () => audio.update(S.state) });
 
-    // FreeDV (only when the Pi has libcodec2, see docs/freedv.md): a tab beside Audio on phones and tablets, a card under the Levels/Audio row on wide screens
-    const fdOk = !!S.audio?.freedv?.available;
+    // FreeDV (when the RADE library is installed, or can be installed from the tab's button; see docs/freedv.md): a tab beside Audio on phones and tablets, a card under the Levels/Audio row on wide screens
+    const fdOk = !!(S.audio?.freedv?.show ?? S.audio?.freedv?.available);
     const tabs = [...TABS];
     $("layout").classList.toggle("has-fd", fdOk);
     if (fdOk) {

@@ -643,6 +643,37 @@ async def memories(request):
     return web.json_response({"channels": items})
 
 
+async def memory_write(request):
+    """Add or edit ONE memory channel of the radio (FT-991A). Administrators only, with a confirmation, never while the radio transmits. The driver reads the whole list before and after and
+    proves the write (see FT991A.memory_write); it takes about 20 seconds."""
+    from .common import client_ip, read_json, require_admin
+    admin_user = require_admin(request)
+    app = request.app
+    try:
+        ch = int(request.match_info["channel"])
+    except ValueError:
+        raise web.HTTPBadRequest(text="memory channel must be 1..99") from None
+    if not 1 <= ch <= 99:
+        raise web.HTTPBadRequest(text="memory channel must be 1..99")
+    body = await read_json(request)
+    if body.get("confirm") is not True:
+        raise web.HTTPBadRequest(text="confirmation required: this overwrites the channel stored in the radio")
+    hz, mode, tone, shift, name = body.get("frequency"), body.get("mode"), body.get("tone_mode", "off"), body.get("shift", "simplex"), body.get("name", "")
+    if isinstance(hz, bool) or not isinstance(hz, int) or not all(isinstance(v, str) for v in (mode, tone, shift, name)):
+        raise web.HTTPBadRequest(text="frequency (Hz, a whole number), mode, tone_mode, shift and name are needed")
+    guard, driver = app[K_GUARD], app[K_DRIVER]
+    if guard.keyed:
+        raise web.HTTPConflict(text="not while transmitting")
+    log.warning("memory_write: %s asked to write channel %s: %s Hz %s tone=%s shift=%s name=%r", admin_user.username, ch, hz, mode, tone, shift, name)
+    try:
+        item = await driver.memory_write(ch, hz, mode, tone, shift, name)
+    except RadioError as e:
+        app[K_AUTH].audit("memory_write_failed", admin_user.username, client_ip(request), f"ch {ch}: {str(e)[:150]}")
+        raise web.HTTPConflict(text=str(e)) from None
+    app[K_AUTH].audit("memory_write", admin_user.username, client_ip(request), f"ch {ch}: {hz} Hz {mode} tone={tone} shift={shift} name={name.strip()[:12]!r}")
+    return web.json_response({"ok": True, "channel": item})
+
+
 async def audio_devices(request):
     if request[K_SESSION].role != "admin":
         raise web.HTTPForbidden(text="admin only")
@@ -681,6 +712,8 @@ def create_app(cfg: dict, driver: RadioDriver | None = None, auth: AuthStore | N
         app[K_RESTART] = restart_hook
     app[K_HUB] = Hub(driver, guard, auth,
                      lease_timeout_s if lease_timeout_s is not None else cfg["safety"]["control_request_timeout_s"])
+    from .audio import rade as _rade
+    _rade.set_install_dir(Path(cfg["storage"]["data_dir"]) / "lib")           # BEFORE the audio service looks for the library: the copy installed from the page (newer) wins over /opt
     audio = AudioService(
         cfg["audio"], is_mock=driver.is_mock,
         tx_gate=lambda cid: guard.keyed and guard.owner == cid,
@@ -688,8 +721,6 @@ def create_app(cfg: dict, driver: RadioDriver | None = None, auth: AuthStore | N
     )
     app[K_AUDIO] = app[K_HUB].audio = audio
     audio.set_freedv_params(cfg["freedv"]["mode"], cfg["freedv"]["tx_level_db"])
-    from .audio import rade as _rade
-    _rade.set_install_dir(Path(cfg["storage"]["data_dir"]) / "lib")
     app[K_HUB].ui = {"steps": cfg["ui"]["tuning_steps_hz"],
                      "meter": {"alc_full": cfg["ui"]["meter_alc_full"], "comp_full": cfg["ui"]["meter_comp_full"],
                                "swr_warn": cfg["ui"]["swr_warn"], "swr_raw_at_3": cfg["ui"]["swr_raw_at_3"]}}
@@ -745,6 +776,7 @@ def create_app(cfg: dict, driver: RadioDriver | None = None, auth: AuthStore | N
     app.router.add_get("/ws/audio", audio_ws)
     app.router.add_get("/api/audio/devices", audio_devices)
     app.router.add_get("/api/memories", memories)
+    app.router.add_post("/api/memories/{channel}", memory_write)
     app.router.add_get("/ws", ws_handler)
     if (DOCS_DIR / "index.html").is_file():
         app.router.add_get("/docs", docs_redirect)

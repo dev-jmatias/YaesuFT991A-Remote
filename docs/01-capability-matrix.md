@@ -47,6 +47,7 @@ How to read the table:
 | RIT | works | from the manual | works | works | not offered yet |
 | XIT | works | from the manual | works | works | not offered yet |
 | **VFOs and memories** | | | | | |
+| Memory channels: add and edit (MT write) | works | - | - | - | - |
 | Memory channels: list and recall | works | not offered yet | works | works | not offered yet |
 | Quick split (QS) | from the manual, untested | from the manual | not offered yet | not offered yet | not offered yet |
 | Split | works | from the manual | not offered yet | not offered yet | from the manual |

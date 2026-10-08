@@ -194,8 +194,10 @@ class AudioService:
 
     # ------------------------------------------------------------- FreeDV
     def freedv_state(self) -> dict:
+        from . import rade
         st = freedv.mode_status()
-        return {"available": self.freedv_ok, "reason": self.freedv_reason, "on": self._fd_rx is not None, "mode": self.freedv_mode,
+        # "show": the page shows the FreeDV tab also while the RADE library is missing but can be installed, because the Install RADE button lives there
+        return {"available": self.freedv_ok, "show": bool(self.freedv_ok or rade.installable()), "reason": self.freedv_reason, "on": self._fd_rx is not None, "mode": self.freedv_mode,
                 "modes": [m for m in freedv.ALL_MODES if not st.get(m)], "unavailable": {m: w for m, w in st.items() if w},
                 "all_modes": list(freedv.ALL_MODES)}
 
@@ -217,7 +219,7 @@ class AudioService:
     def refresh_freedv(self) -> None:
         """Look again for the FreeDV libraries (after the Install RADE button put one in place)."""
         from . import rade
-        rade.reset()
+        rade.reset(force=True)                       # also drops an older library that is already loaded: the newly installed one is used the next time FreeDV is switched on
         self.freedv_ok, self.freedv_reason = freedv.available()
 
     def set_freedv_params(self, mode: str, tx_level_db: float) -> None:

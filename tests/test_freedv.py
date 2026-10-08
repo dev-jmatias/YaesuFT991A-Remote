@@ -197,6 +197,17 @@ async def test_speech_passes_through_the_normal_path_when_freedv_is_off(svc):
     assert len(svc._tx_q) == 1 and svc._tx_q[0] != TONES
 
 
+async def test_the_tab_is_shown_while_rade_can_still_be_installed(svc, monkeypatch):
+    """Without the RADE library the tab used to vanish, and with it the Install RADE button."""
+    from radio_remote.audio import rade
+    svc.freedv_ok, svc.freedv_reason = False, "RADE is not installed"
+    monkeypatch.setattr(rade, "installable", lambda: True)
+    st = svc.freedv_state()
+    assert st["available"] is False and st["show"] is True
+    monkeypatch.setattr(rade, "installable", lambda: False)                      # a 32-bit system: nothing to install, nothing to show
+    assert svc.freedv_state()["show"] is False
+
+
 async def test_unavailable_library_refuses_to_switch_on(svc):
     svc.freedv_ok, svc.freedv_reason = False, "RADE is not installed"
     with pytest.raises(AudioUnavailable, match="not installed"):
@@ -300,3 +311,27 @@ async def test_an_over_with_no_holes_is_logged_as_such(svc, caplog):
     await until(lambda: any("no holes" in r.getMessage() for r in caplog.records))
     assert svc.tx_underruns == 0
     await svc._stop_tx_sink()
+
+
+def test_a_reinstalled_library_is_picked_up_without_a_restart(monkeypatch):
+    """The page's Reinstall RADE put a V1+V2 library in place, but the running service kept the older V1-only one until it was restarted."""
+    from pathlib import Path
+    from radio_remote.audio import rade
+    monkeypatch.setattr(rade, "_LIB", object())
+    monkeypatch.setattr(rade, "_PATH", Path("/opt/radio-remote/lib/librade-rr.so"))
+    monkeypatch.setattr(rade, "_ERR", "")
+    rade.reset()
+    assert rade._LIB is not None                                         # an ordinary reset only forgets a FAILED load
+    rade.reset(force=True)
+    assert rade._LIB is None and rade._PATH is None                      # the next look re-resolves which file wins
+
+
+async def test_the_library_folder_is_known_before_the_audio_service_first_looks(make_app, monkeypatch):
+    """The copy installed from the page lives in the data folder and must win over /opt: its folder has to be set BEFORE the first look for the library,
+    or the older /opt copy is loaded and kept (seen on a PC where RADE V2 never appeared in the list)."""
+    from radio_remote.audio import rade
+    rade.set_install_dir(None)
+    seen, real = [], rade._load
+    monkeypatch.setattr(rade, "_load", lambda: (seen.append(rade.install_dir()), real())[1])
+    await make_app()
+    assert seen and all(d is not None for d in seen)

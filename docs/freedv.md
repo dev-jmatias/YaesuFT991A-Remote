@@ -5,7 +5,7 @@ FreeDV sends speech as modem tones in an ordinary SSB channel. Radio Remote does
 * **Receive:** the Pi turns the radio's modem tones back into speech and plays that to every listener.
 * **Transmit:** your voice (browser microphone) is turned into modem tones by the Pi and sent to the radio, while you hold PTT.
 
-Modes: **RADE V1** (the neural mode most stations use today) and **RADE V2** (experimental, see below). Both come from one optional library, the same one that has always held RADE.
+Modes: **RADE V1** (the neural mode most stations use today) and **RADE V2** (see below). Both come from one optional library, the same one that has always held RADE.
 The older codec2 modes (1600, 700D, 700E) were removed from the program; a configuration file that still names one of them is read as RADE V1.
 
 > **Status:** the modem round trip (voice to tones to voice, noise rejected) is covered by automated tests. How well it works over the air with
@@ -85,11 +85,10 @@ Then choose **RADE** in the mode list of the FreeDV tab (or in a channel). Until
   Audio > RX gain**. For transmit use the same **modem level** slider as the other modes and keep the ALC barely moving.
 * The speech it plays is the neural vocoder's voice (clean, but not your exact voice). A few hundred milliseconds of delay is normal.
 
-### RADE V2 (experimental)
+### RADE V2
 
-Choose **RADE V2 (experimental)** in the mode list. It is a newer version of the same idea with a narrower signal (about 1.1 to 1.9 kHz), its own level control on receive, and it follows a mistuned
-signal by itself. **Treat it as an experiment:** the RADE authors say the V2 signal and software may still change without notice and that other versions will not be able to decode it, and on-air use is not
-yet recommended by them. **A V1 station cannot decode a V2 station and the other way round**, and today most stations are on V1. Use V2 only with someone who is also on V2.
+Choose **RADE V2** in the mode list. It is a newer version of the same idea with a narrower signal (about 1.1 to 1.9 kHz), its own level control on receive, and it follows a mistuned
+signal by itself. **A V1 station cannot decode a V2 station and the other way round**, so use the version the other station uses; most stations are on V1 today.
 
 * It needs a library built with V2 support (the one that comes with this version). If you updated the program but kept an older RADE library, V1 still works and the tab says that V2 needs the library to be reinstalled:
   **Admin > Config > RADE > Reinstall RADE**.

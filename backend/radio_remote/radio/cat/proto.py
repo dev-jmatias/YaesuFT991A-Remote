@@ -48,6 +48,7 @@ class Ft991aProto:
     memory_read = staticmethod(frame.memory_read)
     memory_read_notag = staticmethod(frame.memory_read_notag)
     memory_select = staticmethod(frame.memory_select)
+    memory_write = staticmethod(frame.memory_write)                # FT-991A only (the HF radios' memories are never written)
     decode_memory = staticmethod(frame.decode_memory)
     decode_memory_notag = staticmethod(frame.decode_memory_notag)
 

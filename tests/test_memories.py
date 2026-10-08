@@ -17,7 +17,7 @@ def test_memory_frames():
         with pytest.raises(frame.FrameError):
             frame.memory_select(bad)
     ok = "MT005" + "014200000" + "+0000" + "0" + "0" + "2" + "1" + "0" + "00" + "0" + "0" + "20m DX".ljust(12) + ";"
-    assert frame.decode_memory(ok) == {"channel": 5, "frequency": 14_200_000, "mode": "USB", "tag": "20m DX"}
+    assert frame.decode_memory(ok) == {"channel": 5, "frequency": 14_200_000, "mode": "USB", "tag": "20m DX", "tone_mode": "off", "shift": "simplex"}
     empty = "MT006" + "000000000" + "+0000" + "00" + "1" + "1" + "0" + "00" + "0" + "0" + " " * 12 + ";"
     assert frame.decode_memory(empty) is None                       # an empty channel
     with pytest.raises(frame.FrameError):
@@ -33,7 +33,7 @@ def test_memory_frames():
 def test_mr_read_without_tag_is_a_read_only_fallback():
     assert frame.memory_read_notag(3) == "MR003;"
     ok = "MR003" + "007100000" + "+0000" + "0" + "0" + "1" + "1" + "0" + "00" + "0" + ";"
-    assert frame.decode_memory_notag(ok) == {"channel": 3, "frequency": 7_100_000, "mode": "LSB", "tag": ""}
+    assert frame.decode_memory_notag(ok) == {"channel": 3, "frequency": 7_100_000, "mode": "LSB", "tag": "", "tone_mode": "off", "shift": "simplex"}
     assert frame.decode_memory_notag("MR004" + "000000000" + "+0000" + "0011" + "0" + "00" + "0" + ";") is None   # empty channel
     for bad in ("MR003123;", "MT003" + "007100000" + "+0000" + "0011" + "0" + "00" + "0" + ";"):
         with pytest.raises(frame.FrameError):
@@ -203,3 +203,29 @@ async def test_memory_commands_need_control_and_login(client):
     a = await cmd(sock, 2, type="memory_select", channel=5)
     assert a["ok"] is False and "control" in a["error"].lower()
     await sock.close()
+
+
+async def test_a_radio_in_memory_check_mode_is_brought_back_and_the_recall_is_retried(rig):
+    """Win4Yaesu's manual: occasionally selecting memories changes nothing because the radio is in Memory Check Mode; the V/M key brings it back. A friend's radios
+    needed the memory change repeated until it took. The recall is now checked against the radio's IF answer and retried once."""
+    d, sim = rig.driver, rig.sim
+    await d.memory_channels()
+    n = len(sim.log)
+    await d.memory_select(11)
+    assert sim.mem_ch == 11 and "VM" not in sim.log[n:]                       # a normal recall: sent once, no V/M, no retry
+    assert [c for c in sim.log[n:] if c.startswith("MC")] == ["MC011"]
+    await d.memory_to_vfo()
+    sim.mem_check = 1                                                         # the radio drops into memory check mode
+    n = len(sim.log)
+    await d.memory_select(6)
+    assert sim.mem_check == 0 and sim.mem_ch == 6                              # V/M pressed once, MC sent again, and it took
+    assert sim.log[n:].count("VM") == 1 and [c for c in sim.log[n:] if c.startswith("MC")] == ["MC006", "MC006"]
+
+
+async def test_a_recall_that_cannot_take_effect_is_reported_instead_of_believed(rig):
+    d, sim = rig.driver, rig.sim
+    await d.memory_channels()
+    sim.mem_check = 2                                                         # a radio that stays in the special mode whatever is pressed
+    with pytest.raises(RadioError, match="V/M"):
+        await d.memory_select(5)
+    assert sim.log.count("VM") == 1                                           # one V/M and one more MC, not an endless loop

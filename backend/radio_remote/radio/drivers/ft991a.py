@@ -66,6 +66,8 @@ class YaesuCatDriver(RadioDriver):
         self._wake: asyncio.Event | None = None
         self._mem_cache: list[dict] | None = None             # memory channels read from the radio (re-read on request)
         self._mem_lock = asyncio.Lock()
+        self._mem_write_lock = asyncio.Lock()
+        self._mem_edit_blocked = ""                              # set when a write changed another channel: editing stays off until the service restarts
         self._last_vfo_freq: int | None = None                  # the VFO frequency and mode last seen outside memory mode (see _on_frame)
         self._last_vfo_mode: str | None = None
         self.state.update(connected=False, model=model, tx=False, tx_source=None)
@@ -495,7 +497,7 @@ class YaesuCatDriver(RadioDriver):
         await self._guard_cat(c.request("FA;"))
         await self._guard_cat(c.request("MD0;"))
 
-    # ------------------------------------------------------------ memory channels (read and select only: never written)
+    # ------------------------------------------------------------ memory channels (read, select and, for an FT-991A, write)
     def _need_memories(self) -> None:
         if not self.caps.has("memories") or not hasattr(self.proto, "memory_read"):
             raise RadioError("memory channels are not enabled for this radio profile")
@@ -592,8 +594,82 @@ class YaesuCatDriver(RadioDriver):
         # Logged on purpose (INFO, only when a channel is recalled): what was sent and what the radio says it is on now, so a
         # recall that does not take effect can be diagnosed from the service log.
         await asyncio.sleep(self.t.settle_s)
-        log.info("memory recall: sent %s, radio answers IF with %s", cmd, await self._guard_cat(c.request("IF;")))
+        ans = await self._guard_cat(c.request("IF;"))
+        log.info("memory recall: sent %s, radio answers IF with %s", cmd, ans)
+        if not self._recall_took(ans, channel):
+            # The Win4Yaesu manual describes it: "occasionally, for no apparent reason, selecting memories will not change the frequency or any parameters ... the radio has entered
+            # Memory Check Mode ... click the V/M button again". IF P7 then says Memory Tune / QMB / PMS / HOME instead of Memory. So the recall is never just believed: it is checked, and once
+            # retried (V/M pressed first only when the radio is in one of those other states, never when it is plainly in VFO or memory mode, where V/M would toggle the wrong way).
+            await asyncio.sleep(self.t.settle_s * 2)                       # the answer may simply have been early
+            ans = await self._guard_cat(c.request("IF;"))
+            if not self._recall_took(ans, channel):
+                state = (self.proto.decode(ans) or {}).get("vfo_memory")
+                log.warning("memory recall: the radio did not go to channel %d (state %r, IF %s); %s and sending %s again", channel, state,
+                            ans, "pressing V/M once" if state == "other" else "no V/M needed", cmd)
+                if state == "other":
+                    await self._guard_cat(c.send("VM;"))
+                    await asyncio.sleep(self.t.settle_s)
+                await self._guard_cat(c.send(cmd))
+                await asyncio.sleep(self.t.settle_s)
+                ans = await self._guard_cat(c.request("IF;"))
+                log.warning("memory recall: second try, the radio answers IF with %s", ans)
+                if not self._recall_took(ans, channel):
+                    raise RadioError(f"the radio did not go to memory channel {channel}; it may be in a special memory mode: press its V/M key once and try again")
         await self._settled_reads(["IF;", "MD0;"])               # IF carries frequency, mode and the memory channel
+
+    def _recall_took(self, answer: str, channel: int) -> bool:
+        """Does this IF answer say the radio is in memory mode on this channel?"""
+        try:
+            d = self.proto.decode(answer) or {}
+        except Exception:
+            return False
+        return d.get("vfo_memory") == "memory" and d.get("memory_channel") == channel
+
+    @staticmethod
+    def _mem_sig(m: dict) -> tuple:
+        return (m.get("frequency"), m.get("mode"), (m.get("tag") or "").strip(), m.get("tone_mode", "off"), m.get("shift", "simplex"))
+
+    async def memory_write(self, channel: int, frequency: int, mode: str, tone_mode: str = "off", shift: str = "simplex", name: str = "") -> dict:
+        """MT P1..P12; (manual p.11 "MT MEMORY CHANNEL WRITE/TAG") stores one channel, and then PROVES it: the whole list is read before and after, the channel must read back as written and
+        no other channel may have changed. A real FT-991A answers every MT read with channel 001 in its P1 field (see memory_channels), so nobody can assume that a write goes where P1 says;
+        if another channel changed, editing is switched off until the service restarts and the error names the channels, so they can be put back by hand. Takes about 20 s (two list reads)."""
+        self._need_memories()
+        if not self.caps.has("memory_edit") or not hasattr(self.proto, "memory_write"):
+            raise RadioError("editing memory channels is not enabled for this radio profile")
+        if self._mem_edit_blocked:
+            raise RadioError(self._mem_edit_blocked)
+        try:
+            cmd = self.proto.memory_write(channel, frequency, mode, tone_mode, shift, name)
+        except frame.FrameError as e:
+            raise RadioError(str(e)) from None
+        c = self._need_client()
+        async with self._mem_write_lock:
+            if self.state.get("tx") or self.state.get("tuning"):
+                raise RadioError("not while transmitting")
+            before = {m["channel"]: m for m in await self.memory_channels(refresh=True)}
+            log.warning("memory write: channel %03d was %s; sending %s", channel, before.get(channel) or "empty", cmd)
+            await self._guard_cat(c.send(cmd))
+            await asyncio.sleep(0.6)                                             # the radio stores it
+            after = {m["channel"]: m for m in await self.memory_channels(refresh=True)}
+            others = sorted(ch for ch in set(before) | set(after) if ch != channel and (ch not in before or ch not in after or self._mem_sig(before[ch]) != self._mem_sig(after[ch])))
+            if others:
+                self._mem_edit_blocked = (f"The radio changed other memory channels ({', '.join(str(x) for x in others[:12])}) when channel {channel} was written, so editing is switched off. "
+                                          "Put the channels back from your exported list, or restart the service to try again.")
+                log.error("memory write: channel(s) %s changed by a write to %s; editing switched off", others, channel)
+                raise RadioError(self._mem_edit_blocked)
+            want = (frequency, mode, name.strip(), tone_mode, shift)
+            got = after.get(channel)
+            if got is None:
+                raise RadioError(f"the radio did not store channel {channel} (it still reads as empty)")
+            have = self._mem_sig(got)
+            if have != want:
+                if have[1:] == want[1:]:                                         # only the frequency differs: the radio rounded it to its tuning step
+                    log.info("memory write: channel %03d stored at %d Hz (asked for %d)", channel, have[0], frequency)
+                else:
+                    raise RadioError(f"the radio stored channel {channel} differently from what was sent: it reads {have}, sent {want}")
+            log.info("memory write: channel %03d now %s", channel, got)
+            await self._settled_reads(["IF;"])
+            return got
 
     async def memory_to_vfo(self) -> None:
         """Back from memory mode to the VFO: VM; is the radio's V/M key (a toggle), so it is only sent while the radio is in memory mode."""

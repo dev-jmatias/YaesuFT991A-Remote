@@ -1,4 +1,4 @@
-"""FreeDV digital voice: RADE V1 ("RADE") and RADE V2 ("RADE2", experimental upstream), both through the library in rade.py.
+"""FreeDV digital voice: RADE V1 ("RADE") and RADE V2 ("RADE2"), both through the library in rade.py.
 
 The radio's USB audio carries the modem tones. On receive this module turns them back into speech; on transmit it turns the
 operator's speech into modem tones. Audio inside the server is mono int16 at 48 kHz; the modems work at 8 kHz (RADE: speech at 16 kHz), so each
