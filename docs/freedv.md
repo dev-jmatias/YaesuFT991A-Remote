@@ -48,11 +48,30 @@ signals: RADE V1 locks only within about ±50 Hz, so the Pi does the fine tuning
 
 ### Radio settings that matter for FreeDV
 
-* USB or LSB mode (not DATA), **speech processor off**, no equaliser tricks: the radio must pass the modem tones unchanged.
+**FT-991A: use the radio's DATA mode (as the FreeDV guide does).** In plain USB/LSB the transmit audio goes through the radio's microphone chain (speech processor, the parametric equaliser, the
+SSB transmit filter, menu 110), which distorts the OFDM modem tones: the other station may receive a clean-looking signal it cannot decode. The DATA modes bypass that chain. FreeDV's own guide
+for the FT-991A ([freedv.org/getting-started-yaesu](https://freedv.org/getting-started-yaesu/)) sets these menus once on the radio:
+
+| Menu | Name | Value |
+|---|---|---|
+| 031 | CAT RATE | 38400 |
+| 059 | CW FREQ DISPLAY | DIRECT FREQ |
+| 062 | DATA MODE | OTHERS |
+| 064, 065 | OTHER DISP (SSB), OTHER SHIFT (SSB) | 1500 Hz |
+| 066, 068 | DATA LCUT FREQ, DATA HCUT FREQ | OFF |
+| 070 | DATA IN SELECT | REAR (the page's microphone button sets it) |
+| 071 | DATA PTT SELECT | DAKY |
+| 072 | DATA PORT SELECT | USB |
+
+Then switch on **Use the radio's DATA-USB / DATA-LSB mode** in the FreeDV tab (administrators): FreeDV then puts the radio in DATA-USB (DATA-LSB below 10 MHz) instead of USB (LSB).
+It is off by default because it needs the menus above. The receive level that goes to the Pi is then menu **073 DATA OUT LEVEL** (in USB/LSB it is 107 SSB OUT LEVEL).
+
+**Always:** speech processor off, no equaliser tricks (the radio must pass the modem tones unchanged).
+
 * Set the transmit level so that the **ALC barely moves**: the tones are a continuous signal with high peaks, and an overdriven signal
   is worse than a weak one. Use the **Transmit level of the modem tones** slider on the FreeDV tab (administrators; default -6 dB) together
-  with the radio's data-in level, and keep the power moderate (about half of what you would use for SSB is a good start).
-* The receive level that goes to the Pi is the radio's menu 107 SSB OUT LEVEL ([radio connection](radio-connection.md)): the modem tones should
+  with the radio's data-in level. Watch the power meter as well: a level so low that the radio makes only a few watts reaches fewer stations.
+* The receive level that goes to the Pi is the radio's menu 107 SSB OUT LEVEL in USB/LSB, 073 DATA OUT LEVEL in the DATA modes ([radio connection](radio-connection.md)): the modem tones should
   be clearly present but never clipping.
 
 ## RADE (the neural modes)

@@ -42,6 +42,17 @@ and goes back by itself if the new version does not start. Settings and accounts
 | `radio-remote-rade-linux-aarch64.tar.xz` | the optional RADE library (FreeDV neural modes V1 and V2) for a Raspberry Pi, installed with `install_rade.sh` (the PC build is `…-x86_64.tar.xz`) |
 | `SHA256SUMS` | checksums of all of the above |
 
+### What is new in 1.1.18
+
+- **FT-991A: choosing a memory after a band key now really retunes the radio.** Found on a real radio: pressing a band key while a memory is recalled puts the radio in *Memory Tune* (IF state 2), and an `MC`
+  sent from there changes the channel number (and even reports "memory") without retuning, so the display showed the new channel while the audio stayed on the band key's frequency. Before every recall the app now checks the
+  radio's state and, if it is in such a special memory state, presses V/M first (the Win4Yaesu manual names the same way out). The recall is also checked afterwards and retried once.
+- **FreeDV on the FT-991A: an option to use the radio's DATA-USB / DATA-LSB mode** (FreeDV tab, administrators; off by default). FreeDV's own guide for the FT-991A uses the DATA modes, which bypass the radio's microphone chain (speech processor,
+  equaliser, SSB transmit filter) that distorts RADE; the manual has the table of menus to set once on the radio (062, 064/065, 066/068, 070, 071, 072, 059). With the option on, FreeDV puts the radio in DATA-USB (DATA-LSB below 10 MHz).
+- **The microphone button sets the right input in every mode** (FT-991A): REAR on menus 106 (SSB), 045 (AM), 074 (FM) and 070 (DATA IN SELECT) when you arm it; when you release it (or the last operator has left) 106, 045 and 074 go back to
+  **MIC**, the front microphone, so local operation works in SSB, AM and FM. Menu 070 is left on REAR (it only matters in the DATA modes). A menu left on REAR by hand is also put back.
+- The page asks for the memory's tone before editing (1.1.16) and the band / memory state is refreshed after a band key.
+
 ### What is new in 1.1.17
 
 - **FreeDV receive no longer freezes the server on a small PC.** The RADE decoder takes 60 to 100 ms for every modem frame on an Intel Atom (about 64% of a core in the live service), and it ran inside the single loop that also serves

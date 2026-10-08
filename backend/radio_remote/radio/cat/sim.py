@@ -15,7 +15,7 @@ from .transport import MemoryTransport, TransportClosed
 REG_DEFAULTS = {
     "NA0": "0", "SH0": "00", "IS0": "+0000", "CO00": "0000", "CO01": "1500", "CO02": "0000", "CO03": "0025",
     "BP00": "000", "BP01": "150", "BC0": "0", "NR0": "0", "RL0": "05", "NB0": "0", "NL0": "005", "PA0": "0",
-    "RA0": "0", "RT": "0", "XT": "0", "PR0": "0", "PR1": "0", "PL": "050", "ML0": "000", "ML1": "050", "AC": "000", "EX153": "00", "EX106": "1", "EX045": "0", "EX074": "0",
+    "RA0": "0", "RT": "0", "XT": "0", "PR0": "0", "PR1": "0", "PL": "050", "ML0": "000", "ML1": "050", "AC": "000", "EX153": "00", "EX106": "1", "EX045": "0", "EX074": "0", "EX070": "0",
 }
 BAND_START = {14: 118_000_000, 0: 1_840_000, 1: 3_573_000, 2: 5_357_000, 3: 7_074_000, 4: 10_136_000, 5: 14_074_000, 6: 18_100_000,
               7: 21_074_000, 8: 24_915_000, 9: 28_074_000, 10: 50_313_000, 15: 144_174_000, 16: 432_100_000}
@@ -33,6 +33,8 @@ class SimulatedFT991A:
         self.mem_tone = {}         # channel -> the same four values, stored per channel (an MT write copies the tone NUMBERS from VFO-A, as a real FT-991A does)
         self.write_misdirect = 0   # non-zero: an MT write goes to THIS channel instead of the one asked for (a faulty radio, for the safety test)
         self.mem_writes = 0
+        self.mem_tune = False      # BENCH-FOUND on a real FT-991A: the band key pressed in memory mode puts the radio in MEMORY TUNE (IF P7 = 2), not in VFO mode
+        self.mem_stuck = False     # ... and an MC recalled from memory tune reports P7 = 1 and the new channel, but the radio stays on the frequency the band key left (it does not retune)
         self.mem_check = 0         # 1 or 2: the radio is in memory check / memory tune mode: MC does nothing and IF reports P7 = 2 until the V/M key (VM;) is pressed
         self.am_deletes = 0        # non-zero: AM empties THIS channel instead of the recalled one (a faulty radio, for the safety test)
         self.refuse_writes = False  # True: an MT write is answered with ?; and stores nothing
@@ -83,6 +85,12 @@ class SimulatedFT991A:
         if self.ai:
             await self._send("TX0;")
 
+    def rx_freq(self) -> int:
+        """What the radio really receives (not what CAT reports: in memory mode IF and FA show VFO-A): the recalled channel's own frequency, unless it is stuck after a recall from memory tune."""
+        if self.mem_ch and not self.mem_stuck and not self.mem_tune and self.mem_ch in self.memories:
+            return self.memories[self.mem_ch][0]
+        return self.freq
+
     def power_cycle(self) -> None:
         self.ai = 0              # manual p.4: AI resets to 0 when the radio is switched off
 
@@ -96,7 +104,7 @@ class SimulatedFT991A:
         code = MODE_CODES[self.mode]
         sign = "-" if self.clar < 0 else "+"
         return (f"IF{self.mem_ch:03d}{self.freq:09d}{sign}{abs(self.clar):04d}{self.reg['RT']}{self.reg['XT']}{code}"
-                f"{2 if self.mem_check else (1 if self.mem_ch else 0)}0000;")
+                f"{2 if (self.mem_check or self.mem_tune) else (1 if self.mem_ch else 0)}0000;")
 
     async def _run(self) -> None:
         buf = bytearray()
@@ -162,6 +170,8 @@ class SimulatedFT991A:
                 await self.t.close()          # radio goes to standby: the link dies
             return
         if name == "BS" and len(p) == 2 and p.isdigit() and int(p) in BAND_START:
+            if self.mem_ch:
+                self.mem_tune, self.mem_stuck = True, False                              # the band key in memory mode: memory tune on that band (the channel number stays)
             self.freq = BAND_START[int(p)]
             if int(p) == 14:
                 self.mode = "AM"                                                         # the AIR band comes up in AM
@@ -268,7 +278,14 @@ class SimulatedFT991A:
             if not self.mc_keeps_vfo:
                 self.freq, self.mode = self.memories[ch][0], self.memories[ch][1]
             return
+        if name == "VM" and not p and self.mem_tune:
+            self.mem_tune = self.mem_stuck = False                                       # V/M from memory tune: back to the channel's own frequency (P7 = 1)
+            return
+        if name == "MC" and len(p) == 3 and p.isdigit() and self.mem_tune and int(p) in self.memories:
+            self.mem_tune, self.mem_stuck, self.mem_ch = False, True, int(p)             # BENCH-FOUND: the channel number changes, P7 = 1, but the radio does not retune
+            return
         if name == "VM" and not p:
+            self.mem_stuck = False
             if self.mem_ch:
                 self.mem_ch = 0
                 if self.vfo_freq:

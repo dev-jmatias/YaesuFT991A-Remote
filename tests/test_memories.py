@@ -218,8 +218,8 @@ async def test_a_radio_in_memory_check_mode_is_brought_back_and_the_recall_is_re
     sim.mem_check = 1                                                         # the radio drops into memory check mode
     n = len(sim.log)
     await d.memory_select(6)
-    assert sim.mem_check == 0 and sim.mem_ch == 6                              # V/M pressed once, MC sent again, and it took
-    assert sim.log[n:].count("VM") == 1 and [c for c in sim.log[n:] if c.startswith("MC")] == ["MC006", "MC006"]
+    assert sim.mem_check == 0 and sim.mem_ch == 6                              # the state is checked BEFORE the recall: V/M pressed once, then a single MC, and it took
+    assert sim.log[n:].count("VM") == 1 and [c for c in sim.log[n:] if c.startswith("MC")] == ["MC006"]
 
 
 async def test_a_recall_that_cannot_take_effect_is_reported_instead_of_believed(rig):
@@ -228,4 +228,22 @@ async def test_a_recall_that_cannot_take_effect_is_reported_instead_of_believed(
     sim.mem_check = 2                                                         # a radio that stays in the special mode whatever is pressed
     with pytest.raises(RadioError, match="V/M"):
         await d.memory_select(5)
-    assert sim.log.count("VM") == 1                                           # one V/M and one more MC, not an endless loop
+    assert sim.log.count("VM") == 2                                           # one V/M before the recall and one before the retry, then it gives up: not an endless loop
+
+
+async def test_memory_then_band_then_memory_again_shows_the_new_memory_not_a_stale_frequency(rig):
+    """Seen by a user: recall a memory, press a band button WITHOUT going back to the VFO, then recall another memory: the page showed one frequency while the radio was on another.
+    The driver compared the radio's IF frequency with the VFO frequency it saw last, and that one was stale after the band change."""
+    d, sim = rig.driver, rig.sim
+    sim.mc_keeps_vfo = True                                                   # the radios that report the VFO frequency in IF while a memory is recalled
+    await d.memory_channels()
+    await d.memory_select(5)                                                  # 20 m USB, stored 14.200
+    assert d.state["frequency"] == 14_200_000 and d.state["vfo_memory"] == "memory"
+    await d.set_band("40m")                                                   # BENCH-FOUND: the band key in memory mode puts the radio in MEMORY TUNE (P7 = 2) on 7.074
+    assert d.state["vfo_memory"] == "other" and d.state["frequency"] == 7_074_000
+    n = len(sim.log)
+    await d.memory_select(11)                                                 # 2 m calling, stored 145.500 FM
+    assert sim.log[n:].count("VM") == 1                                       # V/M was pressed first: a recall straight from memory tune does not retune the radio
+    assert d.state["vfo_memory"] == "memory" and d.state["memory_channel"] == 11
+    assert d.state["frequency"] == 145_500_000 and d.state["mode"] == "FM"    # what the page shows ...
+    assert sim.rx_freq() == 145_500_000                                       # ... is what the radio really receives (it stayed on 7.074 before the fix)

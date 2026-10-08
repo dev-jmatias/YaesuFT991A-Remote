@@ -54,7 +54,7 @@ DEFAULTS: dict[str, dict[str, Any]] = {
     # FreeDV digital voice (RADE V1 = "RADE", RADE V2 = "RADE2"; both from the optional RADE library) done on the Pi: see audio/freedv.py and docs/freedv.md.
     # mode = the one used when the FreeDV button is pressed; tx_level_db = level of the modem tones sent to the radio (keep the ALC barely moving); channels = the preset
     # list shown on the FreeDV tab, each "name|frequency in Hz|mode". Frequencies below 10 MHz use LSB, above use USB (the FreeDV convention).
-    "freedv": {"mode": "RADE", "tx_level_db": -6.0, "channels": [
+    "freedv": {"mode": "RADE", "tx_level_db": -6.0, "data_mode": False, "channels": [
         "160m|1997000|RADE", "80m|3625000|RADE", "80m (2)|3643000|RADE", "40m|7177000|RADE", "40m (2)|7197000|RADE",
         "20m|14236000|RADE", "20m (2)|14240000|RADE", "17m|18118000|RADE", "15m|21313000|RADE", "12m|24933000|RADE",
         "10m|28330000|RADE", "10m (2)|28720000|RADE"]},

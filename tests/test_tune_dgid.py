@@ -255,13 +255,14 @@ async def test_hub_dgid_validation(client):
 
 # ------------------------------------------------------------------ mic select (menu 106)
 def test_mic_select_frames_and_encoder():
-    assert frame.decode("EX1061;") == {"mic_select": "REAR"}
-    assert frame.decode("EX1060;") == {"mic_select": "MIC"}
+    assert frame.decode("EX1061;") == {"mic_ssb": "REAR"}
+    assert frame.decode("EX1060;") == {"mic_ssb": "MIC"}
+    assert frame.decode("EX0451;") == {"mic_am": "REAR"} and frame.decode("EX0740;") == {"mic_fm": "MIC"} and frame.decode("EX0701;") == {"mic_data": "REAR"}
     with pytest.raises(frame.FrameError):
         frame.decode("EX1062;")
     from radio_remote.radio.cat import ft991a_controls as fc
-    assert fc.ENCODE["mic_select"][1]("REAR") == ["EX1061;", "EX0451;", "EX0741;"]            # SSB, AM and FM menus together
-    assert fc.ENCODE["mic_select"][1]("MIC") == ["EX1060;", "EX0450;", "EX0740;"]
+    assert fc.ENCODE["mic_select"][1]("REAR") == ["EX1061;", "EX0451;", "EX0741;", "EX0701;"]   # SSB, AM, FM and DATA menus together ...
+    assert fc.ENCODE["mic_select"][1]("MIC") == ["EX1060;", "EX0450;", "EX0740;"]                # back to the front microphone in SSB, AM and FM; 070 stays on REAR
     assert fc.ENCODE["mic_select"][0] == "EX106;"
 
 
@@ -271,7 +272,34 @@ async def test_mic_select_roundtrip_and_validation(rig):
     await d.set_control("mic_select", "MIC")
     assert sim.reg["EX106"] == "0" and sim.reg["EX045"] == "0" and sim.reg["EX074"] == "0" and d.state["mic_select"] == "MIC"
     await d.set_control("mic_select", "REAR")
-    assert sim.reg["EX106"] == "1" and sim.reg["EX045"] == "1" and sim.reg["EX074"] == "1"      # AM and FM follow the SSB menu
+    assert sim.reg["EX106"] == "1" and sim.reg["EX045"] == "1" and sim.reg["EX074"] == "1" and sim.reg["EX070"] == "1"      # AM, FM and DATA follow the SSB menu
     await d.set_control("mic_select", "MIC")
+    assert sim.reg["EX106"] == "0" and sim.reg["EX045"] == "0" and sim.reg["EX074"] == "0" and sim.reg["EX070"] == "1"      # SSB, AM and FM are back on the front microphone; DATA IN SELECT stays on REAR
+    assert d.state["mic_select"] == "MIC"                                                       # (070 does not count: it may stay on REAR for good)
+    sim.reg["EX074"] = "1"                                                                      # a menu left behind on REAR (set on the radio, or by an earlier version) ...
+    await d.set_control("mic_select", "MIC")
+    assert d.state["mic_select"] == "MIC" and sim.reg["EX074"] == "0"                           # ... is put back too
+    await d.set_control("mic_select", "REAR")
+    assert all(sim.reg[k] == "1" for k in ("EX106", "EX045", "EX074", "EX070")) and d.state["mic_select"] == "REAR"
+    await d.set_control("mic_select", "MIC")
+    assert all(sim.reg[k] == "0" for k in ("EX106", "EX045", "EX074")) and sim.reg["EX070"] == "1"
     with pytest.raises(Exception):
         await d.set_control("mic_select", "LINE")
+
+
+async def test_one_menu_left_on_rear_still_counts_as_rear_so_the_return_to_the_front_microphone_is_not_missed(rig):
+    """After the last operator leaves the radio goes back to MIC only when its state says REAR. That state was read from menu 106 alone, so a radio whose AM/FM/DATA menu was left on REAR
+    (by an earlier version or by hand) was never put back."""
+    d, sim = rig.driver, rig.sim
+    await d.set_control("mic_select", "MIC")
+    assert d.state["mic_select"] == "MIC"
+    sim.reg["EX045"] = "1"                                                    # only the AM menu is left on REAR
+    c = d.client
+    for r in ("EX106;", "EX045;", "EX074;", "EX070;"):
+        await c.request(r)
+    assert d.state["mic_select"] == "REAR"
+    await d.set_control("mic_select", "MIC")
+    assert sim.reg["EX045"] == "0" and d.state["mic_select"] == "MIC"
+    sim.reg["EX070"] = "1"                                                    # DATA IN SELECT on REAR alone is the normal setup and does not count
+    await c.request("EX070;")
+    assert d.state["mic_select"] == "MIC"

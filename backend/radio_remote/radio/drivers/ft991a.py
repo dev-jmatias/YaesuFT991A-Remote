@@ -66,6 +66,7 @@ class YaesuCatDriver(RadioDriver):
         self._wake: asyncio.Event | None = None
         self._mem_cache: list[dict] | None = None             # memory channels read from the radio (re-read on request)
         self._mem_lock = asyncio.Lock()
+        self._mic_menus: dict[str, str] = {}                      # microphone source per mode family (ssb / am / fm / data) as last read: "mic_select" is REAR when any is REAR
         self._mem_write_lock = asyncio.Lock()
         self._mem_edit_blocked = ""                              # set when a write changed another channel: editing stays off until the service restarts
         self._last_vfo_freq: int | None = None                  # the VFO frequency and mode last seen outside memory mode (see _on_frame)
@@ -193,6 +194,8 @@ class YaesuCatDriver(RadioDriver):
         for spec in controls.available(feats):
             if spec["name"] in self.proto.ENCODE and self.proto.ENCODE[spec["name"]][0] not in reads:
                 reads.append(self.proto.ENCODE[spec["name"]][0])
+        if feats["mic_select"]:
+            reads += [r for r in getattr(self.proto, "EXTRA_MIC_READS", ()) if r not in reads]
         if feats["width"]:
             reads.append(self.proto.READ_WIDTH)
         if self.caps.has("dual_receiver"):                                   # the SUB receiver's copies of the same controls
@@ -264,6 +267,10 @@ class YaesuCatDriver(RadioDriver):
         # BENCH-FOUND on a friend's FT-991A: in memory mode its IF answer carries the channel number but still the VFO's frequency (MC009 and MC001 both answered
         # 14.236000), so the page kept showing the VFO frequency. While the radio is in memory mode and only repeats the VFO frequency we last saw, the stored
         # frequency and mode of that channel (read from the radio's own memory list) are shown instead. A frequency that differs from the VFO's is trusted as before.
+        mic_keys = fields.keys() & {"mic_ssb", "mic_am", "mic_fm", "mic_data"}
+        if mic_keys:
+            self._mic_menus.update({k[4:]: fields[k] for k in mic_keys})
+            fields["mic_select"] = "REAR" if "REAR" in [v for k, v in self._mic_menus.items() if k != "data"] else "MIC"   # 070 (data) may stay on REAR for good: see ft991a_controls
         in_memory = fields.get("vfo_memory", self.state.get("vfo_memory")) == "memory"
         if not in_memory:
             if "frequency" in fields:
@@ -483,6 +490,9 @@ class YaesuCatDriver(RadioDriver):
         for cmd in cmds:
             await self._guard_cat(c.send(cmd))
         await self._guard_cat(c.request(read))
+        if name == "mic_select":
+            for extra in getattr(self.proto, "EXTRA_MIC_READS", ()):
+                await self._guard_cat(c.request(extra))
         if turned_on:
             await self._guard_cat(c.request("RT;"))
         if name == "narrow":                       # code meanings change with narrow/wide
@@ -496,6 +506,9 @@ class YaesuCatDriver(RadioDriver):
         await self._guard_cat(c.send(f"BS{code:02d};"))
         await self._guard_cat(c.request("FA;"))
         await self._guard_cat(c.request("MD0;"))
+        # The band key leaves memory mode, but nothing says so unless IF is read: the driver went on believing it was in memory mode, so its idea of "the VFO frequency" (used to tell
+        # a radio that repeats the VFO frequency in memory mode from one that reports the memory's own) went stale, and the next recall showed the wrong frequency.
+        await self._guard_cat(c.request("IF;"))
 
     # ------------------------------------------------------------ memory channels (read, select and, for an FT-991A, write)
     def _need_memories(self) -> None:
@@ -590,6 +603,14 @@ class YaesuCatDriver(RadioDriver):
             raise RadioError(str(e)) from None
         if self._mem_cache is not None and not any(m["channel"] == channel for m in self._mem_cache):
             raise RadioError("that memory channel is empty")
+        # BENCH-FOUND on a real FT-991A: pressing a band key while a memory is recalled puts the radio in MEMORY TUNE (IF P7 = 2). An MC sent from there changes the channel number and
+        # even reports P7 = 1, but the radio does not retune: the display says the new channel while the audio stays on the frequency the band key chose. The V/M key (which the Win4Yaesu
+        # manual also names as the way out of this state) brings it back; only then is MC sent.
+        before = await self._ask(c, "IF;")
+        if self._vm_state(before) == "other":
+            log.warning("memory recall: the radio is in a special memory state (IF %s); pressing V/M first so that channel %d really retunes it", before, channel)
+            await self._guard_cat(c.send("VM;"))
+            await asyncio.sleep(self.t.settle_s * 2)
         await self._guard_cat(c.send(cmd))
         # Logged on purpose (INFO, only when a channel is recalled): what was sent and what the radio says it is on now, so a
         # recall that does not take effect can be diagnosed from the service log.

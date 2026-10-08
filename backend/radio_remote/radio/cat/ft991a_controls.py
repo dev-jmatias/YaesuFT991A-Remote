@@ -99,8 +99,11 @@ ENCODE: dict[str, tuple[str, Callable[[Any], list[str]]]] = {
     "monitor_level": ("ML1;", lambda v: [f"ML1{v:03d};"]),
     "dgid": ("EX153;", lambda v: [f"EX153{0 if v == 'AUTO' else int(v):02d};"]),   # menu 153 WIRES DG-ID: 00 = AUTO, 01..99 (manual p.9)
     # The microphone source has one menu per mode family: 106 SSB MIC SELECT (read, shown), 045 AM MIC SELECT and 074 FM MIC SELECT (manual p.9: 0 = MIC, 1 = REAR). All three are
-    # written together, otherwise the page's microphone reaches the radio in LSB/USB (and FreeDV) but not in AM or FM. DATA modes use menu 070 DATA IN SELECT: not touched.
-    "mic_select": ("EX106;", lambda v: [f"EX106{1 if v == 'REAR' else 0};", f"EX045{1 if v == 'REAR' else 0};", f"EX074{1 if v == 'REAR' else 0};"]),
+    # written together, otherwise the page's microphone reaches the radio in LSB/USB but not in AM or FM; menu 070 DATA IN SELECT is for the DATA-USB / DATA-LSB modes FreeDV is meant to use.
+    # REAR = the radio takes its audio from the USB port (remote operation) in every mode; MIC = the front microphone (local operation) in SSB, AM and FM. Menu 070 is set to REAR with the others but is
+    # NOT put back to MIC: on every radio seen so far it was already on REAR (the FreeDV guide and every digital program use it that way), and it only matters in the DATA modes, never for the front
+    # microphone in SSB, AM or FM, which 106, 045 and 074 decide.
+    "mic_select": ("EX106;", lambda v: ([f"EX1061;", "EX0451;", "EX0741;", "EX0701;"] if v == "REAR" else ["EX1060;", "EX0450;", "EX0740;"])),
     "tuner": ("AC;", lambda v: [f"AC00{_b(v)};"]),                    # P3 0 = off, 1 = on (2 = start tune: NOT used)
 }
 
@@ -215,11 +218,13 @@ def _p_flag(name):
 
 
 def _p_ex(p):
-    # EX answers carry a 3-digit menu number then the value. Only menu 153 (DG-ID) and 106 (SSB mic select) are interpreted.
-    if p.startswith("106"):
-        if len(p) != 4 or p[3] not in "01":
-            raise FrameError("bad EX106")
-        return {"mic_select": "REAR" if p[3] == "1" else "MIC"}
+    # EX answers carry a 3-digit menu number then the value. Interpreted: menu 153 (DG-ID) and the four microphone-source menus 106 (SSB), 045 (AM), 074 (FM), 070 (DATA); the driver
+    # combines 106, 045 and 074 into the one "mic_select" state (REAR when any of them is on REAR, so that "back to the front microphone" cannot be missed because one menu was left behind); 070 is only reported.
+    for menu, key in (("106", "mic_ssb"), ("045", "mic_am"), ("074", "mic_fm"), ("070", "mic_data")):
+        if p.startswith(menu):
+            if len(p) != 4 or p[3] not in "01":
+                raise FrameError(f"bad EX{menu}")
+            return {key: "REAR" if p[3] == "1" else "MIC"}
     if p.startswith("153"):
         # the manual says two digits (00..99) but a real FT-991A (seen on a Raspberry Pi bench run) answers 'EX153000;': accept both
         if len(p) not in (5, 6) or not p[3:].isdigit():

@@ -6,6 +6,7 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "
 // microphone into modem tones while that connection holds PTT (see docs/freedv.md). This tab: on/off, the mode, the preset channels and the
 // transmit level. By the FreeDV convention frequencies below 10 MHz use LSB and above use USB.
 export const ssbFor = (hz) => (hz < 10_000_000 ? "LSB" : "USB");
+const dataFor = (hz) => (hz < 10_000_000 ? "DATA-L" : "DATA-U");
 const MODE_LABEL = { RADE: "RADE V1", RADE2: "RADE V2" };
 const modeName = (m) => MODE_LABEL[m] || m;
 const fmtMHz = (hz) => (hz / 1e6).toFixed(hz % 1000 ? 4 : 3);
@@ -13,7 +14,11 @@ const fmtMHz = (hz) => (hz / 1e6).toFixed(hz % 1000 ? 4 : 3);
 export function createFreeDV(host, ctx) {
   const { S, send, toast, signal } = ctx;
   const admin = S.user.role === "admin";
-  let info = { channels: [], modes: ["RADE"], tx_level_db: -6 };
+  let info = { channels: [], modes: ["RADE"], tx_level_db: -6, data_mode: false };
+  const hasData = () => (S.caps?.modes || []).includes("DATA-U") && (S.caps?.modes || []).includes("DATA-L");
+  // The radio mode FreeDV uses: plain USB/LSB, or (option "DATA", the FreeDV guide's way for the FT-991A) DATA-USB/DATA-LSB, which bypass the radio's microphone processing.
+  const radioModeFor = (hz) => (info.data_mode && hasData() ? dataFor(hz) : ssbFor(hz));
+  const modeOk = (m) => (info.data_mode && hasData() ? ["DATA-U", "DATA-L"] : ["USB", "LSB"]).includes(m);
   const root = el(`<div class="fdv">
     <h2>FreeDV</h2>
     <div class="fdv-status" aria-live="polite"><i class="dot" id="fdv-dot"></i><span id="fdv-text">FreeDV is off</span></div>
@@ -33,6 +38,7 @@ export function createFreeDV(host, ctx) {
       <label class="fdv-mode">Mode <select id="fdv-mode" aria-label="FreeDV mode"></select></label>
     </div>
     <p class="dim fdv-note" id="fdv-note" hidden></p>
+    <label class="chk fdv-data" id="fdv-data-row" hidden title="The FreeDV guide for the FT-991A uses the radio's DATA-USB / DATA-LSB mode: the audio then bypasses the radio's microphone processing and filters. It needs the radio's menus set as in the manual (FreeDV chapter), for example 070 DATA IN SELECT = REAR (the microphone button sets it)."><input type="checkbox" id="fdv-data"> Use the radio's DATA-USB / DATA-LSB mode (recommended by FreeDV; see the manual)</label>
     <div class="row fdv-rade" id="fdv-rade-row" hidden>
       <button type="button" id="fdv-rade-install" class="active" hidden>Install RADE</button>
       <span class="dim" id="fdv-rade-msg"></span>
@@ -92,7 +98,7 @@ export function createFreeDV(host, ctx) {
       const b = el(`<button class="led fdv-c" title="${esc(c.name)}: ${fmtMHz(c.hz)} MHz ${ssbFor(c.hz)}, FreeDV ${modeName(c.mode)}">${esc(c.name)}<small>${fmtMHz(c.hz)} MHz · ${modeName(c.mode)}</small></button>`);
       b.dataset.hz = c.hz; b.dataset.mode = c.mode;
       b.onclick = async () => {
-        await send("set_mode", { mode: ssbFor(c.hz) });
+        await send("set_mode", { mode: radioModeFor(c.hz) });
         await send("set_frequency", { hz: c.hz });
         await send("freedv", { on: true, mode: c.mode });
       };
@@ -149,10 +155,19 @@ export function createFreeDV(host, ctx) {
 
   $("fdv-onoff").onclick = async () => {
     if (on()) { await send("freedv", { on: false }); return; }
-    if (!["USB", "LSB"].includes(S.state.mode)) await send("set_mode", { mode: ssbFor(hz()) });
+    if (!modeOk(S.state.mode)) await send("set_mode", { mode: radioModeFor(hz()) });
     await send("freedv", { on: true, mode: modeSel.value });
   };
   modeSel.onchange = () => { if (on()) send("freedv", { on: true, mode: modeSel.value }); };
+
+  $("fdv-data").onchange = async (e) => {
+    try {
+      await api("/api/config", "PUT", { freedv: { data_mode: e.target.checked } });
+      info.data_mode = e.target.checked;
+      if (on() && !modeOk(S.state.mode)) await send("set_mode", { mode: radioModeFor(hz()) });
+      toast(e.target.checked ? "FreeDV now uses DATA-USB / DATA-LSB" : "FreeDV now uses USB / LSB");
+    } catch (x) { e.target.checked = !e.target.checked; toast(x.message); }
+  };
 
   let lvTimer = 0;
   $("fdv-lvr").oninput = (e) => {
@@ -176,6 +191,8 @@ export function createFreeDV(host, ctx) {
     $("fdv-note").hidden = !missing.length;
     $("fdv-note").textContent = missing.map(([m, why]) => `${modeName(m)}: ${why}`).join("  ");
     paintRadeRow();
+    $("fdv-data-row").hidden = !(admin && hasData());
+    $("fdv-data").checked = !!info.data_mode;
     $("fdv-lvr").value = info.tx_level_db; $("fdv-lv").textContent = info.tx_level_db;
     $("fdv-lvr").disabled = !admin;
     $("fdv-lvnote").textContent = admin ? "" : "(set by an administrator)";
@@ -188,7 +205,7 @@ export function createFreeDV(host, ctx) {
   // ---- FreeDV Reporter: who is on the air (and the settings for the announcement, administrators only)
   let rep = null, repTimer = 0;
   const tuneTo = async (st) => {
-    await send("set_mode", { mode: ssbFor(st.freq) });
+    await send("set_mode", { mode: radioModeFor(st.freq) });
     await send("set_frequency", { hz: st.freq });
     await send("freedv", { on: true, mode: st.mode });
   };
@@ -299,7 +316,7 @@ export function createFreeDV(host, ctx) {
     const au = ctx.audio?.(), streaming = !!au && (au.hear || au.mic);          // the Pi only decodes while someone is listening
     $("fdv-text").textContent = !onNow ? "FreeDV is off"
       : !streaming ? `FreeDV ${modeName(s.freedv_mode)} is on. Tap the speaker icon (Listen) to hear and decode.`
-      : !["USB", "LSB"].includes(s.mode) ? `FreeDV ${modeName(s.freedv_mode)} is on, but the radio is in ${s.mode}: use USB (LSB below 10 MHz)`
+      : !modeOk(s.mode) ? `FreeDV ${modeName(s.freedv_mode)} is on, but the radio is in ${s.mode}: use ${info.data_mode && hasData() ? "DATA-U (DATA-L below 10 MHz)" : "USB (LSB below 10 MHz)"}`
       : locked ? `FreeDV ${modeName(s.freedv_mode)} locked on a signal (SNR ${(+s.freedv_snr || 0).toFixed(1)} dB)` : `FreeDV ${modeName(s.freedv_mode)} listening, no signal locked yet`;
     for (const c of $("fdv-ch").querySelectorAll(".fdv-c")) c.classList.toggle("active", onNow && Math.abs(hz() - +c.dataset.hz) < 500 && s.freedv_mode === c.dataset.mode);
     paintTune();

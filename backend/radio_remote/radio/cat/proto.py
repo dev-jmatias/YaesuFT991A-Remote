@@ -22,6 +22,7 @@ class Ft991aProto:
     NAME = "FT-991A"
     RADIO_ID = frame.RADIO_ID
     BAND_CODES = fc.BAND_CODES
+    EXTRA_MIC_READS = ("EX045;", "EX074;", "EX070;")             # the AM, FM and DATA microphone menus (106, the SSB one, is the control's own read)
     LEVELS = frame.LEVELS
     ENCODE = fc.ENCODE
     READ_WIDTH = fc.READ_WIDTH

@@ -236,7 +236,7 @@ async def test_power_off_refused_while_transmitting(rig):
 async def test_power_on_and_tune_start_are_never_sent(rig):
     await asyncio.sleep(0.5)                                   # let every poll loop run
     assert "PS1" not in rig.sim.log and "AC002" not in rig.sim.log
-    assert all(c in ("EX153", "EX106", "EX045", "EX074") or not c.startswith("EX") for c in rig.sim.log)    # menus 153/106 may be READ; nothing writes a menu on its own
+    assert all(c in ("EX153", "EX106", "EX045", "EX074", "EX070") or not c.startswith("EX") for c in rig.sim.log)    # menus 153/106 may be READ; nothing writes a menu on its own
 
 
 # ------------------------------------------------------------------------ hub rules

@@ -619,7 +619,7 @@ async def freedv_info(request):
     app = request.app
     fd, audio = app[K_CFG]["freedv"], app[K_AUDIO]
     st = audio.freedv_state()
-    return web.json_response({**st, "tx_level_db": fd["tx_level_db"], "install_rade": "sudo /opt/radio-remote/current/scripts/install_rade.sh",
+    return web.json_response({**st, "tx_level_db": fd["tx_level_db"], "data_mode": bool(fd.get("data_mode", False)), "install_rade": "sudo /opt/radio-remote/current/scripts/install_rade.sh",
                           "rade_installable": _rade.installable(), "arch": platform.machine(),
                           "rade_path": _rade.loaded_path(),
                           "tune": {m: {"centre": p["centre"], "width": p["width"]} for m, p in _tune.PARAMS.items()}, "channels": [

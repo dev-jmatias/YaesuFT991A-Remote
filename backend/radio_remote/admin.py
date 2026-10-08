@@ -29,11 +29,11 @@ EDITABLE = {
     "logging": {"level"},
     "updates": {"check"},
     "rigctl": {"enabled", "port", "allow", "set"},
-    "freedv": {"mode", "tx_level_db", "channels"},
+    "freedv": {"mode", "tx_level_db", "channels", "data_mode"},
     "reporter": {"enabled", "announce", "watch", "callsign", "grid_square", "message"},
 }
 LOCKED = ["safety.allow_ptt", "server.host", "server.port", "server.allowed_origins", "storage.data_dir", "updates.repo"]
-LIVE = {("logging", "level"), ("audio", "rx_gain_db"), ("audio", "tx_gain_db"), ("updates", "check"), ("rigctl", "enabled"), ("rigctl", "port"), ("rigctl", "allow"), ("rigctl", "set"), ("freedv", "mode"), ("freedv", "tx_level_db"), ("freedv", "channels"), ("reporter", "enabled"), ("reporter", "announce"), ("reporter", "watch"), ("reporter", "callsign"),
+LIVE = {("logging", "level"), ("audio", "rx_gain_db"), ("audio", "tx_gain_db"), ("updates", "check"), ("rigctl", "enabled"), ("rigctl", "port"), ("rigctl", "allow"), ("rigctl", "set"), ("freedv", "mode"), ("freedv", "tx_level_db"), ("freedv", "channels"), ("freedv", "data_mode"), ("reporter", "enabled"), ("reporter", "announce"), ("reporter", "watch"), ("reporter", "callsign"),
         ("reporter", "grid_square"), ("reporter", "message")}
 
 
