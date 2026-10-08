@@ -3,7 +3,7 @@ import { createAudioPanel } from "../audio.js";
 import { createVfoPanels } from "../components/vfo-panels.js";
 import { createVfoB } from "../components/vfo-b.js";
 import { createTuningStrip } from "../components/tuning-strip.js";
-import { createDgHint, createFilters, createLevels, createTuneButton } from "../components/controls.js";
+import { createDgHint, createFilters, createLevels, createSquelch, createTuneButton } from "../components/controls.js";
 import { createPtt } from "../components/ptt.js";
 import { createFreeDV } from "../components/freedv.js";
 import { createMemoryButtons } from "../components/memories.js";
@@ -259,6 +259,7 @@ export function renderRadio(root, { onLogout, onAuthLost }) {
     for (const m of c.modes) { const x = el(`<button class="led" data-m="${m}">${m}</button>`); x.onclick = () => send("set_mode", { mode: m }); modeRow.append(x); }
     modeBox.append(modeRow);
     parts.push(createDgHint(modeBox, ctx));
+    parts.push(createSquelch(modeBox, ctx));
 
 
     // PTT

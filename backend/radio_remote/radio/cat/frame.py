@@ -90,6 +90,7 @@ LEVELS = {
     "rf_gain": ("RG0", 3, 0, 255),
     "mic_gain": ("MG", 3, 0, 100),
     "rf_power": ("PC", 3, 5, 100),
+    "squelch": ("SQ0", 3, 0, 100),               # SQ P1(0) P2P2P2: squelch level of the main band (manual p.16); 000 = open
 }
 # RM P1 meter selector (p.15)
 RM_NAMES = {"1": "smeter", "3": "comp", "4": "alc", "5": "po_raw", "6": "swr_raw"}
@@ -187,10 +188,10 @@ def decode(frame: str) -> dict:
         if p[19] not in MODES:
             raise FrameError("bad OI mode")
         return {"mode_b": MODES[p[19]]}
-    if cmd in ("AG", "RG", "SM"):
+    if cmd in ("AG", "RG", "SM", "SQ"):
         if len(p) != 4 or p[0] != "0":
             raise FrameError(f"{cmd} needs P1=0 and 3 digits")
-        return {{"AG": "af_gain", "RG": "rf_gain", "SM": "smeter"}[cmd]: _int(p[1:])}
+        return {{"AG": "af_gain", "RG": "rf_gain", "SM": "smeter", "SQ": "squelch"}[cmd]: _int(p[1:])}
     if cmd in ("MG", "PC"):
         if len(p) != 3:
             raise FrameError(f"{cmd} needs 3 digits")

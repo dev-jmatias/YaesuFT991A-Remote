@@ -21,19 +21,46 @@ or unplugged the page shows it as offline and reconnects by itself.
 
 ## Radio menu settings (FT-991A)
 
-The software never changes the radio's menus; you set them once on the radio. Menu numbers are from the official CAT manual (1711-D).
+You set these once on the radio. The only menus the program changes by itself are the **microphone source** ones (below), when you press the microphone button or the last operator leaves.
+Menu numbers are from the official CAT manual (1711-D).
 
-| Menu | Setting | Recommendation |
+**Basics (every use)**
+
+| Menu | Setting | Value |
 |---|---|---|
 | 031 CAT RATE | 4800 / 9600 / 19200 / 38400 | **38400** (the default of the app; if you change it set `radio.baud` to match) |
 | 036 TX TOT | OFF, 1-30 min | **set a value (e.g. 3 min)**: the radio's own backstop if the Pi ever fails |
 | 047, 071, 076, 108 (PTT select) | DAKY / RTS / DTR | **DAKY**, so nothing can key the radio by toggling the RTS/DTR serial lines. The app opens the port with DTR/RTS low regardless |
-| 106 SSB MIC SELECT | MIC / REAR | **REAR** for remote operation. The **REAR / MIC** buttons above the PTT button in the app flip this menu for you (MIC is for operating at the radio) |
-| 107 SSB OUT LEVEL (and 073 DATA, 046 AM, 075 FM, 054 CW, 099 RTTY) | 0-100, default 50 | the **receive level sent to the Pi** over USB. If the browser audio is too quiet, raise it (90 was right on the tested radio) before using `audio.rx_gain_db` |
 | 032 CAT TOT, 033 CAT RTS | | leave at the defaults; raise CAT TOT only if you see CAT timeouts |
 
-Other menus that decide where transmit audio comes from and where receive audio goes (070 DATA IN SELECT, 072 DATA PORT SELECT,
-109 SSB PORT SELECT and the AM/FM equivalents) are listed in the manual but without a ready recipe: if your audio does not flow, follow the
+**Microphone source: managed by the app** (0 = MIC, 1 = REAR)
+
+| Menu | Mode | Remote in use (microphone button on) | Nobody remote (at the radio) |
+|---|---|---|---|
+| 106 SSB MIC SELECT | SSB | REAR | **MIC** |
+| 045 AM MIC SELECT | AM | REAR | **MIC** |
+| 074 FM MIC SELECT | FM, C4FM | REAR | **MIC** |
+| 070 DATA IN SELECT | DATA modes | REAR | **stays REAR** (it only matters in the DATA modes) |
+
+**Receive level sent to the Pi** (0-100, default 50): 107 SSB OUT LEVEL in USB/LSB, **073 DATA OUT LEVEL** in the DATA modes (and 046 AM, 075 FM, 054 CW, 099 RTTY). If the browser audio is too quiet,
+raise it (90 was right on one tested radio, 50 on another) before using `audio.rx_gain_db`.
+
+**FreeDV in the DATA modes** (the FreeDV guide's setup; switch on the FreeDV tab's DATA option after setting them)
+
+| Menu | Setting | Value |
+|---|---|---|
+| 059 CW FREQ DISPLAY | | **DIRECT FREQ** |
+| 062 DATA MODE | PSK / OTHER | **OTHER** |
+| 064 OTHER DISP (SSB), 065 OTHER SHIFT (SSB) | | **+1500 Hz** both |
+| 066 DATA LCUT FREQ, 068 DATA HCUT FREQ | | **OFF** both |
+| 070 DATA IN SELECT | MIC / REAR | **REAR** |
+| 071 DATA PTT SELECT | | **DAKY** |
+| 072 DATA PORT SELECT | DATA / USB | **USB** (the manual numbers it 1 = DATA, 2 = USB, but a real radio took 0 = DATA, 1 = USB: check the display) |
+
+Not set for FreeDV, but worth knowing: 110 SSB TX BPF narrows the SSB transmit audio (it matters only if you use plain USB/LSB for FreeDV, which is why the DATA modes are recommended), and the
+speech processor must be off.
+
+Other menus that decide where transmit audio comes from and where receive audio goes (109 SSB PORT SELECT and the AM/FM equivalents) are listed in the manual but without a ready recipe: if your audio does not flow, follow the
 steps in [audio](04-audio.md) and change one menu at a time.
 
 ### Powering the radio on and off

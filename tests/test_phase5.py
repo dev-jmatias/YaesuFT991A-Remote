@@ -367,3 +367,17 @@ async def test_vfo_b_mode_is_read_and_follows_swap_and_copy(rig):
             break
         await asyncio.sleep(0.05)
     assert d.state["mode_b"] == "LSB"
+
+
+async def test_squelch_level_round_trip(rig):
+    """FT-991A squelch (SQ0, 000-100): shown as a slider under the mode buttons in FM/AM/AIR and in the Levels tab."""
+    from radio_remote.radio.cat import frame as _frame
+    assert _frame.level_set("squelch", 30) == "SQ0030;" and _frame.level_read("squelch") == "SQ0;"
+    assert _frame.decode("SQ0030;") == {"squelch": 30}
+    with pytest.raises(_frame.FrameError):
+        _frame.level_set("squelch", 101)
+    d, sim = rig.driver, rig.sim
+    assert d.caps.level_range("squelch") == (0, 100)
+    assert d.state.get("squelch") == 0                                       # read at connect
+    await d.set_level("squelch", 42)
+    assert sim.levels["SQ0"] == 42 and d.state["squelch"] == 42

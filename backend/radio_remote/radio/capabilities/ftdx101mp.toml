@@ -74,6 +74,14 @@ label = "RF Gain MAIN"
 min = 0
 max = 255
 label = "RF Gain SUB"
+[levels.squelch]
+min = 0
+max = 100
+label = "Squelch MAIN"
+[levels.squelch_sub]
+min = 0
+max = 100
+label = "Squelch SUB"
 [levels.mic_gain]
 min = 0
 max = 100

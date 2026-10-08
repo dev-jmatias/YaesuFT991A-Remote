@@ -42,6 +42,12 @@ and goes back by itself if the new version does not start. Settings and accounts
 | `radio-remote-rade-linux-aarch64.tar.xz` | the optional RADE library (FreeDV neural modes V1 and V2) for a Raspberry Pi, installed with `install_rade.sh` (the PC build is `…-x86_64.tar.xz`) |
 | `SHA256SUMS` | checksums of all of the above |
 
+### What is new in 1.1.19
+
+- **Squelch.** A **Squelch** slider under the mode buttons on the Radio tab, shown in FM, AM and C4FM modes and on the AIR band, and always in the Levels tab. It is the radio's own squelch level (`SQ`, 0 to 100, 0 = open).
+  FT-991A: tested on a real radio. FTDX101D and FTDX101MP: MAIN and SUB sliders, written from the CAT manual and simulator-tested (not yet tried on a real FTDX101).
+- The manual's radio-menu chapter (docs/radio-connection.md) now has the whole table for the FT-991A: the basics, the microphone-source menus the app manages (106, 045, 074 and 070), the receive-level menus (107 and 073) and the FreeDV DATA-mode menus.
+
 ### What is new in 1.1.18
 
 - **FT-991A: choosing a memory after a band key now really retunes the radio.** Found on a real radio: pressing a band key while a memory is recalled puts the radio in *Memory Tune* (IF state 2), and an `MC`

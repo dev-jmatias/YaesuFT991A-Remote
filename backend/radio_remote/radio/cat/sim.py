@@ -41,7 +41,7 @@ class SimulatedFT991A:
         self.mem_ch = 0            # 0 = VFO mode, else the recalled memory channel
         self.mc_keeps_vfo = False  # True: a recall changes the channel only, IF keeps answering with the VFO frequency (seen on a friend's FT-991A)
         self.vfo_freq = None       # the VFO frequency while a memory is recalled
-        self.levels = {"AG0": 80, "RG0": 255, "MG": 50, "PC": 50}
+        self.levels = {"AG0": 80, "RG0": 255, "MG": 50, "PC": 50, "SQ0": 0}
         self.meters = {"1": 40, "3": 0, "4": 0, "5": 0, "6": 0}
         self.tx = 0              # 0 off, 1 CAT, 2 radio
         self.ai = 0
@@ -328,9 +328,9 @@ class SimulatedFT991A:
                     self.reg[k] = rest
                     return
                 return await self._send("?;")
-        key = name + (p[:1] if name in ("AG", "RG") else "")
+        key = name + (p[:1] if name in ("AG", "RG", "SQ") else "")
         if key in self.levels:
-            val = p[1:] if name in ("AG", "RG") else p
+            val = p[1:] if name in ("AG", "RG", "SQ") else p
             if not val:
                 return await self._send(f"{key}{self.levels[key]:03d};")
             if val.isdigit() and len(val) == 3:

@@ -19,7 +19,7 @@ class MockDriver(RadioDriver):
         self.ptt_calls: list[bool] = []  # for tests
         self.state.update(
             connected=False, model="mock", frequency=14_200_000, band="20m", mode="USB",
-            tx=False, af_gain=80, rf_gain=255, mic_gain=50, rf_power=50,
+            tx=False, af_gain=80, rf_gain=255, mic_gain=50, rf_power=50, squelch=0,
             smeter=0, swr=1.0, alc=0, comp=0, rf_power_out=0,
             narrow=False, width_code=0, if_shift=0, contour=False, contour_freq=1500, apf=False, apf_freq=0,
             notch=False, notch_freq=1500, auto_notch=False, nr=False, nr_level=5, nb=False, nb_level=5,

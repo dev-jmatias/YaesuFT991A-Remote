@@ -80,6 +80,8 @@ PTT stays at the bottom on every tab so you can adjust a level while transmittin
 
 ## 4. Memory channels
 
+**Squelch (FT-991A, FTDX101D and MP):** a **Squelch** slider appears under the mode buttons in FM, AM and C4FM and on the AIR band (and is always in the Levels tab); on the FTDX101 there is one for MAIN and one for SUB. 0 is open (no squelch); raise it until the noise just closes. It is the radio's own squelch level (`SQ`), the same as its SQL knob. On the FTDX101 it is written from the manual and simulator-tested; the FT-991A one was tested on a real radio.
+
 **AIR band (FT-991A):** the band buttons include **AIR** (the radio's AIR key, `BS14`): the radio goes to the airband in AM by itself and the page's tuning step switches to 25 kHz, the airband channel
 spacing, and goes back to the previous step when you leave the band.
 

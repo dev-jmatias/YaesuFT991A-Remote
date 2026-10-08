@@ -57,13 +57,13 @@ class Ft991aProto:
         return "FT3;" if on else "FT2;"                      # bench-verified
 
     def sync_reads(self, caps) -> list[str]:
-        return ["IF;", "FB;", "OI;", "FT;", "TX;", "AG0;", "RG0;", "MG;", "PC;", "SM0;"]
+        return ["IF;", "FB;", "OI;", "FT;", "TX;", "AG0;", "RG0;", "MG;", "PC;", "SM0;", "SQ0;"]
 
     def backstop_reads(self, caps) -> list[str]:
         return ["IF;", "TX;", "FB;", "OI;", "FT;"]
 
     def slow_reads(self, caps) -> list[str]:
-        return ["AG0;", "RG0;", "MG;", "PC;", "FB;", "FT;"]
+        return ["AG0;", "RG0;", "MG;", "PC;", "SQ0;", "FB;", "FT;"]
 
     def settled_vfo_reads(self, caps) -> list[str]:
         return ["FA;", "FB;", "OI;", "FT;", "MD0;"]
@@ -162,6 +162,8 @@ class HfProto:
         if model.startswith("ftdx101"):
             self.LEVELS["af_gain_sub"] = ("AG1", 3, 0, 255)             # AG P1=1: the SUB receiver's own volume
             self.LEVELS["rf_gain_sub"] = ("RG1", 3, 0, 255)
+            self.LEVELS["squelch"] = ("SQ0", 3, 0, 100)                 # SQ P1 P2P2P2: P1 0 = MAIN, 1 = SUB; 000-100 (FTDX101MP CAT manual)
+            self.LEVELS["squelch_sub"] = ("SQ1", 3, 0, 100)
         self.ENCODE = self._encoders()
         self._mic_by_value = {v: k for k, v in self.m.mic_values.items()}
 
@@ -245,6 +247,8 @@ class HfProto:
             out.append(self.SPLIT_READ)
         if caps.has("dual_receiver"):
             out += ["FR;", "FT;", "VS;", "AG1;"]
+        if "squelch" in caps.data.get("levels", {}):
+            out += ["SQ0;", "SQ1;"]
         return out + ["TX;", "AG0;", "RG0;", "MG;", "PC;", "SM0;"]
 
     def backstop_reads(self, caps) -> list[str]:
@@ -259,6 +263,8 @@ class HfProto:
 
     def slow_reads(self, caps) -> list[str]:
         out = ["AG0;", "RG0;", "MG;", "PC;"]
+        if "squelch" in caps.data.get("levels", {}):
+            out += ["SQ0;", "SQ1;"]
         if caps.has("dual_receiver"):
             out += ["AG1;", "RG1;"]
         if caps.has("vfo_b"):
@@ -367,6 +373,12 @@ class HfProto:
             if cmd == "RG" and p[0] == "1" and self.model.startswith("ftdx101"):
                 return {"rf_gain_sub": _int(p[1:])}
             return {{"AG": "af_gain", "RG": "rf_gain", "SM": "smeter"}[cmd]: _int(p[1:])} if p[0] == "0" else {}
+        if cmd == "SQ":
+            if len(p) != 4 or p[0] not in "01":
+                raise FrameError("SQ needs P1 and 3 digits")
+            if not self.model.startswith("ftdx101"):
+                return {}
+            return {"squelch" if p[0] == "0" else "squelch_sub": _int(p[1:])}
         if cmd in ("MG", "PC"):
             if len(p) != 3:
                 raise FrameError(f"{cmd} needs 3 digits")

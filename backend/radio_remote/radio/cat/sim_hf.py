@@ -44,6 +44,7 @@ class SimulatedYaesuHf(SimulatedFT991A):
         self.sub_is = 0
         if model.startswith("ftdx101"):
             self.levels["RG1"] = 252                                     # SUB RF gain
+            self.levels["SQ1"] = 0                                       # SUB squelch (MAIN is SQ0, from the base class)
 
     def _swap_sub(self) -> None:
         for k in self.sub_reg:

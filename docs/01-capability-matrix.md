@@ -80,7 +80,7 @@ How to read the table:
 
 | | FT-991A | FTDX10 | FTDX101D | FTDX101MP | FT-710 |
 |---|---|---|---|---|---|
-| Level controls | AF Gain 0-255, RF Gain 0-255, Mic Gain 0-100, TX Power 5-100 | AF Gain 0-255, RF Gain 0-255, Mic Gain 0-100, TX Power 5-100 | AF Gain MAIN 0-255, AF Gain SUB 0-255, RF Gain MAIN 0-255, RF Gain SUB 0-255, Mic Gain 0-100, TX Power 5-100 | AF Gain MAIN 0-255, AF Gain SUB 0-255, RF Gain MAIN 0-255, RF Gain SUB 0-255, Mic Gain 0-100, TX Power 5-200 | AF Gain 0-255, RF Gain 0-255, Mic Gain 0-100, TX Power 5-100 |
+| Level controls | AF Gain 0-255, RF Gain 0-255, Mic Gain 0-100, Squelch 0-100, TX Power 5-100 | AF Gain 0-255, RF Gain 0-255, Mic Gain 0-100, TX Power 5-100 | AF Gain MAIN 0-255, AF Gain SUB 0-255, RF Gain MAIN 0-255, RF Gain SUB 0-255, Squelch MAIN 0-100, Squelch SUB 0-100, Mic Gain 0-100, TX Power 5-100 | AF Gain MAIN 0-255, AF Gain SUB 0-255, RF Gain MAIN 0-255, RF Gain SUB 0-255, Squelch MAIN 0-100, Squelch SUB 0-100, Mic Gain 0-100, TX Power 5-200 | AF Gain 0-255, RF Gain 0-255, Mic Gain 0-100, TX Power 5-100 |
 
 ## Not available on any of them (over CAT)
 

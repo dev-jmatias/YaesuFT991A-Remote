@@ -33,6 +33,31 @@ export function createDgHint(host, ctx) {
   host.append(dg);
   return { update() { dg.hidden = ctx.S.state.mode !== "C4FM"; } };
 }
+// A squelch slider on the Radio tab, shown where a squelch is used: FM, AM and C4FM modes and the AIR band (it is also in the Levels tab, always).
+export function createSquelch(host, ctx) {
+  // one row per receiver the radio has: MAIN (state mode/band) and, on a dual-receiver radio, SUB (mode_b/band_b)
+  const defs = [["squelch", "mode", "band"], ["squelch_sub", "mode_b", "band_b"]].filter(([k]) => ctx.S.caps.levels?.[k]);
+  if (!defs.length) return { update() {} };
+  const squelchModes = ["FM", "FM-N", "AM", "AM-N", "C4FM", "DATA-FM"];
+  const rows = defs.map(([k, modeKey, bandKey]) => {
+    const r = ctx.S.caps.levels[k];
+    const w = el(`<div class="arow sqlrow" hidden><span class="alabel">${r.label}</span><input type="range" min="${r.min}" max="${r.max}" aria-label="${r.label}"><span class="aval" data-v></span></div>`);
+    const inp = w.querySelector("input"), v = w.querySelector("[data-v]");
+    inp.oninput = () => (v.textContent = inp.value === "0" ? "open" : inp.value);
+    inp.onchange = () => ctx.send("set_level", { name: k, value: +inp.value });
+    host.append(w);
+    return { k, modeKey, bandKey, w, inp, v };
+  });
+  return {
+    update() {
+      const s = ctx.S.state;
+      for (const { k, modeKey, bandKey, w, inp, v } of rows) {
+        w.hidden = !(squelchModes.includes(s[modeKey]) || s[bandKey] === "AIR");
+        if (s[k] !== undefined && document.activeElement !== inp) { inp.value = s[k]; v.textContent = s[k] === 0 ? "open" : String(s[k]); }
+      }
+    },
+  };
+}
 // Main level sliders (RF / MIC / TX power ...): one row each, label | slider | value, aligned in a column.
 export function createLevels(host, ctx) {
   // AF gain is the radio's own speaker volume: irrelevant when listening through the browser, so it is not offered here,

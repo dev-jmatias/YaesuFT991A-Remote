@@ -505,3 +505,23 @@ def test_every_control_spec_is_known_to_some_profile():
         union |= set(HfProto(m).ENCODE)
     for name in controls.SPEC_BY_NAME:
         assert name == "width" or name in union or name in ("dgid", "processor", "processor_level", "att"), name
+
+
+async def test_ftdx101_squelch_main_and_sub():
+    """SQ P1 P2P2P2 (FTDX101MP CAT manual): P1 0 = MAIN, 1 = SUB, 000-100."""
+    for model in ("ftdx101d", "ftdx101mp"):
+        r, d = await connect(model)
+        try:
+            await wait_for(lambda: d.state.get("squelch") == 0 and d.state.get("squelch_sub") == 0)          # SQ0 and SQ1 read at connect
+            await d.set_level("squelch", 35)
+            await d.set_level("squelch_sub", 60)
+            assert r.sim.levels["SQ0"] == 35 and r.sim.levels["SQ1"] == 60
+            assert d.state["squelch"] == 35 and d.state["squelch_sub"] == 60
+            lv = Capabilities.load(model).public()["levels"]
+            assert lv["squelch"]["max"] == 100 and lv["squelch_sub"]["label"] == "Squelch SUB"
+            assert d.proto.decode("SQ1042;") == {"squelch_sub": 42} and d.proto.decode("SQ0000;") == {"squelch": 0}
+            with pytest.raises(Exception):
+                await d.set_level("squelch", 101)
+        finally:
+            await d.stop()
+    assert "squelch" not in Capabilities.load("ftdx10").public()["levels"]                                  # only the radios whose manual was checked
