@@ -15,9 +15,9 @@ from .transport import MemoryTransport, TransportClosed
 REG_DEFAULTS = {
     "NA0": "0", "SH0": "00", "IS0": "+0000", "CO00": "0000", "CO01": "1500", "CO02": "0000", "CO03": "0025",
     "BP00": "000", "BP01": "150", "BC0": "0", "NR0": "0", "RL0": "05", "NB0": "0", "NL0": "005", "PA0": "0",
-    "RA0": "0", "RT": "0", "XT": "0", "PR0": "0", "PR1": "0", "PL": "050", "ML0": "000", "ML1": "050", "AC": "000", "EX153": "00", "EX106": "1",
+    "RA0": "0", "RT": "0", "XT": "0", "PR0": "0", "PR1": "0", "PL": "050", "ML0": "000", "ML1": "050", "AC": "000", "EX153": "00", "EX106": "1", "EX045": "0", "EX074": "0",
 }
-BAND_START = {0: 1_840_000, 1: 3_573_000, 2: 5_357_000, 3: 7_074_000, 4: 10_136_000, 5: 14_074_000, 6: 18_100_000,
+BAND_START = {14: 118_000_000, 0: 1_840_000, 1: 3_573_000, 2: 5_357_000, 3: 7_074_000, 4: 10_136_000, 5: 14_074_000, 6: 18_100_000,
               7: 21_074_000, 8: 24_915_000, 9: 28_074_000, 10: 50_313_000, 15: 144_174_000, 16: 432_100_000}
 
 
@@ -29,10 +29,12 @@ class SimulatedFT991A:
         self.memories = {5: (14_200_000, "USB", "20m DX"), 6: (7_100_000, "LSB", "40m net"), 11: (145_500_000, "FM", "2m calling"),
                          99: (28_400_000, "USB", "")}
         self.label_001 = False     # True: MT/MR answers always carry channel 001 (what a real FT-991A was seen to do)
-        self.mem_extra = {}        # channel -> (tone mode digit, shift digit); absent = off / simplex
+        self.vfo_tone = {"CT": "0", "OS": "0", "CN0": "000", "CN1": "000"}      # VFO-A's tone mode, shift, CTCSS number, DCS number
+        self.mem_tone = {}         # channel -> the same four values, stored per channel (an MT write copies the tone NUMBERS from VFO-A, as a real FT-991A does)
         self.write_misdirect = 0   # non-zero: an MT write goes to THIS channel instead of the one asked for (a faulty radio, for the safety test)
         self.mem_writes = 0
         self.mem_check = 0         # 1 or 2: the radio is in memory check / memory tune mode: MC does nothing and IF reports P7 = 2 until the V/M key (VM;) is pressed
+        self.am_deletes = 0        # non-zero: AM empties THIS channel instead of the recalled one (a faulty radio, for the safety test)
         self.refuse_writes = False  # True: an MT write is answered with ?; and stores nothing
         self.mem_ch = 0            # 0 = VFO mode, else the recalled memory channel
         self.mc_keeps_vfo = False  # True: a recall changes the channel only, IF keeps answering with the VFO frequency (seen on a friend's FT-991A)
@@ -161,6 +163,8 @@ class SimulatedFT991A:
             return
         if name == "BS" and len(p) == 2 and p.isdigit() and int(p) in BAND_START:
             self.freq = BAND_START[int(p)]
+            if int(p) == 14:
+                self.mode = "AM"                                                         # the AIR band comes up in AM
             return
         if name == "FT":
             if not p:
@@ -198,16 +202,16 @@ class SimulatedFT991A:
                 return await self._send("?;")
             hz, md, tag = self.memories[ch]
             label = 1 if self.label_001 else ch               # a real FT-991A writes 001 in the answer whatever channel was asked
-            tone, shift = self.mem_extra.get(ch, ("0", "0"))
-            return await self._send(f"MT{label:03d}{hz:09d}+000000{MODE_CODES[md]}1{tone}00{shift}0{tag.ljust(12)};")
+            st = self.mem_tone.get(ch, {"CT": "0", "OS": "0"})
+            return await self._send(f"MT{label:03d}{hz:09d}+000000{MODE_CODES[md]}1{st['CT']}00{st['OS']}0{tag.ljust(12)};")
         if name == "MR" and len(p) == 3 and p.isdigit():             # memory read without the tag (read form only)
             ch = int(p)
             if ch not in self.memories:
                 return await self._send("?;")
             hz, md, _tag = self.memories[ch]
             label = 1 if self.label_001 else ch
-            tone, shift = self.mem_extra.get(ch, ("0", "0"))
-            return await self._send(f"MR{label:03d}{hz:09d}+000000{MODE_CODES[md]}1{tone}00{shift};")
+            st = self.mem_tone.get(ch, {"CT": "0", "OS": "0"})
+            return await self._send(f"MR{label:03d}{hz:09d}+000000{MODE_CODES[md]}1{st['CT']}00{st['OS']};")
         if name == "MT" and len(p) == 38 and p[:12].isdigit() and p[12] in "+-":       # memory WRITE: channel(3) freq(9) clar(5) rx tx mode P7 tone 00 shift 0 tag(12)
             ch, hz = int(p[:3]), int(p[3:12])
             mode = {v: k for k, v in MODE_CODES.items()}.get(p[19])
@@ -215,8 +219,38 @@ class SimulatedFT991A:
                 return await self._send("?;")
             ch = self.write_misdirect or ch
             self.memories[ch] = (hz, mode, p[26:].strip())
-            self.mem_extra[ch] = (p[21], p[24])
+            self.mem_tone[ch] = {"CT": p[21], "OS": p[24], "CN0": self.vfo_tone["CN0"], "CN1": self.vfo_tone["CN1"]}
             self.mem_writes += 1
+            return
+        if name in ("CT", "OS", "CN"):                                                   # tone mode, shift, tone number: what the radio shows is the recalled channel's own
+            cur = self.mem_tone.get(self.mem_ch) if self.mem_ch else self.vfo_tone
+            cur = cur if cur is not None else {"CT": "0", "OS": "0", "CN0": "000", "CN1": "000"}
+            key = {"CT": "CT", "OS": "OS"}.get(name)
+            if name == "CN":
+                if len(p) == 2 and p in ("00", "01"):
+                    return await self._send(f"CN{p}{cur['CN0' if p[1] == '0' else 'CN1']};")
+                if len(p) == 5 and p[:2] in ("00", "01") and p[2:].isdigit():
+                    if not self.mem_ch:
+                        self.vfo_tone["CN0" if p[1] == "0" else "CN1"] = p[2:]
+                    return
+                return await self._send("?;")
+            if len(p) == 1 and p == "0":
+                return await self._send(f"{name}0{cur[key]};")
+            if len(p) == 2 and p[0] == "0" and p[1] in ("01234" if name == "CT" else "012"):
+                if name == "OS" and self.mode not in ("FM", "FM-N", "DATA-FM"):
+                    return await self._send("?;")                                              # shift exists in FM only (manual)
+                if not self.mem_ch:
+                    self.vfo_tone[key] = p[1]
+                return
+            return await self._send("?;")
+        if name == "AM" and not p:
+            if self.mem_ch and self.mem_ch in self.memories and not self.mem_check:           # BENCH-FOUND: AM on a recalled channel EMPTIES it and the radio lands on the first channel
+                victim = self.am_deletes or self.mem_ch
+                self.memories.pop(victim, None)
+                self.mem_tone.pop(victim, None)
+                self.mem_ch = min(self.memories) if self.memories else 0
+                if self.mem_ch and not self.mc_keeps_vfo:
+                    self.freq, self.mode = self.memories[self.mem_ch][0], self.memories[self.mem_ch][1]
             return
         if name == "MC" and len(p) == 3 and p.isdigit() and self.mem_check:
             return                                                                       # ignored, like a radio in memory check mode

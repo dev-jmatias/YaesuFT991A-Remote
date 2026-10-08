@@ -50,6 +50,9 @@ class FakeTx:
         self.fed.append(pcm)
         return [TONES]
 
+    def flush(self):
+        return [TONES]                                    # the last modem frame, completed with silence
+
     def close(self):
         pass
 
@@ -335,3 +338,31 @@ async def test_the_library_folder_is_known_before_the_audio_service_first_looks(
     monkeypatch.setattr(rade, "_load", lambda: (seen.append(rade.install_dir()), real())[1])
     await make_app()
     assert seen and all(d is not None for d in seen)
+
+
+async def test_the_tones_already_queued_reach_the_radio_before_ptt_is_released(svc):
+    """PiRO (another remote-radio project) holds PTT a while after its last audio because 'handing PCM to ALSA does not mean it has been played'. Here the cushion
+    (and the last modem frame) were cut off by unkeying at once; the PTT-off command now waits for the queue."""
+    svc.set_freedv(True, "RADE")
+    peer = types.SimpleNamespace(conn_id="c1")
+    mic = b"\x10\x00" * (FRAME_BYTES // 2)
+    await svc._ensure_tx_sink()
+    svc.gate["open"] = True
+    n = service.TX_PREFILL_FRAMES + 4
+    for _ in range(n):
+        svc._mic_frame(peer, mic)
+    await until(lambda: TONES in svc.sink.frames)                                    # the tones have started
+    await svc.drain_freedv_tx()
+    assert not svc._tx_q                                                             # everything queued went to the radio
+    assert svc.sink.frames.count(TONES) == n + 1                                     # and the flushed last frame with it
+    assert svc.tx_underruns == 0 and not svc._tx_ending                              # the queue running dry at the end of an over is not a hole
+    await svc._stop_tx_sink()
+
+
+async def test_drain_does_nothing_for_ordinary_voice_or_when_not_transmitting(svc):
+    import time
+    t0 = time.monotonic()
+    await svc.drain_freedv_tx()                                                      # FreeDV off
+    svc.set_freedv(True, "RADE")
+    await svc.drain_freedv_tx()                                                      # FreeDV on but nothing is being transmitted
+    assert time.monotonic() - t0 < 0.2

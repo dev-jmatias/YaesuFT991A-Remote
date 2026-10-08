@@ -22,7 +22,7 @@ import aiohttp
 log = logging.getLogger("reporter")
 
 PROTOCOL_VERSION = 2
-MODE_NAMES = {"RADE": "RADEV1", "RADE2": "RADEV2"}          # our mode -> the name the site uses (RADEV1 is what FreeDV 2.x sends; RADEV2 is a guess: not confirmed against the site)
+MODE_NAMES = {"RADE": "RADEV1", "RADE2": "RADEV2"}          # our mode -> the name the site uses (RADEV1 is what FreeDV 2.x sends; RADEV2 is what other open-source clients (for example PiRO) report for V2)
 OUR_MODE = {v: k for k, v in MODE_NAMES.items()}
 MAX_STATIONS = 2000
 BACKOFF = (5, 10, 20, 40, 60)

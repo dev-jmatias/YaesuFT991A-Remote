@@ -92,12 +92,12 @@ signal by itself. **A V1 station cannot decode a V2 station and the other way ro
 
 * It needs a library built with V2 support (the one that comes with this version). If you updated the program but kept an older RADE library, V1 still works and the tab says that V2 needs the library to be reinstalled:
   **Admin > Config > RADE > Reinstall RADE**.
-* The FreeDV Reporter lists V2 stations as "RADE V2"; whether the site uses exactly the name Radio Remote sends for V2 is not confirmed.
+* The FreeDV Reporter lists V2 stations as "RADE V2"; the site's mode name for V2 is `RADEV2` (as other open-source clients report it).
 
 ### When your transmission is unreadable at the other station
 
 RADE needs a continuous stream of tones, with no holes in it. The Pi therefore keeps a small cushion (about 0.2 s) of modem tones queued before it starts sending them to the radio, so an uneven network (Wi-Fi, a remote connection)
-cannot put gaps into the signal; the price is that the last fraction of a second of an over may not be sent when you release PTT, so hold PTT a moment after the last word.
+cannot put gaps into the signal; when you release PTT the Pi first sends the last modem frame (silence completes it) and lets the queued tones reach the radio, so the end of the over is not cut off; the radio is unkeyed about half a second after you let go.
 After every over the service log says whether the tones went out whole:
 
 ```bash

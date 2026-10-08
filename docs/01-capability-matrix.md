@@ -72,7 +72,7 @@ How to read the table:
 | | FT-991A | FTDX10 | FTDX101D | FTDX101MP | FT-710 |
 |---|---|---|---|---|---|
 | Modes | 14: LSB, USB, CW-U, FM, AM, RTTY-L, CW-L, DATA-L, RTTY-U, DATA-FM, FM-N, DATA-U, AM-N, C4FM | 14: LSB, USB, CW-U, CW-L, AM, FM, DATA-U, DATA-L, RTTY-L, RTTY-U, PSK, AM-N, FM-N, DATA-FM | 14: LSB, USB, CW-U, CW-L, AM, FM, DATA-U, DATA-L, RTTY-L, RTTY-U, PSK, AM-N, FM-N, DATA-FM | 14: LSB, USB, CW-U, CW-L, AM, FM, DATA-U, DATA-L, RTTY-L, RTTY-U, PSK, AM-N, FM-N, DATA-FM | 14: LSB, USB, CW-U, CW-L, AM, FM, DATA-U, DATA-L, RTTY-L, RTTY-U, PSK, AM-N, FM-N, DATA-FM |
-| Bands | 160m, 80m, 60m, 40m, 30m, 20m, 17m, 15m, 12m, 10m, 6m, 2m, 70cm | 160m, 80m, 60m, 40m, 30m, 20m, 17m, 15m, 12m, 10m, 6m | 160m, 80m, 60m, 40m, 30m, 20m, 17m, 15m, 12m, 10m, 6m | 160m, 80m, 60m, 40m, 30m, 20m, 17m, 15m, 12m, 10m, 6m | 160m, 80m, 60m, 40m, 30m, 20m, 17m, 15m, 12m, 10m, 6m |
+| Bands | 160m, 80m, 60m, 40m, 30m, 20m, 17m, 15m, 12m, 10m, 6m, AIR, 2m, 70cm | 160m, 80m, 60m, 40m, 30m, 20m, 17m, 15m, 12m, 10m, 6m | 160m, 80m, 60m, 40m, 30m, 20m, 17m, 15m, 12m, 10m, 6m | 160m, 80m, 60m, 40m, 30m, 20m, 17m, 15m, 12m, 10m, 6m | 160m, 80m, 60m, 40m, 30m, 20m, 17m, 15m, 12m, 10m, 6m |
 | Frequency range | 0.03-470 MHz | 0.03-75 MHz | 0.03-75 MHz | 0.03-75 MHz | 0.03-75 MHz |
 | CAT identity (`ID;`) | `ID0670;` | `ID0761;` | `ID0681;` | `ID0682;` | `ID0800;` |
 

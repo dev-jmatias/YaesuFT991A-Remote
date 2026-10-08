@@ -560,6 +560,7 @@ button.lockbtn.on { background: var(--yellow); color: #1a1100; border-color: tra
 .memfields { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; margin: 8px 0; }
 .memfields label { display: flex; flex-direction: column; gap: 3px; font-size: .82rem; color: var(--dim); min-width: 0; }
 .memfields input, .memfields select { min-width: 0; }
+.memfields label[hidden] { display: none; }
 .memhint { font-size: .8rem; }
 .memedit h3 { margin: 4px 0; }
 

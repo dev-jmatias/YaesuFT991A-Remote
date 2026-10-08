@@ -88,15 +88,38 @@ class MockDriver(RadioDriver):
     async def memory_to_vfo(self) -> None:
         self._update(vfo_memory="vfo", memory_channel=None)
 
-    async def memory_write(self, channel: int, frequency: int, mode: str, tone_mode: str = "off", shift: str = "simplex", name: str = "") -> dict:
+    async def memory_tone(self, channel: int) -> dict:
+        m = next((x for x in self.memories if x["channel"] == channel), None)
+        if m is None:
+            raise RadioError("that memory channel is empty")
+        return {"tone_mode": m.get("tone_mode", "off"), "tone_hz": m.get("tone_hz") or 67.0, "dcs_code": m.get("dcs_code") or "023", "shift": m.get("shift", "simplex")}
+
+    async def memory_delete(self, channel: int) -> None:
+        if self.state["tx"]:
+            raise RadioError("not while transmitting")
+        if not any(m["channel"] == channel for m in self.memories):
+            raise RadioError(f"channel {channel} is already empty")
+        self.memories = [m for m in self.memories if m["channel"] != channel]
+
+    async def memory_write(self, channel: int, frequency: int, mode: str, tone_mode: str = "off", shift: str = "simplex", name: str = "",
+                           tone_hz: float | None = None, dcs_code: str | None = None) -> dict:
         from .cat import frame
         if self.state["tx"]:
             raise RadioError("not while transmitting")
         try:
             frame.memory_write(channel, frequency, mode, tone_mode, shift, name)               # the same checks as for the real radio
+            if tone_mode in ("ctcss_enc", "ctcss_encdec"):
+                if tone_hz is None:
+                    raise frame.FrameError("a tone frequency is needed for this tone mode")
+                frame.tone_index(tone_hz)
+            if tone_mode in ("dcs_enc", "dcs_encdec"):
+                if dcs_code is None:
+                    raise frame.FrameError("a DCS code is needed for this tone mode")
+                frame.dcs_index(dcs_code)
         except frame.FrameError as e:
             raise RadioError(str(e)) from None
-        item = {"channel": channel, "frequency": frequency, "mode": mode, "tag": name.strip(), "tone_mode": tone_mode, "shift": shift, "band": band_for(frequency)}
+        item = {"channel": channel, "frequency": frequency, "mode": mode, "tag": name.strip(), "tone_mode": tone_mode, "shift": shift, "band": band_for(frequency),
+                "tone_hz": tone_hz if tone_mode.startswith("ctcss") else None, "dcs_code": dcs_code if tone_mode.startswith("dcs") else None}
         self.memories = sorted([m for m in self.memories if m["channel"] != channel] + [item], key=lambda m: m["channel"])
         return dict(item)
 

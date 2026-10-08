@@ -213,6 +213,8 @@ async def test_set_band_uses_bs_and_reads_back(rig):
     assert "BS03" in rig.sim.log and rig.driver.state["band"] == "40m"
     await rig.driver.set_band("70cm")
     assert rig.driver.state["band"] == "70cm" and rig.driver.state["frequency"] == 432_100_000
+    await rig.driver.set_band("AIR")                                                  # the radio's AIR key: BS14, airband in AM
+    assert "BS14" in rig.sim.log and rig.driver.state["band"] == "AIR" and rig.driver.state["frequency"] == 118_000_000 and rig.driver.state["mode"] == "AM"
     with pytest.raises(RadioError):
         await rig.driver.set_band("23cm")
 
@@ -234,7 +236,7 @@ async def test_power_off_refused_while_transmitting(rig):
 async def test_power_on_and_tune_start_are_never_sent(rig):
     await asyncio.sleep(0.5)                                   # let every poll loop run
     assert "PS1" not in rig.sim.log and "AC002" not in rig.sim.log
-    assert all(c in ("EX153", "EX106") or not c.startswith("EX") for c in rig.sim.log)    # menus 153/106 may be READ; nothing writes a menu on its own
+    assert all(c in ("EX153", "EX106", "EX045", "EX074") or not c.startswith("EX") for c in rig.sim.log)    # menus 153/106 may be READ; nothing writes a menu on its own
 
 
 # ------------------------------------------------------------------------ hub rules

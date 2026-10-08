@@ -31,7 +31,7 @@ def test_bad_values_never_reach_the_radio(args):
 async def test_edit_an_existing_channel_and_add_a_new_one(rig):
     d, sim = rig.driver, rig.sim
     before = await d.memory_channels()
-    got = await d.memory_write(11, 145_600_000, "FM", "ctcss_enc", "minus", "S.ESTRELA")
+    got = await d.memory_write(11, 145_600_000, "FM", "ctcss_enc", "minus", "S.ESTRELA", tone_hz=71.9)
     assert got["frequency"] == 145_600_000 and got["tone_mode"] == "ctcss_enc" and got["shift"] == "minus" and got["tag"] == "S.ESTRELA"
     assert sim.mem_writes == 1
     items = {m["channel"]: m for m in await d.memory_channels()}
@@ -89,7 +89,7 @@ URL = "/api/memories/"
 async def test_endpoint_is_admin_only_and_needs_confirmation(make_app, monkeypatch):
     client = await make_app()
     root = await admin_user(client)
-    body = {"frequency": 145_600_000, "mode": "FM", "tone_mode": "ctcss_enc", "shift": "minus", "name": "S.ESTRELA", "confirm": True}
+    body = {"frequency": 145_600_000, "mode": "FM", "tone_mode": "ctcss_enc", "tone_hz": 71.9, "shift": "minus", "name": "S.ESTRELA", "confirm": True}
     r = await client.post(URL + "11", json={**body, "confirm": False}, headers=root.h)
     assert r.status == 400 and "confirmation" in await r.text()
     assert (await client.post(URL + "11", json=body)).status == 403                           # no CSRF token

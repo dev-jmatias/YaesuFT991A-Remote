@@ -358,6 +358,11 @@ class Hub:
             on = msg.get("on")
             if not isinstance(on, bool):
                 raise CommandError("'on' must be boolean")
+            if not on and self.audio and self.guard.keyed and self.guard.owner == conn_id:
+                try:
+                    await self.audio.drain_freedv_tx()                    # FreeDV: let the last tones reach the radio before it is unkeyed
+                except Exception:
+                    log.exception("FreeDV transmit drain failed; releasing PTT anyway")
             try:
                 await self.guard.request(conn_id, on)
             except TxRefused as e:
@@ -659,19 +664,66 @@ async def memory_write(request):
     if body.get("confirm") is not True:
         raise web.HTTPBadRequest(text="confirmation required: this overwrites the channel stored in the radio")
     hz, mode, tone, shift, name = body.get("frequency"), body.get("mode"), body.get("tone_mode", "off"), body.get("shift", "simplex"), body.get("name", "")
+    tone_hz, dcs_code = body.get("tone_hz"), body.get("dcs_code")
     if isinstance(hz, bool) or not isinstance(hz, int) or not all(isinstance(v, str) for v in (mode, tone, shift, name)):
         raise web.HTTPBadRequest(text="frequency (Hz, a whole number), mode, tone_mode, shift and name are needed")
+    if (tone_hz is not None and (isinstance(tone_hz, bool) or not isinstance(tone_hz, (int, float)))) or (dcs_code is not None and not isinstance(dcs_code, str)):
+        raise web.HTTPBadRequest(text="tone_hz must be a number and dcs_code a text")
     guard, driver = app[K_GUARD], app[K_DRIVER]
     if guard.keyed:
         raise web.HTTPConflict(text="not while transmitting")
-    log.warning("memory_write: %s asked to write channel %s: %s Hz %s tone=%s shift=%s name=%r", admin_user.username, ch, hz, mode, tone, shift, name)
+    log.warning("memory_write: %s asked to write channel %s: %s Hz %s tone=%s %s%s shift=%s name=%r", admin_user.username, ch, hz, mode, tone, tone_hz or "", dcs_code or "", shift, name)
     try:
-        item = await driver.memory_write(ch, hz, mode, tone, shift, name)
+        item = await driver.memory_write(ch, hz, mode, tone, shift, name, tone_hz=tone_hz, dcs_code=dcs_code)
     except RadioError as e:
         app[K_AUTH].audit("memory_write_failed", admin_user.username, client_ip(request), f"ch {ch}: {str(e)[:150]}")
         raise web.HTTPConflict(text=str(e)) from None
-    app[K_AUTH].audit("memory_write", admin_user.username, client_ip(request), f"ch {ch}: {hz} Hz {mode} tone={tone} shift={shift} name={name.strip()[:12]!r}")
+    app[K_AUTH].audit("memory_write", admin_user.username, client_ip(request), f"ch {ch}: {hz} Hz {mode} tone={tone} {tone_hz or ''}{dcs_code or ''} shift={shift} name={name.strip()[:12]!r}")
     return web.json_response({"ok": True, "channel": item})
+
+
+async def memory_tone(request):
+    """The tone mode, tone frequency / DCS code and shift a stored channel holds (the editor pre-fills its form with it). The radio shows them only for a recalled channel, so the driver recalls it
+    briefly and puts the radio back. Administrators only: it moves the radio's front for a moment."""
+    from .common import require_admin
+    require_admin(request)
+    try:
+        ch = int(request.match_info["channel"])
+    except ValueError:
+        raise web.HTTPBadRequest(text="memory channel must be 1..99") from None
+    if not 1 <= ch <= 99:
+        raise web.HTTPBadRequest(text="memory channel must be 1..99")
+    if request.app[K_GUARD].keyed:
+        raise web.HTTPConflict(text="not while transmitting")
+    try:
+        return web.json_response(await request.app[K_DRIVER].memory_tone(ch))
+    except RadioError as e:
+        raise web.HTTPConflict(text=str(e)) from None
+
+
+async def memory_delete(request):
+    """Empty ONE memory channel (FT-991A): administrators only, with a confirmation, never while the radio transmits; proved like a write (see FT991A.memory_delete)."""
+    from .common import client_ip, read_json, require_admin
+    admin_user = require_admin(request)
+    app = request.app
+    try:
+        ch = int(request.match_info["channel"])
+    except ValueError:
+        raise web.HTTPBadRequest(text="memory channel must be 1..99") from None
+    if not 1 <= ch <= 99:
+        raise web.HTTPBadRequest(text="memory channel must be 1..99")
+    if (await read_json(request)).get("confirm") is not True:
+        raise web.HTTPBadRequest(text="confirmation required: this empties the channel stored in the radio")
+    if app[K_GUARD].keyed:
+        raise web.HTTPConflict(text="not while transmitting")
+    log.warning("memory_delete: %s asked to empty channel %s", admin_user.username, ch)
+    try:
+        await app[K_DRIVER].memory_delete(ch)
+    except RadioError as e:
+        app[K_AUTH].audit("memory_delete_failed", admin_user.username, client_ip(request), f"ch {ch}: {str(e)[:150]}")
+        raise web.HTTPConflict(text=str(e)) from None
+    app[K_AUTH].audit("memory_delete", admin_user.username, client_ip(request), f"ch {ch}")
+    return web.json_response({"ok": True})
 
 
 async def audio_devices(request):
@@ -777,6 +829,8 @@ def create_app(cfg: dict, driver: RadioDriver | None = None, auth: AuthStore | N
     app.router.add_get("/api/audio/devices", audio_devices)
     app.router.add_get("/api/memories", memories)
     app.router.add_post("/api/memories/{channel}", memory_write)
+    app.router.add_get("/api/memories/{channel}/tone", memory_tone)
+    app.router.add_post("/api/memories/{channel}/delete", memory_delete)
     app.router.add_get("/ws", ws_handler)
     if (DOCS_DIR / "index.html").is_file():
         app.router.add_get("/docs", docs_redirect)

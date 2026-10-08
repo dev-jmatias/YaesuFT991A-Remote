@@ -176,6 +176,26 @@ class TxChain:
             self._rest = self._rest[FRAME_BYTES:]
         return out
 
+    def flush(self) -> list[bytes]:
+        """End of an over: the last words may still be inside the modem (it only sends whole modem frames, 40 to 120 ms of speech each). Silence is fed until that last frame is
+        complete, so the end of the speech is transmitted instead of being cut off. Nothing is added when nothing is waiting."""
+        if not hasattr(self.fd, "pending"):
+            return []
+        n = self.fd.n_speech
+        for _ in range(64):                                   # at most one modem frame of 10 ms blocks
+            if not len(self._speech) and not self.fd.pending():
+                break
+            fill = n - len(self._speech) if len(self._speech) else n
+            self._speech = np.concatenate([self._speech, np.zeros(fill, dtype="<i2")])
+            while len(self._speech) >= n:
+                block, self._speech = self._speech[:n], self._speech[n:]
+                self._rest += _to_i16(self.up.process(self.fd.tx(block).astype(np.float64)) * self.level).tobytes()
+        out = []
+        while len(self._rest) >= FRAME_BYTES:
+            out.append(self._rest[:FRAME_BYTES])
+            self._rest = self._rest[FRAME_BYTES:]
+        return out
+
     def close(self) -> None:
         self.fd.close()
 

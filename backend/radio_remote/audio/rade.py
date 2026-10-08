@@ -166,6 +166,8 @@ class RadeCore:
             raise RadeUnavailable("the RADE library could not open a modem")
         self.sync, self.snr = 0, 0.0
         self.mode = "RADE2" if v2 else "RADE"
+        self._block = 640 if v2 else 1920              # speech samples (16 kHz) per modem frame: V1 12 x 10 ms = 120 ms, V2 4 x 10 ms = 40 ms
+        self._fed = 0
 
     def close(self) -> None:
         if self.g:
@@ -188,9 +190,14 @@ class RadeCore:
         self.sync, self.snr = int(sync.value), float(snr.value)
         return out[:n]
 
+    def pending(self) -> int:
+        """Speech samples inside the modem that have not yet been sent (a modem frame is only produced when a whole block of speech has arrived)."""
+        return self._fed % self._block
+
     def tx(self, speech: np.ndarray) -> np.ndarray:
         """16 kHz speech (any length) -> 8 kHz modem samples (a modem frame comes out for every 120 ms of speech, the rest waits)."""
         x = np.ascontiguousarray(speech, dtype="<i2")
+        self._fed += len(x)
         out = np.empty(self.lib.rg_tx_max_out(self.g, len(x)), dtype="<i2")
         n = self.lib.rg_tx(self.g, x.ctypes.data_as(ctypes.POINTER(ctypes.c_int16)), len(x),
                            out.ctypes.data_as(ctypes.POINTER(ctypes.c_int16)), len(out))

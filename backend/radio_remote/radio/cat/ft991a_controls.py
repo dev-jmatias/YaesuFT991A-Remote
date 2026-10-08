@@ -13,9 +13,9 @@ from typing import Any, Callable
 
 from .frame import FrameError, _int
 
-# ---- BS band codes (p.5); 24.5 MHz = 12m, 5 MHz = 60m
+# ---- BS band codes (p.5); 24.5 MHz = 12m, 5 MHz = 60m; 14 = AIR (the radio's AIR key: airband receive, AM)
 BAND_CODES = {"160m": 0, "80m": 1, "60m": 2, "40m": 3, "30m": 4, "20m": 5, "17m": 6, "15m": 7,
-              "12m": 8, "10m": 9, "6m": 10, "2m": 15, "70cm": 16}
+              "12m": 8, "10m": 9, "6m": 10, "AIR": 14, "2m": 15, "70cm": 16}
 
 # ---- SH width tables (p.16), code -> Hz. Code 00 is "default" and duplicates another entry.
 _CW_N = {0: 500, 1: 50, 2: 100, 3: 150, 4: 200, 5: 250, 6: 300, 7: 350, 8: 400, 9: 450, 10: 500}
@@ -98,7 +98,9 @@ ENCODE: dict[str, tuple[str, Callable[[Any], list[str]]]] = {
     "monitor": ("ML0;", lambda v: [f"ML0{_b(v):03d};"]),
     "monitor_level": ("ML1;", lambda v: [f"ML1{v:03d};"]),
     "dgid": ("EX153;", lambda v: [f"EX153{0 if v == 'AUTO' else int(v):02d};"]),   # menu 153 WIRES DG-ID: 00 = AUTO, 01..99 (manual p.9)
-    "mic_select": ("EX106;", lambda v: [f"EX106{1 if v == 'REAR' else 0};"]),   # menu 106 SSB MIC SELECT: 0 = MIC, 1 = REAR (manual p.9)
+    # The microphone source has one menu per mode family: 106 SSB MIC SELECT (read, shown), 045 AM MIC SELECT and 074 FM MIC SELECT (manual p.9: 0 = MIC, 1 = REAR). All three are
+    # written together, otherwise the page's microphone reaches the radio in LSB/USB (and FreeDV) but not in AM or FM. DATA modes use menu 070 DATA IN SELECT: not touched.
+    "mic_select": ("EX106;", lambda v: [f"EX106{1 if v == 'REAR' else 0};", f"EX045{1 if v == 'REAR' else 0};", f"EX074{1 if v == 'REAR' else 0};"]),
     "tuner": ("AC;", lambda v: [f"AC00{_b(v)};"]),                    # P3 0 = off, 1 = on (2 = start tune: NOT used)
 }
 

@@ -80,17 +80,22 @@ PTT stays at the bottom on every tab so you can adjust a level while transmittin
 
 ## 4. Memory channels
 
+**AIR band (FT-991A):** the band buttons include **AIR** (the radio's AIR key, `BS14`): the radio goes to the airband in AM by itself and the page's tuning step switches to 25 kHz, the airband channel
+spacing, and goes back to the previous step when you leave the band.
+
 **Memories** (beside **Tune**; FT-991A and FTDX101D) lists the channels stored in the radio (001-099): number, name, frequency, mode. Type in the box to filter. Tap a
 channel to recall it. **Back to VFO** returns to the VFO. **Re-read** reads the list again after you changed memories on the radio.
 **Export** saves the list as a CSV file (a backup, or to open in a spreadsheet). The list is read in the background a few seconds after the
 radio connects, so it opens at once; it is read again whenever the radio reconnects.
 
-**Adding and editing a channel (FT-991A, administrators):** **Add** stores a new channel and **Edit** (beside each row) changes one: name (up to 12 characters), frequency, mode,
-**shift direction** (simplex, plus, minus) and **tone mode** (off, CTCSS encode, CTCSS encode + decode, DCS). Saving asks for confirmation and takes about 20 seconds: the program writes the
-channel and then reads **all** channels back, and tells you if the radio did not store it exactly as sent. If a write ever changed a channel other than the one you edited, editing switches itself
-off (until the service is restarted) and the message names the channels, so put them back from your **Export** file. **Export first** if the list matters to you. Two limits of the radio's CAT
-commands: the **tone frequency** (for example 71.9 Hz) and the **repeater offset** (for example 600 kHz) are radio menu settings and cannot be stored per channel from here, so set them
-in the radio's menus; and **deleting** a channel is not offered yet (do it on the radio).
+**Adding, editing and deleting a channel (FT-991A, administrators):** **Add** stores a new channel and **Edit** (beside each row) changes one: name (up to 12 characters), frequency, mode,
+**shift direction** (simplex, plus, minus), **tone mode** (off, CTCSS encode, CTCSS encode + decode, DCS) and the **tone frequency** (the 50 CTCSS tones) or **DCS code**. Opening **Edit** on a channel
+with a tone reads that channel's own tone from the radio first (the radio is recalled to that channel for a moment and put back), so changing a name does not change its tone. **Delete channel** empties it.
+Saving or deleting asks for confirmation and takes 20 to 30 seconds: the program writes the channel and then reads **all** channels back, and tells you if the radio did not store it exactly as sent.
+To store a tone the radio's VFO-A is borrowed for a moment (it is set to the channel's frequency, mode, shift and tone, the channel is written, and VFO-A, its own tone settings and the V/M state are put
+back as they were). If a write or a delete ever changed a channel other than the one you chose, editing switches itself off (until the service is restarted) and the message names the channels, so put
+them back from your **Export** file. **Export first** if the list matters to you. One limit remains: the **repeater offset** (for example 600 kHz) is a radio menu setting, not stored per channel, so set it
+in the radio's menus; the page only chooses the direction.
 
 ## 5. Transmitting
 
@@ -105,7 +110,7 @@ Rules that always apply:
   apply: the time limit ends it, and it also ends when the page is hidden (screen locked, another app or tab), when control is lost or the
   connection drops. Use it only when you are sure of the band, the antenna and your power.
 * Only the client with control can transmit; microphone audio reaches the radio only while that client is keyed.
-* **The microphone button** (top right of the frequency panel) does two things at once: it arms your microphone in the browser and sets the radio's input (menu 106) to **REAR**, so the radio takes its audio from the USB port. Switching it off puts the radio back to **MIC** (the front microphone). It is locked while the radio is transmitting. If you close the page without switching it off, the Pi puts the radio back on **MIC** by itself about 15 seconds after the last operator (or administrator) connection has gone; a page reload or a short network drop does not trigger it, and a listen-only account does not keep it on REAR. It is left alone while the radio is transmitting.
+* **The microphone button** (top right of the frequency panel) does two things at once: it arms your microphone in the browser and sets the radio's input to **REAR**, so the radio takes its audio from the USB port. On an FT-991A that is menu 106 (SSB MIC SELECT) together with menus 045 (AM MIC SELECT) and 074 (FM MIC SELECT), so it works in AM and FM too; the DATA modes use menu 070 (DATA IN SELECT), which is not touched. Switching it off puts the radio back to **MIC** (the front microphone). It is locked while the radio is transmitting. If you close the page without switching it off, the Pi puts the radio back on **MIC** by itself about 15 seconds after the last operator (or administrator) connection has gone; a page reload or a short network drop does not trigger it, and a listen-only account does not keep it on REAR. It is left alone while the radio is transmitting.
 * **Tune** makes the radio transmit a carrier for a few seconds while the antenna tuner matches. Use an antenna or dummy load.
 * **Lock PTT** (the round padlock beside *Hold to transmit*) prevents accidental transmissions from **this device**:
   while it is on (amber) the PTT button and **Tune** cannot be used. A transmission that is already running can still be

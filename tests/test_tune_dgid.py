@@ -260,7 +260,8 @@ def test_mic_select_frames_and_encoder():
     with pytest.raises(frame.FrameError):
         frame.decode("EX1062;")
     from radio_remote.radio.cat import ft991a_controls as fc
-    assert fc.ENCODE["mic_select"][1]("REAR") == ["EX1061;"] and fc.ENCODE["mic_select"][1]("MIC") == ["EX1060;"]
+    assert fc.ENCODE["mic_select"][1]("REAR") == ["EX1061;", "EX0451;", "EX0741;"]            # SSB, AM and FM menus together
+    assert fc.ENCODE["mic_select"][1]("MIC") == ["EX1060;", "EX0450;", "EX0740;"]
     assert fc.ENCODE["mic_select"][0] == "EX106;"
 
 
@@ -268,6 +269,9 @@ async def test_mic_select_roundtrip_and_validation(rig):
     d, sim = rig.driver, rig.sim
     assert d.state["mic_select"] == "REAR"                       # read at connect
     await d.set_control("mic_select", "MIC")
-    assert sim.reg["EX106"] == "0" and d.state["mic_select"] == "MIC"
+    assert sim.reg["EX106"] == "0" and sim.reg["EX045"] == "0" and sim.reg["EX074"] == "0" and d.state["mic_select"] == "MIC"
+    await d.set_control("mic_select", "REAR")
+    assert sim.reg["EX106"] == "1" and sim.reg["EX045"] == "1" and sim.reg["EX074"] == "1"      # AM and FM follow the SSB menu
+    await d.set_control("mic_select", "MIC")
     with pytest.raises(Exception):
         await d.set_control("mic_select", "LINE")

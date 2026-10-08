@@ -81,6 +81,7 @@ export function renderRadio(root, { onLogout, onAuthLost }) {
     audio: () => audio,
   };
 
+  let lastBand = null, stepBeforeAir = null;
   function repaint() { for (const p of parts) p.update?.(); paintChrome(); }
 
   function paintChrome() {
@@ -96,6 +97,15 @@ export function renderRadio(root, { onLogout, onAuthLost }) {
     for (const b of view.querySelectorAll("[data-m]")) b.classList.toggle("active", b.dataset.m === s.mode);
     for (const b of view.querySelectorAll("[data-b]")) b.classList.toggle("active", b.dataset.b === s.band);
     const st = view.querySelector("#stepsel");
+    if (s.band !== lastBand) {
+      // The AIR band is channelled every 25 kHz: the tuning step follows it when the band is entered (from the page or from the radio's own AIR key, which also puts the radio
+      // in AM by itself) and goes back to the previous step when the band is left.
+      const prev = lastBand;
+      lastBand = s.band;
+      const has25 = st && [...st.options].some((o) => +o.value === 25000);
+      if (s.band === "AIR" && prev !== "AIR" && has25) { stepBeforeAir = ui.step; ui.step = 25000; }
+      else if (prev === "AIR" && s.band !== "AIR" && stepBeforeAir) { ui.step = stepBeforeAir; stepBeforeAir = null; }
+    }
     if (st && +st.value !== ui.step) st.value = ui.step;
     paintLease();
   }
@@ -206,7 +216,8 @@ export function renderRadio(root, { onLogout, onAuthLost }) {
     const stepBox = block(toolRow, "Tuning step", "tuning");
     const stepRow = el(`<div class="row steprow"><button class="led" id="dn" aria-label="Step down">&minus;</button><select id="stepsel" aria-label="Tuning step"></select><button class="led" id="up" aria-label="Step up">+</button></div>`);
     stepBox.append(stepRow);
-    const steps = S.ui.steps?.length ? S.ui.steps : [100, 1000, 10000];
+    const baseSteps = S.ui.steps?.length ? S.ui.steps : [100, 1000, 10000];
+    const steps = [...new Set([...baseSteps, ...(c.bands.includes("AIR") ? [25000] : [])])].sort((a, b) => a - b);          // 25 kHz: the airband channel step
     if (!steps.includes(ui.step)) ui.step = steps.includes(1000) ? 1000 : steps[0];
     const sel = stepRow.querySelector("#stepsel");
     sel.innerHTML = steps.map((s) => `<option value="${s}">${fmtStep(s)}</option>`).join("");

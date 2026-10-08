@@ -127,3 +127,18 @@ def test_the_modem_locks_again_after_a_restart_and_keeps_its_tuning(mode):
         rx.process(f)
         locked = locked or rx.sync == 1
     assert locked
+
+
+@pytest.mark.parametrize("mode", ["RADE", "RADE2"])
+def test_flush_completes_the_last_modem_frame_and_sends_nothing_extra_when_nothing_waits(mode):
+    if mode not in freedv.available_modes():
+        pytest.skip(f"{mode} is not available in this RADE library")
+    tx = freedv.TxChain(mode, level=0.5)
+    mic = speechlike(87)                                            # 1.74 s: not a whole number of modem frames
+    got = []
+    for i in range(87):
+        got += tx.process(mic[i * FRAME_SAMPLES:(i + 1) * FRAME_SAMPLES].tobytes())
+    assert tx.fd.pending() != 0 or len(tx._speech)                  # some speech is still inside the modem
+    last = tx.flush()
+    assert last and all(len(f) == len(got[0]) for f in last)        # whole 20 ms frames of tones
+    assert tx.fd.pending() == 0 and tx.flush() == []                # now nothing waits, and a second flush adds nothing

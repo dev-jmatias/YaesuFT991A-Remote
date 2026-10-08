@@ -30,6 +30,8 @@ TX_QUEUE_FREEDV = 24             # frames (480 ms) while FreeDV is on: its modem
 TX_PREFILL_FRAMES = 10           # FreeDV: frames (200 ms) of modem tones that must be waiting before they start going to the radio (and again after a gap). The modem hands over
                                  # its tones in bursts (RADE: 120 ms at a time) that arrive with the network's jitter; without this cushion a burst that is a few ms late made the
                                  # sender write 20 ms of silence into the middle of the signal, and RADE cannot follow a signal with holes in it
+TX_DRAIN_MAX_S = 0.7             # PTT release: the most the page waits for the queued tones to reach the radio (a cushion of 0.2 s plus the last modem frame normally needs about 0.4 s)
+TX_TAIL_S = 0.15                 # and a little more: aplay holds about 100 ms that has been handed over but not yet played
 SLOW_FRAME_MS = 20.0             # a FreeDV receive step that takes longer than one frame (20 ms) can make the capture fall behind on a slow PC
 LEVEL_INTERVAL_S = 0.1
 GATE_IDLE_S = 0.5               # seconds without a microphone frame after which the transmit state ends by itself (over WebSocket the page sends nothing once PTT is released)
@@ -123,6 +125,7 @@ class AudioService:
         self._tx_gate_open = False
         self._gate_seen = 0.0                            # when the gate last let a microphone frame through
         self._tx_primed = True                           # FreeDV transmit: the cushion (TX_PREFILL_FRAMES) is in place and the tones are flowing
+        self._tx_ending = False                          # PTT is being released: the queue running dry is the end of the over, not a hole
         self.tx_underruns = 0                            # FreeDV transmit: holes written into the tones because the queue ran dry in mid-over (all overs)
         self._over_underruns = 0                         # the same, for the over in progress
         self._over_frames = 0
@@ -435,7 +438,7 @@ class AudioService:
                         pcm = self._tx_q.popleft()
                     else:
                         pcm = silence
-                        if fd and self._tx_primed:                             # ran dry in the middle of an over: a hole in the tones; refill before going on
+                        if fd and self._tx_primed and not self._tx_ending:     # ran dry in the middle of an over: a hole in the tones; refill before going on
                             self._tx_primed = False
                             self.tx_underruns += 1
                             self._over_underruns += 1
@@ -460,6 +463,29 @@ class AudioService:
                 await asyncio.shield(sink.stop())
             await asyncio.sleep(backoff)
             backoff = min(backoff * 2, 5.0)
+
+    async def drain_freedv_tx(self) -> None:
+        """PTT is about to be released. Unkeying at once cut off the end of every FreeDV over: up to a few hundred ms of tones were still queued (the cushion) and the last
+        modem frame had not been formed. So: flush the modem (silence completes the last frame), wait until the queue has gone to the radio (at most TX_DRAIN_MAX_S), then
+        a short tail for the sound card's own buffer. Nothing happens for ordinary voice or when FreeDV is off."""
+        ch = self._fd_tx
+        if ch is None or not self._tx_gate_open or self._pump_task is None:
+            return
+        self._tx_ending = True
+        try:
+            try:
+                for tone in ch.flush():
+                    self._tx_q.append(tone)
+            except Exception:
+                log.exception("FreeDV could not flush the last modem frame")
+            loop = asyncio.get_running_loop()
+            end = loop.time() + TX_DRAIN_MAX_S
+            while self._tx_q and loop.time() < end:
+                await asyncio.sleep(0.02)
+            if not self._tx_q:
+                await asyncio.sleep(TX_TAIL_S)
+        finally:
+            self._tx_ending = False
 
     def _over_finished(self) -> None:
         """A FreeDV transmission ended: say in the log whether the tones went out without holes (the thing to look at when others cannot decode us)."""
@@ -492,6 +518,7 @@ class AudioService:
                 self._tx_q.clear()                       # never send stale audio from before PTT
                 self._tx_gate_open = True
                 self._tx_primed = self._fd_tx is None    # FreeDV: wait for the cushion before the tones start
+                self._tx_ending = False
                 self._over_underruns = self._over_frames = 0
                 self._tx_proc_ms_max = 0.0
                 self._level("freedv_tx_underruns", 0)

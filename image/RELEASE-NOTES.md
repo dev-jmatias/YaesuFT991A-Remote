@@ -42,6 +42,18 @@ and goes back by itself if the new version does not start. Settings and accounts
 | `radio-remote-rade-linux-aarch64.tar.xz` | the optional RADE library (FreeDV neural modes V1 and V2) for a Raspberry Pi, installed with `install_rade.sh` (the PC build is `…-x86_64.tar.xz`) |
 | `SHA256SUMS` | checksums of all of the above |
 
+### What is new in 1.1.16
+
+- **Fix in the 1.1.15 memory editor: editing a channel that uses a tone no longer resets its tone frequency.** The radio's `MT` write copies the tone number VFO-A holds at that moment into the channel (found on a real FT-991A), so the
+  1.1.15 editor changed the tone of a channel whenever its name or frequency was edited. If you edited tone channels with 1.1.15, check their tone frequency on the radio.
+- **Tone frequency and DCS code per memory channel (FT-991A).** The editor now has a **tone frequency** list (the 50 CTCSS tones) and a **DCS code** list. Opening **Edit** on a channel with a tone reads the channel's own tone from the radio first
+  (it is recalled for a moment and the radio put back). To store a tone, VFO-A is borrowed: it is set to the channel's mode, frequency, shift and tone, the channel is written, read back by recalling it, and VFO-A with its own settings and the V/M state
+  are put back. A save takes about 30 seconds. Tested on a real FT-991A (two channels with different tones, rename keeps the tone, VFO-A and its 2 m settings restored).
+- **Delete a memory channel (FT-991A).** **Delete channel** in the editor empties it: the channel is recalled (and checked) and then `AM;` empties it (found on a real FT-991A). Proved like a write: the channel must read as empty and no other channel may change.
+- **AIR band (FT-991A).** The band buttons include **AIR** (the radio's AIR key, `BS14`): the radio goes to AM by itself and the page's tuning step becomes 25 kHz, going back to the previous step when you leave the band.
+- **The microphone button works in AM and FM too.** It set only menu 106 (SSB MIC SELECT); it now sets 106, 045 (AM MIC SELECT) and 074 (FM MIC SELECT) together (FT-991A). DATA modes (menu 070) are untouched.
+- **FreeDV: the end of an over is no longer cut off.** When you release PTT the last modem frame is completed with silence and the queued tones reach the radio before it is unkeyed (about half a second later). The FreeDV Reporter name for RADE V2 (`RADEV2`) is confirmed by another open-source client.
+
 ### What is new in 1.1.15
 
 - **Memory editor (FT-991A, administrators).** **Memories > Add** stores a new channel and **Edit** changes one: name (up to 12 characters), frequency, mode, shift direction (simplex, plus, minus) and tone mode (off, CTCSS encode,

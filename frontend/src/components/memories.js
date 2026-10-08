@@ -6,8 +6,10 @@ const fmt = (hz) => {
   return `${s.slice(0, 3).replace(/^0+(?=\d)/, "")}.${s.slice(3, 6)}.${s.slice(6)}`;
 };
 
-// What a channel can store besides frequency, mode and name (FT-991A MT command): the shift direction and the tone MODE. The tone frequency (e.g. 71.9 Hz) and the
-// repeater offset (e.g. 600 kHz) are radio menu settings that CAT cannot store per channel, so they are not offered here.
+// What a channel can store besides frequency, mode and name (FT-991A): the shift direction, the tone MODE and the tone frequency (CTCSS) or DCS code. The repeater offset
+// (e.g. 600 kHz) is a radio menu setting that CAT cannot store per channel, so it is not offered here. The tables are the ones of the radio's CAT manual (the server checks them too).
+const CTCSS = [67.0, 69.3, 71.9, 74.4, 77.0, 79.7, 82.5, 85.4, 88.5, 91.5, 94.8, 97.4, 100.0, 103.5, 107.2, 110.9, 114.8, 118.8, 123.0, 127.3, 131.8, 136.5, 141.3, 146.2, 151.4, 156.7, 159.8, 162.2, 165.5, 167.9, 171.3, 173.8, 177.3, 179.9, 183.5, 186.2, 189.9, 192.8, 196.6, 199.5, 203.5, 206.5, 210.7, 218.1, 225.7, 229.1, 233.6, 241.8, 250.3, 254.1];
+const DCS = ["023", "025", "026", "031", "032", "036", "043", "047", "051", "053", "054", "065", "071", "072", "073", "074", "114", "115", "116", "122", "125", "131", "132", "134", "143", "145", "152", "155", "156", "162", "165", "172", "174", "205", "212", "223", "225", "226", "243", "244", "245", "246", "251", "252", "255", "261", "263", "265", "266", "271", "274", "306", "311", "315", "325", "331", "332", "343", "346", "351", "356", "364", "365", "371", "411", "412", "413", "423", "431", "432", "445", "446", "452", "454", "455", "462", "464", "465", "466", "503", "506", "516", "523", "526", "532", "546", "565", "606", "612", "624", "627", "631", "632", "654", "662", "664", "703", "712", "723", "731", "732", "734", "743", "754"];
 const MODES = ["LSB", "USB", "CW-U", "CW-L", "AM", "FM", "RTTY-L", "RTTY-U", "DATA-L", "DATA-U", "DATA-FM", "FM-N", "AM-N", "C4FM"];
 const SHIFTS = { simplex: "Simplex (no shift)", plus: "Plus shift (+)", minus: "Minus shift (-)" };
 const SHIFT_MARK = { simplex: "", plus: "+", minus: "-" };
@@ -41,12 +43,15 @@ export function openMemories(ctx) {
         <label>Mode<select data-f="mode">${MODES.map((m) => `<option>${m}</option>`).join("")}</select></label>
         <label>Shift<select data-f="shift">${Object.entries(SHIFTS).map(([k, v]) => `<option value="${k}">${v}</option>`).join("")}</select></label>
         <label>Tone<select data-f="tone">${Object.entries(TONES).map(([k, v]) => `<option value="${k}">${v}</option>`).join("")}</select></label>
+        <label data-tonebox hidden>Tone frequency<select data-f="tonehz">${CTCSS.map((t) => `<option value="${t}">${t.toFixed(1)} Hz</option>`).join("")}</select></label>
+        <label data-dcsbox hidden>DCS code<select data-f="dcs">${DCS.map((c) => `<option value="${c}">${c}</option>`).join("")}</select></label>
       </div>
-      <p class="dim memhint">The tone frequency and the repeater offset are set in the radio's menus; here you only choose whether they are used. The name may use letters, digits and
-        ordinary punctuation. <b>Saving overwrites the channel stored in the radio</b> and takes about 20 seconds, because the program reads all channels back to check the result:
-        use <b>Export</b> first if you want a backup.</p>
+      <p class="dim memhint">The repeater offset (for example 600 kHz) is set in the radio's menus; here you choose the direction. The name may use letters, digits and
+        ordinary punctuation. <b>Saving overwrites the channel stored in the radio</b> and takes about 30 seconds: the radio's front is borrowed for a moment to store the tone, and the program
+        reads all channels back to check the result. Use <b>Export</b> first if you want a backup.</p>
       <div class="memnote" data-enote></div>
-      <div class="row"><button type="submit" class="active" data-save>Save to the radio…</button><button type="button" data-cancel>Cancel</button></div>
+      <div class="row"><button type="submit" class="active" data-save>Save to the radio…</button><button type="button" data-cancel>Cancel</button>
+        <button type="button" class="danger" data-delete title="Empty this channel in the radio" hidden>Delete channel…</button></div>
     </form>
   </div></div>`);
   document.body.append(sheet);
@@ -59,6 +64,13 @@ export function openMemories(ctx) {
   document.addEventListener("keydown", onKey);
   sheet.addEventListener("click", (e) => { if (e.target === sheet && !busy) close(); });
   q("[data-x]").onclick = () => { if (!busy) close(); };
+
+  const syncTone = () => {
+    const t = f("tone").value;
+    q("[data-tonebox]").hidden = !t.startsWith("ctcss");
+    q("[data-dcsbox]").hidden = !t.startsWith("dcs");
+  };
+  f("tone").onchange = syncTone;
 
   const tagOf = (m) => `${SHIFT_MARK[m.shift || "simplex"]}${TONE_MARK[m.tone_mode || "off"] ? (SHIFT_MARK[m.shift || "simplex"] ? " " : "") + TONE_MARK[m.tone_mode || "off"] : ""}`;
 
@@ -128,9 +140,31 @@ export function openMemories(ctx) {
     f("mode").value = isNew ? (MODES.includes(ctx.S.state.mode) ? ctx.S.state.mode : "FM") : (MODES.includes(m.mode) ? m.mode : "FM");
     f("shift").value = isNew ? "simplex" : m.shift || "simplex";
     f("tone").value = isNew ? "off" : m.tone_mode || "off";
+    f("tonehz").value = "88.5"; f("dcs").value = "023";
+    syncTone();
+    q("[data-delete]").hidden = isNew;
+    q("[data-delete]").dataset.ch = isNew ? "" : String(m.channel);
+    q("[data-save]").disabled = false;
     q("[data-enote]").textContent = isNew ? "A new channel starts from the radio's current frequency and mode." : "";
     q('[data-view="list"]').hidden = true; q('[data-view="edit"]').hidden = false;
     f(isNew ? "channel" : "name").focus();
+    if (!isNew && m.tone_mode && m.tone_mode !== "off") loadTone(m.channel);       // the channel's own tone frequency: without it a save would reset it
+  }
+
+  // The tone frequency of a stored channel can only be read by recalling it, so the server does that for a moment and puts the radio back.
+  async function loadTone(ch) {
+    const note = q("[data-enote]"), save = q("[data-save]");
+    save.disabled = true;
+    note.textContent = "Reading the channel's tone from the radio…";
+    try {
+      const t = await api(`/api/memories/${ch}/tone`);
+      if (t.tone_hz != null) f("tonehz").value = String(t.tone_hz);
+      if (t.dcs_code != null) f("dcs").value = t.dcs_code;
+      note.textContent = "";
+      save.disabled = false;
+    } catch (e) {
+      note.textContent = "Could not read this channel's tone, so it cannot be edited safely now: " + e.message;
+    }
   }
 
   q('[data-view="edit"]').onsubmit = async (ev) => {
@@ -149,9 +183,11 @@ export function openMemories(ctx) {
     if (!confirm(`${what}\n\nContinue?`)) return;
     busy = true;
     for (const b of sheet.querySelectorAll("button")) b.disabled = true;
-    note.textContent = "Writing to the radio and checking every channel... about 20 seconds. Please wait.";
+    note.textContent = "Writing to the radio and checking every channel... about 30 seconds. Please wait.";
     try {
-      await api(`/api/memories/${ch}`, "POST", { frequency: hz, mode: f("mode").value, shift: f("shift").value, tone_mode: f("tone").value, name, confirm: true });
+      const tone = f("tone").value;
+      await api(`/api/memories/${ch}`, "POST", { frequency: hz, mode: f("mode").value, shift: f("shift").value, tone_mode: tone, name, confirm: true,
+        ...(tone.startsWith("ctcss") ? { tone_hz: parseFloat(f("tonehz").value) } : {}), ...(tone.startsWith("dcs") ? { dcs_code: f("dcs").value } : {}) });
       ctx.toast?.(`Channel ${ch} stored and checked`);
       busy = false;
       for (const b of sheet.querySelectorAll("button")) b.disabled = false;
@@ -164,6 +200,26 @@ export function openMemories(ctx) {
     }
   };
   q("[data-cancel]").onclick = () => { if (!busy) showList(); };
+  q("[data-delete]").onclick = async () => {
+    const ch = parseInt(q("[data-delete]").dataset.ch, 10), old = items.find((x) => x.channel === ch);
+    if (busy || !ch) return;
+    if (!confirm(`Channel ${ch}${old ? ` ("${old.tag || "-"}" ${fmt(old.frequency)} ${old.mode})` : ""} will be EMPTIED in the radio. This cannot be undone (use Export first for a backup).\n\nContinue?`)) return;
+    busy = true;
+    for (const b of sheet.querySelectorAll("button")) b.disabled = true;
+    q("[data-enote]").textContent = "Deleting the channel and checking every channel... about 20 seconds. Please wait.";
+    try {
+      await api(`/api/memories/${ch}/delete`, "POST", { confirm: true });
+      ctx.toast?.(`Channel ${ch} deleted`);
+      busy = false;
+      for (const b of sheet.querySelectorAll("button")) b.disabled = false;
+      showList();
+      await load(false);
+    } catch (e) {
+      busy = false;
+      for (const b of sheet.querySelectorAll("button")) b.disabled = false;
+      q("[data-enote]").textContent = "Not deleted: " + e.message;
+    }
+  };
 
   q("[data-q]").oninput = paint;
   q("[data-refresh]").onclick = () => load(true);
