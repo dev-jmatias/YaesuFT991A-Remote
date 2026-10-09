@@ -189,7 +189,7 @@ class YaesuCatDriver(RadioDriver):
         """Read commands for every control this radio profile exposes (width last: depends on mode/NA)."""
         feats = {k: self.caps.has(k) for k in ("width", "if_shift", "contour", "apf", "manual_notch", "auto_notch",
                                               "dnr", "noise_blanker", "ipo", "att", "att_levels", "agc", "rit", "xit", "processor",
-                                              "monitor", "tuner", "dgid", "mic_select", "audio_out_level", "audio_in_level", "amc_level", "cw_keyer", "rear_select")}
+                                              "monitor", "tuner", "scan", "dgid", "mic_select", "audio_out_level", "audio_in_level", "amc_level", "cw_keyer", "rear_select")}
         reads = []
         for spec in controls.available(feats):
             if spec["name"] in self.proto.ENCODE and self.proto.ENCODE[spec["name"]][0] not in reads:
@@ -241,6 +241,8 @@ class YaesuCatDriver(RadioDriver):
                 i += 1
             else:
                 await self._read(self.proto.S_METER_READ, PRIO_METER)
+                if self.state.get("scan") and self.caps.has("scan"):
+                    await self._read("SC;", PRIO_METER)            # the radio ends a scan by itself (a key on the radio, a transmission): follow it closely
             await asyncio.sleep(self.t.meter_s)
 
     async def _poll_backstop(self) -> None:

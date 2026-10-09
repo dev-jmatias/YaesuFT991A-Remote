@@ -42,6 +42,12 @@ and goes back by itself if the new version does not start. Settings and accounts
 | `radio-remote-rade-linux-aarch64.tar.xz` | the optional RADE library (FreeDV neural modes V1 and V2) for a Raspberry Pi, installed with `install_rade.sh` (the PC build is `…-x86_64.tar.xz`) |
 | `SHA256SUMS` | checksums of all of the above |
 
+### What is new in 1.1.22
+
+- **Scan button (FT-991A).** A **Scan** / **Stop scan** button beside Tune on the Radio tab starts and stops the radio's own scan (CAT `SC`): in memory mode it steps through the stored memory channels, otherwise it scans up from the VFO frequency. It is greyed out while transmitting, and follows the radio if the scan is ended on the radio itself. Verified on a real FT-991A.
+- **Tune sends a carrier only.** With FreeDV on, the microphone and the modem tones were also sent to the radio while the antenna tuner transmitted; now nothing but the tuner's carrier goes out.
+- **No more false "radio is no longer keyed" warnings.** The PTT watchdog could see the radio's TX state change during a normal release (before the release had finished) and log a warning on about a quarter to 40% of releases. It now waits for a key or un-key in progress.
+
 ### What is new in 1.1.21
 
 - **FreeDV transmit: a second browser no longer restarts the modem.** A browser that is connected but muted still sends silent microphone frames; they closed the transmit gate every 20 ms, and the next frame of the operator transmitting cleared the queue and built a new modem. Now only the browser that started the transmission can end it.

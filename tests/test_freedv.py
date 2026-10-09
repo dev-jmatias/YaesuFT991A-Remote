@@ -483,3 +483,14 @@ async def test_dropped_tone_frames_are_counted(svc):
     for _ in range(service.TX_QUEUE_FREEDV + 5):                         # no sink running: nothing consumes the queue
         svc._mic_frame(peer, mic)
     assert svc.tx_dropped == 5 and svc.status()["freedv_timing"]["tx_dropped"] == 5
+
+
+async def test_tune_sends_a_carrier_only_no_microphone_or_modem_tones(make_app):
+    from radio_remote.common import K_GUARD
+    client = await make_app()
+    audio, guard = client.server.app[K_AUDIO], client.server.app[K_GUARD]
+    guard.keyed, guard.owner, guard.tuning = True, "c1", False
+    assert audio.tx_gate("c1") is True                                  # PTT: the microphone (or the modem) goes out
+    guard.tuning = True
+    assert audio.tx_gate("c1") is False                                 # TUNE: the carrier only
+    guard.keyed = guard.tuning = False

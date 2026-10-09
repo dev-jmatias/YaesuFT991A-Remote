@@ -65,6 +65,7 @@ How to read the table:
 | Power off over CAT | works | from the manual | works | works | from the manual |
 | Power on over CAT (from standby) | works | from the manual | works | works | from the manual |
 | rear_select | - | - | works | works | - |
+| scan | works | - | - | - | - |
 | WIRES DG-ID menu value | works | - | - | - | - |
 
 ## Modes, bands and frequency range

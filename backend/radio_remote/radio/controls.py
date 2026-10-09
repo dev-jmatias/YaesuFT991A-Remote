@@ -64,6 +64,8 @@ SPECS: list[dict[str, Any]] = [
     {"name": "monitor_level", "label": "Monitor level", "group": "Transmit", "kind": "int", "feature": "monitor",
      "min": 0, "max": 100, "step": 1},
     {"name": "tuner", "label": "Antenna tuner", "group": "Transmit", "kind": "bool", "feature": "tuner"},
+    # SC P1: 0 = scan off, 1 = scan up, 2 = scan down (CAT manual p.17). The radio scans its own memory channels (memory mode) or the VFO upward.
+    {"name": "scan", "label": "Scan", "group": "Tuning", "kind": "bool", "feature": "scan"},
     # Radio menu 153 "WIRES DG-ID": AUTO or 1..99. This is the WIRES-X setting, NOT the C4FM RX/TX DG-ID you see on the radio's
     # C4FM screen: the CAT manual has no command for those. Bench report: changing it shows nothing on the radio's C4FM screen.
     # Radio menu 106 "SSB MIC SELECT" (CAT manual p.9): 0 = MIC (front microphone), 1 = REAR (rear data/mic jack, used by the USB audio path).

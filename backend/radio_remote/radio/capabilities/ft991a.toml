@@ -38,6 +38,7 @@ xit = true                            # XT
 processor = true                      # PR/PL
 monitor = true                        # ML
 tuner = true                          # AC00x tuner on/off (does not transmit)
+scan = true                           # SC (p.17): the radio's own scan (memory channels in memory mode, VFO upward otherwise), start/stop from the Radio tab
 tuner_tune = true                     # AC002 start/stop tune: KEYS the transmitter; goes through TxGuard. BENCH-VERIFIED (operator: "tuning works")
 mic_select = true                    # EX106 (menu 106 SSB MIC SELECT: 0 MIC / 1 REAR, manual p.9). Read at connect. BENCH-VERIFIED (REAR/MIC switch works)
 memories = true                       # MC select + MT read (p.11): list and recall stored channels; never written. BENCH-VERIFIED (the radio answers every MT with channel 001: handled)

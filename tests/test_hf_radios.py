@@ -504,7 +504,7 @@ def test_every_control_spec_is_known_to_some_profile():
     for m in HF:
         union |= set(HfProto(m).ENCODE)
     for name in controls.SPEC_BY_NAME:
-        assert name == "width" or name in union or name in ("dgid", "processor", "processor_level", "att"), name
+        assert name == "width" or name in union or name in ("dgid", "processor", "processor_level", "att", "scan"), name
 
 
 async def test_ftdx101_squelch_main_and_sub():

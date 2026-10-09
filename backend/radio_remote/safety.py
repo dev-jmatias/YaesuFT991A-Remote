@@ -174,6 +174,8 @@ class TxGuard:
                 async with self._lock:
                     await self._unkey(reason or "retry")
             return
+        if self._lock.locked():
+            return                    # a key or un-key is in progress: the radio's TX state is changing because of it (not on its own)
         if self.driver.state.get("connected") and self.driver.state.get("tx") is False and not self._retry_needed:
             # Radio un-keyed itself (e.g. CAT reconnect released it): drop our belief, never re-key silently.
             log.warning("radio is no longer keyed; clearing PTT ownership")

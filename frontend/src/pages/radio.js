@@ -3,7 +3,7 @@ import { createAudioPanel } from "../audio.js";
 import { createVfoPanels } from "../components/vfo-panels.js";
 import { createVfoB } from "../components/vfo-b.js";
 import { createTuningStrip } from "../components/tuning-strip.js";
-import { createDgHint, createFilters, createLevels, createSquelch, createTuneButton } from "../components/controls.js";
+import { createDgHint, createFilters, createLevels, createScanButton, createSquelch, createTuneButton } from "../components/controls.js";
 import { createPtt } from "../components/ptt.js";
 import { createFreeDV } from "../components/freedv.js";
 import { createMemoryButtons } from "../components/memories.js";
@@ -226,6 +226,7 @@ export function renderRadio(root, { onLogout, onAuthLost }) {
     stepRow.querySelector("#up").onclick = () => ctx.tune(ui.step);
     stepRow.querySelector("#dn").onclick = () => ctx.tune(-ui.step);
     parts.push(createTuneButton(stepRow, ctx));                       // TUNE (antenna tuner) right next to the tuning step
+    parts.push(createScanButton(stepRow, ctx));                       // SCAN / Stop scan beside TUNE
     parts.push(createMemoryButtons(stepRow, ctx));                    // Memories / Back to VFO beside TUNE
 
     const bandBox = block(vfo, "Band select");

@@ -25,6 +25,22 @@ export function createTuneButton(host, ctx) {
   };
 }
 
+// SCAN: the radio's own scan (memory channels when in memory mode, the VFO upward otherwise), started and stopped here, next to TUNE. It does not transmit.
+export function createScanButton(host, ctx) {
+  if (!ctx.S.caps.features.scan) return { update() {} };
+  const b = el(`<button class="led scan" title="Start the radio's scan: the memory channels when in memory mode, otherwise up the band. Tap again to stop.">Scan</button>`);
+  b.onclick = () => ctx.send("set_control", { name: "scan", value: !ctx.S.state.scan });
+  host.append(b);
+  return {
+    update() {
+      const s = ctx.S.state;
+      b.classList.toggle("on", !!s.scan);
+      b.textContent = s.scan ? "Stop scan" : "Scan";
+      b.disabled = !!(s.tx || s.tuning);
+    },
+  };
+}
+
 // C4FM RX/TX DG-ID cannot be set over CAT (bench-verified: no EX menu item changes when it is changed on the radio),
 // so only a hint is shown, in C4FM mode. The backend "dgid" control (menu 153, WIRES DG-ID) stays but is not offered here.
 export function createDgHint(host, ctx) {

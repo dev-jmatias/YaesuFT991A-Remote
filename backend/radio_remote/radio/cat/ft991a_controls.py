@@ -105,6 +105,7 @@ ENCODE: dict[str, tuple[str, Callable[[Any], list[str]]]] = {
     # microphone in SSB, AM or FM, which 106, 045 and 074 decide.
     "mic_select": ("EX106;", lambda v: ([f"EX1061;", "EX0451;", "EX0741;", "EX0701;"] if v == "REAR" else ["EX1060;", "EX0450;", "EX0740;"])),
     "tuner": ("AC;", lambda v: [f"AC00{_b(v)};"]),                    # P3 0 = off, 1 = on (2 = start tune: NOT used)
+    "scan": ("SC;", lambda v: [f"SC{_b(v)};"]),                       # P1 0 = off, 1 = scan up (2 = down: not offered)
 }
 
 
@@ -201,6 +202,12 @@ def _p_ac(p):
     return {"tuner": p[2] == "1"}
 
 
+def _p_sc(p):
+    if p not in ("0", "1", "2"):
+        raise FrameError("bad SC")
+    return {"scan": p != "0"}
+
+
 def _p_flag0(name):
     def f(p):
         if len(p) != 2 or p[0] != "0" or p[1] not in "01":
@@ -253,5 +260,5 @@ PARSERS: dict[str, Callable[[str], dict]] = {
     "SH": _p_sh, "NA": _p_na, "IS": _p_is, "CO": _p_co, "BP": _p_bp, "PR": _p_pr, "ML": _p_ml,
     "BC": _p_flag0("auto_notch"), "NR": _p_flag0("nr"), "NB": _p_flag0("nb"), "RA": _p_flag0("att"),
     "RL": _p0("nr_level", 2), "NL": _p0("nb_level", 3), "PL": _p_pl,
-    "PA": _p_pa, "RT": _p_flag("rit"), "XT": _p_flag("xit"), "AC": _p_ac,
+    "PA": _p_pa, "RT": _p_flag("rit"), "XT": _p_flag("xit"), "AC": _p_ac, "SC": _p_sc,
 }

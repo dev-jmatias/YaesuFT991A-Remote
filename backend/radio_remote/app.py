@@ -768,7 +768,7 @@ def create_app(cfg: dict, driver: RadioDriver | None = None, auth: AuthStore | N
     _rade.set_install_dir(Path(cfg["storage"]["data_dir"]) / "lib")           # BEFORE the audio service looks for the library: the copy installed from the page (newer) wins over /opt
     audio = AudioService(
         cfg["audio"], is_mock=driver.is_mock,
-        tx_gate=lambda cid: guard.keyed and guard.owner == cid,
+        tx_gate=lambda cid: guard.keyed and not guard.tuning and guard.owner == cid,      # TUNE sends a carrier only: no microphone or modem tones
         on_levels=app[K_HUB].push,
     )
     app[K_AUDIO] = app[K_HUB].audio = audio
