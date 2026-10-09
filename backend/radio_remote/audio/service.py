@@ -134,6 +134,8 @@ class AudioService:
         self._gate_seen = 0.0                            # when the gate last let a microphone frame through
         self._tx_primed = True                           # FreeDV transmit: the cushion (TX_PREFILL_FRAMES) is in place and the tones are flowing
         self._tx_ending = False                          # PTT is being released: the queue running dry is the end of the over, not a hole
+        self.tx_dropped = 0                              # FreeDV transmit: tone frames thrown away because the queue was full (the sender stalled for over 480 ms)
+        self._tx_owner = None                            # conn_id of the peer whose frames opened the gate
         self.tx_underruns = 0                            # FreeDV transmit: holes written into the tones because the queue ran dry in mid-over (all overs)
         self._over_underruns = 0                         # the same, for the over in progress
         self._over_frames = 0
@@ -202,7 +204,7 @@ class AudioService:
             "capture_error": self.capture_error, "playback_error": self.playback_error,
             "frames_to_radio": self.frames_to_radio,
             "freedv_timing": {"rx_ms_avg": round(self.rx_ms_avg, 2), "rx_ms_max": round(self.rx_ms_max, 1), "rx_work_ms_avg": round(self.rx_work_avg, 2), "rx_work_ms_max": round(self.rx_work_max, 1), "rx_slow_frames": self.rx_slow,
-                              "tx_ms_max": round(self._tx_proc_ms_max, 1), "tx_underruns": self.tx_underruns},
+                              "tx_ms_max": round(self._tx_proc_ms_max, 1), "tx_underruns": self.tx_underruns, "tx_dropped": self.tx_dropped},
         }
 
     # ------------------------------------------------------------- FreeDV
@@ -361,7 +363,8 @@ class AudioService:
                         # server the transmission had ended; the receiver stayed muted and the tuning scope frozen until FreeDV was switched off and on.
                         self._tx_gate_open = False
                     self._check_fd_tx()
-                    pcm = apply_gain(await src.read_frame(), self.rx_gain, limit=self.rx_gain > 1.0)      # a boost must not clip hard
+                    # a boost must not clip hard, but with FreeDV on the limiter would distort the modem signal the decoder works on (it hard-clips at full scale instead)
+                    pcm = apply_gain(await src.read_frame(), self.rx_gain, limit=self.rx_gain > 1.0 and self._fd_rx is None)
                     self._level("audio_rx_level", level_pct(pcm))                # the meter shows what the radio sends (the modem tones)
                     if self._fd_rx is not None and self._tx_gate_open:
                         pcm = bytes(FRAME_BYTES)                                 # transmitting: never decode (and replay) our own signal
@@ -492,6 +495,7 @@ class AudioService:
         if ch is None or not self._tx_gate_open or self._pump_task is None:
             return
         self._tx_ending = True
+        self._tx_primed = True                                   # fewer frames than the cushion (a short over, or a refill in progress) must still go out
         try:
             try:
                 for tone in ch.flush():
@@ -537,6 +541,7 @@ class AudioService:
             if not self._tx_gate_open:
                 self._tx_q.clear()                       # never send stale audio from before PTT
                 self._tx_gate_open = True
+                self._tx_owner = peer.conn_id
                 self._tx_primed = self._fd_tx is None    # FreeDV: wait for the cushion before the tones start
                 self._tx_ending = False
                 self._over_underruns = self._over_frames = 0
@@ -553,6 +558,10 @@ class AudioService:
                     tones = self._fd_tx.process(apply_gain(pcm, self.tx_gain))
                     self._tx_proc_ms_max = max(self._tx_proc_ms_max, (time.perf_counter() - t0) * 1000.0)
                     for tone in tones:
+                        if len(self._tx_q) == self._tx_q.maxlen:
+                            self.tx_dropped += 1
+                            if self.tx_dropped == 1 or self.tx_dropped % 100 == 0:
+                                log.warning("FreeDV transmit: the tone queue overflowed, %d frame(s) dropped so far (the sending side stalled)", self.tx_dropped)
                         self._tx_q.append(tone)
                         self._level("audio_tx_level", level_pct(tone))
                 except Exception:
@@ -561,7 +570,9 @@ class AudioService:
             pcm = apply_gain(pcm, self.tx_gain, limit=True)
             self._tx_q.append(pcm)
             self._level("audio_tx_level", level_pct(pcm))
-        else:
+        elif not self._tx_gate_open or peer.conn_id == self._tx_owner:
+            # Only the peer that opened the gate (or nobody, when it is already closed) may close it: a second browser that is connected but muted still sends
+            # silent frames, and those used to close the gate every 20 ms and restart the modem in the middle of the owner's over.
             self._tx_gate_open = False
             self._level("audio_tx_level", 0)
 

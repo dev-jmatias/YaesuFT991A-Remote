@@ -441,3 +441,45 @@ def test_closing_a_chain_waits_for_a_decode_in_progress_and_a_closed_chain_is_si
     t.join()
     assert ch.process(bytes(FRAME_BYTES)) == bytes(FRAME_BYTES)           # a closed chain answers with silence
     ch.restart()                                                          # and cannot be restarted
+
+
+async def test_a_muted_second_browser_does_not_restart_the_modem_of_the_one_transmitting(svc):
+    """REVIEW-FOUND: a connected-but-muted browser still sends silent mic frames; they closed the gate every 20 ms and the owner's next frame cleared the queue and built a new modem."""
+    svc.set_freedv(True, "RADE")
+    owner, other = types.SimpleNamespace(conn_id="c1"), types.SimpleNamespace(conn_id="c2")
+    mic = b"\x10\x00" * (FRAME_BYTES // 2)
+    svc.gate["owner"] = "c1"
+    svc.gate["open"] = True
+    svc._mic_frame(owner, mic)
+    chain = svc._fd_tx
+    for _ in range(5):
+        svc._mic_frame(other, mic)                                       # the muted browser: not the owner, ignored
+        svc._mic_frame(owner, mic)
+    assert svc._tx_gate_open and svc._fd_tx is chain                     # same transmission, same modem
+    svc.gate["open"] = False
+    svc._mic_frame(owner, mic)                                           # the owner released PTT: that closes the gate
+    assert not svc._tx_gate_open
+
+
+async def test_a_drain_below_the_cushion_still_sends_the_last_tones(svc):
+    """REVIEW-FOUND: with fewer than TX_PREFILL_FRAMES queued (a very short over) the pump kept writing silence and the drain waited in vain."""
+    svc.set_freedv(True, "RADE")
+    peer = types.SimpleNamespace(conn_id="c1")
+    mic = b"\x10\x00" * (FRAME_BYTES // 2)
+    await svc._ensure_tx_sink()
+    svc.gate["open"] = True
+    for _ in range(3):
+        svc._mic_frame(peer, mic)
+    await svc.drain_freedv_tx()
+    assert not svc._tx_q and svc.sink.frames.count(TONES) == 4           # 3 frames + the flushed one
+    await svc._stop_tx_sink()
+
+
+async def test_dropped_tone_frames_are_counted(svc):
+    svc.set_freedv(True, "RADE")
+    peer = types.SimpleNamespace(conn_id="c1")
+    mic = b"\x10\x00" * (FRAME_BYTES // 2)
+    svc.gate["open"] = True
+    for _ in range(service.TX_QUEUE_FREEDV + 5):                         # no sink running: nothing consumes the queue
+        svc._mic_frame(peer, mic)
+    assert svc.tx_dropped == 5 and svc.status()["freedv_timing"]["tx_dropped"] == 5

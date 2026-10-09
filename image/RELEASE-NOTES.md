@@ -42,6 +42,13 @@ and goes back by itself if the new version does not start. Settings and accounts
 | `radio-remote-rade-linux-aarch64.tar.xz` | the optional RADE library (FreeDV neural modes V1 and V2) for a Raspberry Pi, installed with `install_rade.sh` (the PC build is `…-x86_64.tar.xz`) |
 | `SHA256SUMS` | checksums of all of the above |
 
+### What is new in 1.1.21
+
+- **FreeDV transmit: a second browser no longer restarts the modem.** A browser that is connected but muted still sends silent microphone frames; they closed the transmit gate every 20 ms, and the next frame of the operator transmitting cleared the queue and built a new modem. Now only the browser that started the transmission can end it.
+- **FreeDV receive: no limiter in front of the RADE decoder.** With a receive boost (`audio.rx_gain_db` above 0) the soft limiter squashed the modem signal and lowered the decoder's signal-to-noise ratio. Level the audio with the radio's menu 073 (DATA OUT LEVEL) instead of a boost.
+- **Very short FreeDV overs** now send their last tones when PTT is released (they were held back waiting for the 200 ms cushion, and the release waited in vain).
+- **Dropped tone frames are counted** (`tx_dropped` in Admin > Diagnostics, and a warning in the log), to show if the sending side ever stalls for more than half a second.
+
 ### What is new in 1.1.20
 
 - **FreeDV receive timing is split in two** (Admin > Diagnostics and the log): the time a 20 ms audio frame takes in total, and the time spent inside the decoder itself. On a small PC the total was far above the decoder's own time,
