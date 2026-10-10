@@ -31,7 +31,8 @@ Menu numbers are from the official CAT manual (1711-D).
 | 031 CAT RATE | 4800 / 9600 / 19200 / 38400 | **38400** (the default of the app; if you change it set `radio.baud` to match) |
 | 036 TX TOT | OFF, 1-30 min | **set a value (e.g. 3 min)**: the radio's own backstop if the Pi ever fails |
 | 047, 071, 076, 108 (PTT select) | DAKY / RTS / DTR | **DAKY**, so nothing can key the radio by toggling the RTS/DTR serial lines. The app opens the port with DTR/RTS low regardless |
-| 032 CAT TOT, 033 CAT RTS | | leave at the defaults; raise CAT TOT only if you see CAT timeouts |
+| 033 CAT RTS | ENABLE / DISABLE | **DISABLE**. With ENABLE the radio only talks while the RTS line is high, and the app never raises RTS (it could key the radio); the radio then stays silent and the app says "radio offline" (seen after a factory reset) |
+| 032 CAT TOT | | leave at the default; raise it only if you see CAT timeouts |
 
 **Microphone source: managed by the app** (0 = MIC, 1 = REAR)
 
@@ -41,6 +42,17 @@ Menu numbers are from the official CAT manual (1711-D).
 | 045 AM MIC SELECT | AM | REAR | **MIC** |
 | 074 FM MIC SELECT | FM, C4FM | REAR | **MIC** |
 | 070 DATA IN SELECT | DATA modes | REAR | **stays REAR** (it only matters in the DATA modes) |
+
+**Where the audio comes in and goes out: USB** (bench-found on a real FT-991A after a reset: the app keyed the radio but no RF came out, because the port menus were on DATA)
+
+| Menu | Mode | Value |
+|---|---|---|
+| 109 SSB PORT SELECT | SSB | **USB** (1) |
+| 048 AM PORT SELECT | AM | **USB** (1) |
+| 077 FM PORT SELECT | FM, C4FM | **USB** (1) |
+| 072 DATA PORT SELECT | DATA modes | **USB** (1; see the FreeDV table) |
+
+If PTT from the app keys the radio but an external power meter shows nothing (in SSB, no audio means no RF), check these first.
 
 **Receive level sent to the Pi** (0-100, default 50): 107 SSB OUT LEVEL in USB/LSB, **073 DATA OUT LEVEL** in the DATA modes (and 046 AM, 075 FM, 054 CW, 099 RTTY). If the browser audio is too quiet,
 raise it (90 was right on one tested radio, 50 on another) before using `audio.rx_gain_db`.
