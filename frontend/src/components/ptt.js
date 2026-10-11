@@ -51,7 +51,7 @@ export function createPtt(host, ctx) {
     showCue(true, "▲ slide up to lock transmit");
     try { btn.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
     try {
-      await sock.send("ptt", { on: true });
+      await sock.send("ptt", ctx.ui.levelTest ? { on: true, test: true } : { on: true });          // test: the FreeDV level test tone instead of the voice
       if (!held) { send("ptt", { on: false }); return; }      // released while the request was in flight
       ctx.audio()?.setPtt(true);
       hb = setInterval(() => sock.ping("ptt_hb"), 250);
@@ -82,7 +82,7 @@ export function createPtt(host, ctx) {
       lockBtn.classList.toggle("on", locked);
       lockBtn.setAttribute("aria-pressed", String(locked));
       lockBtn.title = locked ? "PTT and TUNE are locked on this device. Tap to unlock." : "Lock PTT and TUNE on this device so a stray touch cannot transmit";
-      if (!blocked) btn.textContent = tx ? (s.tx_source === "radio" ? "TX (radio keyed)" : latched ? "TRANSMITTING - TAP TO STOP" : "TRANSMITTING") : locked ? "PTT LOCKED" : "HOLD TO TRANSMIT";
+      if (!blocked) btn.textContent = tx ? (s.tx_source === "radio" ? "TX (radio keyed)" : latched ? "TRANSMITTING - TAP TO STOP" : "TRANSMITTING") : locked ? "PTT LOCKED" : ctx.ui.levelTest && s.freedv_mode ? "HOLD FOR LEVEL TEST TONE" : "HOLD TO TRANSMIT";
       if (tx && !tick) {
         txStart = performance.now();
         tick = setInterval(() => {

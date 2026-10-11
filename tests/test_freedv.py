@@ -95,7 +95,7 @@ def test_config_defaults_and_validation():
     c["freedv"]["mode"] = "FOO"
     with pytest.raises(config.ConfigError):
         config.validate(c)
-    c["freedv"]["mode"], c["freedv"]["tx_level_db"] = "RADE2", 3
+    c["freedv"]["mode"], c["freedv"]["tx_level_db"] = "RADE2", 4
     with pytest.raises(config.ConfigError):
         config.validate(c)
     c["freedv"]["mode"], c["freedv"]["tx_level_db"] = "RADE2", -6                        # RADE V2 is a mode like any other
@@ -494,3 +494,38 @@ async def test_tune_sends_a_carrier_only_no_microphone_or_modem_tones(make_app):
     guard.tuning = True
     assert audio.tx_gate("c1") is False                                 # TUNE: the carrier only
     guard.keyed = guard.tuning = False
+
+
+async def test_the_level_test_sends_a_steady_tone_and_only_for_that_over(svc):
+    """The FreeDV level test: PTT sends a 1500 Hz tone at the modem level (peak TEST_TONE_PEAK x the transmit level) instead of the voice, for at most TEST_TONE_MAX_S."""
+    import numpy as np
+    svc.set_freedv(True, "RADE")
+    peer = types.SimpleNamespace(conn_id="c1")
+    mic = b"\x10\x00" * (FRAME_BYTES // 2)
+    svc.gate["open"] = True
+    svc.set_level_test(True)
+    for _ in range(10):
+        svc._mic_frame(peer, mic)
+    frames = list(svc._tx_q)
+    assert len(frames) == 10
+    x = np.frombuffer(b"".join(frames), "<i2").astype(float)
+    assert abs(np.abs(x).max() - service.TEST_TONE_PEAK * svc.freedv_tx_gain) < 100            # the peak is the modem's peak
+    spec = np.abs(np.fft.rfft(x)); assert abs(np.argmax(spec) * 48000 / len(x) - service.TEST_TONE_HZ) < 10      # at 1500 Hz
+    svc._test_n = int(service.TEST_TONE_MAX_S * service.RATE)                                   # the time is up: nothing more is added
+    n = len(svc._tx_q)
+    svc._mic_frame(peer, mic)
+    assert len(svc._tx_q) == n
+    svc.gate["open"] = False
+    svc._mic_frame(peer, mic)                                                                   # PTT released
+    svc.gate["open"] = True
+    svc._mic_frame(peer, mic)                                                                   # the next over has no test flag: the modem again
+    assert not svc._test_active
+
+
+def test_the_transmit_level_may_go_up_to_plus_3_db():
+    cfg = copy.deepcopy(config.DEFAULTS)
+    cfg["freedv"]["tx_level_db"] = 3
+    config.validate(cfg)
+    cfg["freedv"]["tx_level_db"] = 4
+    with pytest.raises(config.ConfigError):
+        config.validate(cfg)

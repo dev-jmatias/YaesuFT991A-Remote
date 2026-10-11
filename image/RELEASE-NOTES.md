@@ -42,6 +42,12 @@ and goes back by itself if the new version does not start. Settings and accounts
 | `radio-remote-rade-linux-aarch64.tar.xz` | the optional RADE library (FreeDV neural modes V1 and V2) for a Raspberry Pi, installed with `install_rade.sh` (the PC build is `…-x86_64.tar.xz`) |
 | `SHA256SUMS` | checksums of all of the above |
 
+### What is new in 1.1.24
+
+- **FreeDV level test.** A **Level test** checkbox on the FreeDV tab makes the PTT button send a steady 1500 Hz tone at the modem level (up to 15 seconds) instead of your voice, so the transmit level can be set by the radio's ALC and power meters without another station listening. Hold PTT and raise the level until the ALC just starts to move; the manual has the steps and a measured example.
+- **The FreeDV transmit level can go up to +3 dB** (it stopped at 0 dB), and the **default for new installations is -3 dB** (it was -6). RADE's transmit signal is nearly constant in amplitude and is meant to be sent at close to the radio's full set power: a radio whose ALC barely moves is underdriven. Existing settings are not changed.
+- Manual: advice from the FreeDV GUI manual and the RADE paper (radio processing off, wide filters, receive level not clipping, RADE V2 is experimental and few stations use it).
+
 ### What is new in 1.1.23
 
 - **Scan between two frequencies (FT-991A).** The **Scan** button now opens a sheet: *Scan the memories* (the radio's own scan, as before) or a **range scan** with a start and a stop frequency, a step, the signal level to stop on (S1 to S9+20), how long to wait after a signal ends, and whether to carry on or stop the scan on a signal. The server steps the VFO from the start to the stop frequency, parks on a signal and loops back to the start. The radio only receives; the scan ends on PTT or Tune, on any change of frequency, mode, band or memory, when the operator leaves or loses control, or when the radio disconnects. While scanning the button reads **Stop scan**.

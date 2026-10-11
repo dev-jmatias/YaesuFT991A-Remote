@@ -150,7 +150,26 @@ The list on the FreeDV tab comes from the configuration (`freedv.channels`). The
 as dial frequencies). Check the current activity frequencies on the FreeDV website before relying on them.
 Administrators can change the list in the tab (**Edit the channel list**): name, frequency in MHz, mode.
 
-Settings (Admin > Config or the tab): `freedv.mode` (the mode used when FreeDV is switched on without choosing one), `freedv.tx_level_db` (-40..0), `freedv.channels`.
+Settings (Admin > Config or the tab): `freedv.mode` (the mode used when FreeDV is switched on without choosing one), `freedv.tx_level_db` (-40..+3), `freedv.channels`.
+
+## Setting the transmit level (the level test)
+
+RADE's transmit signal has an almost constant amplitude (the paper reports a peak-to-average ratio under 1 dB before the radio). It is meant to be sent at close to the radio's full
+rated power, and **"more is not better"** only applies beyond that: an *overdriven* signal is distorted and decodes badly, but an *underdriven* one is simply weak at the other
+station. A radio whose ALC barely moves (one or two bars at every setting) is underdriven.
+
+1. Switch FreeDV on, put the radio in its FreeDV mode (DATA-U / DATA-L, or USB / LSB), and connect a dummy load (or use a free frequency). Set the radio's power to the level you want to use.
+2. On the FreeDV tab tick **Level test**. The PTT button now sends a steady 1500 Hz tone at the modem level (it stops by itself after 15 seconds; hold again for more).
+3. Hold PTT and raise **Transmit level** until the **ALC** just starts to move, then go down one step. The **PO** meter should be close to the radio's set power (the tone reads about 2 dB
+   higher than the voice signal, because a steady tone has less peak than the modem's signal for the same power).
+4. Untick **Level test**. Do not leave it on: the PTT button would keep sending the tone.
+
+A measured example (FT-991A in DATA-USB, set to 50 W, an external power meter, the test tone): -6 dB gave 32 W and the ALC barely moved; 0 dB gave 41 W with the ALC
+just below its limit; +3 dB gave 42 W with the ALC at its limit. So 0 dB was the right level for that radio: the last 3 dB bought 1 W and started the overdrive. The default for a new
+installation is -3 dB, a safe starting point; every radio and cable is different, so run the level test. Read the **external meter** if you have one: the app's PO bar saturates at the set power.
+
+The level can go up to +3 dB. If the ALC is still not moving at +3 dB, raise the radio's own input level for the USB audio instead (on an FT-991A the sound-card playback volume on the
+computer, or the radio's DATA/USB input gain menus) rather than turning up the level beyond that.
 
 ## Notes and limits
 

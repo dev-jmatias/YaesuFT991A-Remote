@@ -382,9 +382,16 @@ class Hub:
                     await self.audio.drain_freedv_tx()                    # FreeDV: let the last tones reach the radio before it is unkeyed
                 except Exception:
                     log.exception("FreeDV transmit drain failed; releasing PTT anyway")
+            test = on and msg.get("test") is True
+            if test and not (self.audio and self.audio.freedv_state().get("on")):
+                raise CommandError("the level test needs FreeDV switched on")
+            if self.audio:
+                self.audio.set_level_test(test)                          # a steady tone instead of the microphone, for setting the level (ALC / power meters)
             try:
                 await self.guard.request(conn_id, on)
             except TxRefused as e:
+                if self.audio:
+                    self.audio.set_level_test(False)
                 raise CommandError(str(e)) from None
             self._broadcast({"t": "patch", "d": {"ptt_owner": self.guard.owner}})
             self.auth.audit("ptt_on" if on else "ptt_off", session.username, None)
@@ -583,6 +590,8 @@ async def ws_handler(request):
         await app[K_GUARD].release_owner(conn_id)   # never leave TX keyed by a dead connection
         if hub.scanner.owner == conn_id:
             await hub.scanner.stop("the operator left")
+        if app[K_AUDIO]:
+            app[K_AUDIO].set_level_test(False)
         if app[K_AUDIO]:
             await app[K_AUDIO].close_conn(conn_id)
         await hub.lease.on_disconnect(conn_id)

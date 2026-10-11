@@ -14,7 +14,7 @@ const fmtMHz = (hz) => (hz / 1e6).toFixed(hz % 1000 ? 4 : 3);
 export function createFreeDV(host, ctx) {
   const { S, send, toast, signal } = ctx;
   const admin = S.user.role === "admin";
-  let info = { channels: [], modes: ["RADE"], tx_level_db: -6, data_mode: false };
+  let info = { channels: [], modes: ["RADE"], tx_level_db: -3, data_mode: false };
   const hasData = () => (S.caps?.modes || []).includes("DATA-U") && (S.caps?.modes || []).includes("DATA-L");
   // The radio mode FreeDV uses: plain USB/LSB, or (option "DATA", the FreeDV guide's way for the FT-991A) DATA-USB/DATA-LSB, which bypass the radio's microphone processing.
   const radioModeFor = (hz) => (info.data_mode && hasData() ? dataFor(hz) : ssbFor(hz));
@@ -48,8 +48,13 @@ export function createFreeDV(host, ctx) {
     <h3 class="blabel">On the air now (FreeDV Reporter)</h3>
     <div class="fdv-rep" id="fdv-rep"><div class="dim" id="fdv-rep-status"></div><div id="fdv-rep-list"></div></div>
     <div class="fdv-level"><label>Transmit level of the modem tones <b id="fdv-lv"></b> dB
-      <input type="range" id="fdv-lvr" min="-40" max="0" step="1" aria-label="FreeDV transmit level"></label>
-      <span class="dim" id="fdv-lvnote"></span></div>
+      <input type="range" id="fdv-lvr" min="-40" max="3" step="1" aria-label="FreeDV transmit level"></label>
+      <span class="dim" id="fdv-lvnote"></span>
+      <label class="chk" id="fdv-test-row" hidden title="While this is ticked the PTT button sends a steady 1500 Hz tone at this level (for up to 15 s) instead of your voice.">
+        <input type="checkbox" id="fdv-test"> Level test: the PTT button sends a steady tone instead of my voice</label>
+      <p class="dim fdv-note" id="fdv-test-note" hidden>Use a dummy load or a free frequency. Hold the PTT button and raise the level above until the radio's <b>ALC</b> just starts to move,
+        then lower it a step: more is not better, an overdriven signal is distorted. The <b>power (PO)</b> should then be close to the radio's set power (the tone reads about 2 dB higher than the voice signal).
+        The tone stops by itself after 15 seconds. Untick this when you are done.</p></div>
     <details class="fdv-edit" id="fdv-repset" hidden><summary>FreeDV Reporter settings</summary>
       <p class="dim">Announce this station on <b>qso.freedv.org</b> while FreeDV is on (callsign, grid square, frequency, mode, whether you are transmitting) and list who else is on the air.
         Off by default. <b>Your callsign and grid square are shown publicly on that site.</b> The Pi connects only while FreeDV is switched on.</p>
@@ -169,6 +174,7 @@ export function createFreeDV(host, ctx) {
     } catch (x) { e.target.checked = !e.target.checked; toast(x.message); }
   };
 
+  $("fdv-test").onchange = (e) => { ctx.ui.levelTest = e.target.checked; $("fdv-test-note").hidden = !e.target.checked; };
   let lvTimer = 0;
   $("fdv-lvr").oninput = (e) => {
     $("fdv-lv").textContent = e.target.value;
@@ -195,6 +201,7 @@ export function createFreeDV(host, ctx) {
     $("fdv-data").checked = !!info.data_mode;
     $("fdv-lvr").value = info.tx_level_db; $("fdv-lv").textContent = info.tx_level_db;
     $("fdv-lvr").disabled = !admin;
+    $("fdv-test-row").hidden = S.user.role === "viewer" || !S.caps.features.ptt;
     $("fdv-lvnote").textContent = admin ? "" : "(set by an administrator)";
     $("fdv-edit").hidden = !admin;
     paintChannels();

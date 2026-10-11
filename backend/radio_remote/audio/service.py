@@ -33,6 +33,9 @@ TX_PREFILL_FRAMES = 10           # FreeDV: frames (200 ms) of modem tones that m
                                  # sender write 20 ms of silence into the middle of the signal, and RADE cannot follow a signal with holes in it
 TX_DRAIN_MAX_S = 0.7             # PTT release: the most the page waits for the queued tones to reach the radio (a cushion of 0.2 s plus the last modem frame normally needs about 0.4 s)
 TX_TAIL_S = 0.15                 # and a little more: aplay holds about 100 ms that has been handed over but not yet played
+TEST_TONE_HZ = 1500.0           # FreeDV level test: a steady tone in the middle of the modem's audio band
+TEST_TONE_PEAK = 19000.0        # its peak at a transmit level of 0 dB: what the modem's own peaks reach (the ALC reacts to the peaks)
+TEST_TONE_MAX_S = 15.0          # the tone stops by itself after this long
 SLOW_FRAME_MS = 20.0             # a FreeDV receive step that takes longer than one frame (20 ms) can make the capture fall behind on a slow PC
 LEVEL_INTERVAL_S = 0.1
 GATE_IDLE_S = 0.5               # seconds without a microphone frame after which the transmit state ends by itself (over WebSocket the page sends nothing once PTT is released)
@@ -135,6 +138,9 @@ class AudioService:
         self._tx_primed = True                           # FreeDV transmit: the cushion (TX_PREFILL_FRAMES) is in place and the tones are flowing
         self._tx_ending = False                          # PTT is being released: the queue running dry is the end of the over, not a hole
         self.tx_dropped = 0                              # FreeDV transmit: tone frames thrown away because the queue was full (the sender stalled for over 480 ms)
+        self._test_req = False                           # the PTT that is about to open the gate asked for the level test tone (set by the hub)
+        self._test_active = False                        # this over is a level test: a steady tone instead of the microphone's modem tones
+        self._test_n = 0                                 # samples of tone sent so far (phase and duration)
         self._tx_owner = None                            # conn_id of the peer whose frames opened the gate
         self.tx_underruns = 0                            # FreeDV transmit: holes written into the tones because the queue ran dry in mid-over (all overs)
         self._over_underruns = 0                         # the same, for the over in progress
@@ -236,6 +242,16 @@ class AudioService:
         from . import rade
         rade.reset(force=True)                       # also drops an older library that is already loaded: the newly installed one is used the next time FreeDV is switched on
         self.freedv_ok, self.freedv_reason = freedv.available()
+
+    def set_level_test(self, on: bool) -> None:
+        """The next PTT (or the one in progress) sends a steady tone at the modem level instead of the microphone: for setting the level by the ALC and power meters."""
+        self._test_req = bool(on) and self._fd_tx is not None
+
+    def _test_tone_frame(self) -> bytes:
+        n = np.arange(self._test_n, self._test_n + FRAME_SAMPLES)
+        self._test_n += FRAME_SAMPLES
+        amp = TEST_TONE_PEAK * self.freedv_tx_gain
+        return np.clip(np.rint(amp * np.sin(2 * np.pi * TEST_TONE_HZ * n / RATE)), -32768, 32767).astype("<i2").tobytes()
 
     def set_freedv_params(self, mode: str, tx_level_db: float) -> None:
         """Defaults from the config. A running session picks up the new transmit level at once; a mode change applies the next time it is switched on."""
@@ -544,12 +560,19 @@ class AudioService:
                 self._tx_owner = peer.conn_id
                 self._tx_primed = self._fd_tx is None    # FreeDV: wait for the cushion before the tones start
                 self._tx_ending = False
+                self._test_active, self._test_req, self._test_n = self._test_req and self._fd_tx is not None, False, 0
                 self._over_underruns = self._over_frames = 0
                 self._tx_proc_ms_max = 0.0
                 self._level("freedv_tx_underruns", 0)
                 if self._fd_tx is not None:              # a fresh modem for every transmission: nothing left over from the last one
                     self._fd_tx.close()
                     self._fd_tx = freedv.TxChain(self.freedv_mode, self.freedv_tx_gain)
+            if self._fd_tx is not None and self._test_active:
+                if self._test_n < TEST_TONE_MAX_S * RATE:           # level test: a steady tone at the modem level, one frame for every microphone frame
+                    tone = self._test_tone_frame()
+                    self._tx_q.append(tone)
+                    self._level("audio_tx_level", level_pct(tone))
+                return
             if self._fd_tx is not None:
                 # FreeDV: the microphone speech becomes modem tones. The mic gain still applies; the limiter does not (it would distort the
                 # tones), the modem output level (freedv.tx_level_db) takes its place.
