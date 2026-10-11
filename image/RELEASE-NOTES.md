@@ -42,6 +42,11 @@ and goes back by itself if the new version does not start. Settings and accounts
 | `radio-remote-rade-linux-aarch64.tar.xz` | the optional RADE library (FreeDV neural modes V1 and V2) for a Raspberry Pi, installed with `install_rade.sh` (the PC build is `…-x86_64.tar.xz`) |
 | `SHA256SUMS` | checksums of all of the above |
 
+### What is new in 1.1.23
+
+- **Scan between two frequencies (FT-991A).** The **Scan** button now opens a sheet: *Scan the memories* (the radio's own scan, as before) or a **range scan** with a start and a stop frequency, a step, the signal level to stop on (S1 to S9+20), how long to wait after a signal ends, and whether to carry on or stop the scan on a signal. The server steps the VFO from the start to the stop frequency, parks on a signal and loops back to the start. The radio only receives; the scan ends on PTT or Tune, on any change of frequency, mode, band or memory, when the operator leaves or loses control, or when the radio disconnects. While scanning the button reads **Stop scan**.
+- **Manual:** the FT-991A menu chapter now says menu 033 CAT RTS must be **DISABLE** (with ENABLE the radio stays silent and the app shows "radio offline", seen after a factory reset), and lists the port menus 109, 048, 077 and 072 (all USB): with them on DATA the app keys the radio but no audio reaches the transmitter.
+
 ### What is new in 1.1.22
 
 - **Scan button (FT-991A).** A **Scan** / **Stop scan** button beside Tune on the Radio tab starts and stops the radio's own scan (CAT `SC`): in memory mode it steps through the stored memory channels, otherwise it scans up from the VFO frequency. It is greyed out while transmitting, and follows the radio if the scan is ended on the radio itself. Verified on a real FT-991A.

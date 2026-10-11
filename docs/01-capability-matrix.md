@@ -64,6 +64,7 @@ How to read the table:
 | dual_receiver | - | - | works | works | - |
 | Power off over CAT | works | from the manual | works | works | from the manual |
 | Power on over CAT (from standby) | works | from the manual | works | works | from the manual |
+| range_scan | works | - | - | - | - |
 | rear_select | - | - | works | works | - |
 | scan | works | - | - | - | - |
 | WIRES DG-ID menu value | works | - | - | - | - |

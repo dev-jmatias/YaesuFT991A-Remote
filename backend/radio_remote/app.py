@@ -29,6 +29,7 @@ from .ratelimit import TokenBucket
 from .freedv_reporter import FreeDVReporter
 from .rigctl import RigctlServer
 from .safety import TxGuard, TxRefused
+from .scan import RangeScanner, ScanError
 
 log = logging.getLogger("web")
 
@@ -42,6 +43,7 @@ FLUSH_INTERVAL_S = 0.05
 MAX_WS_CLIENTS = 24
 CMD_RATE, CMD_BURST, MAX_STRIKES = 40.0, 80, 200
 LEASE_OPS = {"request_control", "respond_control", "release_control", "force_control"}
+SCAN_KEEPS = {"scan_range", "scan_range_stop", "set_level", "set_control", "freedv"}     # commands that leave a running range scan alone
 
 
 def _int(v, lo=None, hi=None) -> int:
@@ -73,6 +75,7 @@ class Hub:
         self.audio = None
         self.ui: dict = {}
         self.reporter = None                     # FreeDV Reporter (set by create_app)
+        self.scanner = RangeScanner(self)        # the start/stop frequency scan (scan.py)
         self._last_freq = driver.state.get("frequency") or 0
         self.mic_reset_delay_s = 15.0            # how long the radio stays on REAR after the last operator left (a reload or a network blip is not "left")
         self._mic_reset_task: asyncio.Task | None = None
@@ -216,7 +219,23 @@ class Hub:
             h = self.lease.holder
             raise CommandError(f"{h.user} has control. Request control to take over." if h
                                else "Nobody has control. Request control first.")
-        if typ == "set_frequency":
+        if typ not in SCAN_KEEPS or (typ == "set_control" and msg.get("name") == "scan"):
+            await self.scanner.stop("another command")                  # anything that touches the radio's frequency, mode, memory or keying ends the range scan
+        if typ == "scan_range":
+            if not caps.has("range_scan"):
+                raise CommandError("the range scan is not available for this radio")
+            vals = [_int(msg.get(k), 0) for k in ("start", "stop", "step", "level")]
+            hold = msg.get("hold_s", 2)
+            if isinstance(hold, bool) or not isinstance(hold, (int, float)):
+                raise CommandError("hold_s must be a number")
+            try:
+                await self.scanner.start(conn_id, *vals, float(hold), bool(msg.get("stop_on_signal", False)))
+            except ScanError as e:
+                raise CommandError(str(e)) from None
+            self.auth.audit("scan_range", session.username, f"{vals[0]}-{vals[1]} step {vals[2]}")
+        elif typ == "scan_range_stop":
+            await self.scanner.stop("stopped by the operator")
+        elif typ == "set_frequency":
             hz = _int(msg.get("hz"), 1)
             if not caps.frequency_ok(hz):
                 raise CommandError("frequency outside radio coverage")
@@ -562,6 +581,8 @@ async def ws_handler(request):
     finally:
         hub.clients.pop(conn_id, None)
         await app[K_GUARD].release_owner(conn_id)   # never leave TX keyed by a dead connection
+        if hub.scanner.owner == conn_id:
+            await hub.scanner.stop("the operator left")
         if app[K_AUDIO]:
             await app[K_AUDIO].close_conn(conn_id)
         await hub.lease.on_disconnect(conn_id)

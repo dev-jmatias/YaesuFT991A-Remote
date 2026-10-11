@@ -31,6 +31,7 @@ xit = true
 processor = true
 monitor = true
 tuner = true
+range_scan = true                     # the app steps the VFO between two frequencies (scan.py): receive only
 tuner_tune = true
 dgid = true
 memories = true

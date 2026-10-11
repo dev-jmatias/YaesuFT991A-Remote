@@ -1,0 +1,106 @@
+import asyncio
+import types
+
+import pytest
+
+from radio_remote.scan import RangeScanner, ScanError
+
+
+class FakeDriver:
+    def __init__(self, signals=None):
+        self.state = {"connected": True, "smeter": 0}
+        self.caps = types.SimpleNamespace(frequency_ok=lambda hz: 100_000 <= hz <= 470_000_000, has=lambda n: False)
+        self.freqs, self.signals = [], signals or {}
+
+    async def set_frequency(self, hz):
+        self.freqs.append(hz)
+        self.state["frequency"] = hz
+
+    async def read_signal(self, settle_s):
+        await asyncio.sleep(0)
+        self.state["smeter"] = self.signals.get(self.state["frequency"], 0)
+        return self.state["smeter"]
+
+
+class FakeHub:
+    def __init__(self, driver):
+        self.driver = driver
+        self.guard = types.SimpleNamespace(keyed=False)
+        self.lease = types.SimpleNamespace(holds=lambda c: c == "c1")
+        self.pushed = []
+
+    def push(self, fields):
+        self.pushed.append(fields)
+
+
+async def until(pred, t=2.0):
+    end = asyncio.get_running_loop().time() + t
+    while not pred():
+        assert asyncio.get_running_loop().time() < end, "timed out"
+        await asyncio.sleep(0.005)
+
+
+async def test_steps_between_the_two_frequencies_and_loops():
+    d = FakeDriver(); h = FakeHub(d); s = RangeScanner(h)
+    await s.start("c1", 145_000_000, 145_000_300, 100, 100, 0, False)
+    await until(lambda: len(d.freqs) >= 9)
+    assert d.freqs[:9] == [145_000_000, 145_000_100, 145_000_200, 145_000_300] * 2 + [145_000_000]      # up to the stop frequency, then back to the start
+    assert h.pushed[0]["range_scan"]["start"] == 145_000_000
+    await s.stop()
+    assert h.pushed[-1]["range_scan"] is None and not s.running
+
+
+async def test_waits_on_a_signal_then_carries_on_after_the_quiet_time(monkeypatch):
+    monkeypatch.setattr("radio_remote.scan.HOLD_POLL_S", 0.01)
+    d = FakeDriver({145_000_100: 200}); h = FakeHub(d); s = RangeScanner(h)
+    await s.start("c1", 145_000_000, 145_000_300, 100, 100, 0.05, False)
+    await until(lambda: d.freqs and d.freqs[-1] == 145_000_100 and s.running and h.pushed[-1]["range_scan"]["holding"])
+    n = len(d.freqs)
+    await asyncio.sleep(0.05)
+    assert len(d.freqs) == n                                             # parked on the signal
+    d.signals.clear(); d.state["smeter"] = 0                             # the signal ends
+    await until(lambda: len(d.freqs) > n)                                # and the scan moves on
+    await s.stop()
+
+
+async def test_stop_on_signal_ends_the_scan_on_that_frequency():
+    d = FakeDriver({145_000_200: 180}); h = FakeHub(d); s = RangeScanner(h)
+    await s.start("c1", 145_000_000, 145_000_300, 100, 100, 1, True)
+    await until(lambda: not s.running)
+    assert d.freqs[-1] == 145_000_200 and h.pushed[-1]["range_scan"] is None
+
+
+async def test_ends_when_transmitting_or_control_is_lost():
+    d = FakeDriver(); h = FakeHub(d); s = RangeScanner(h)
+    await s.start("c1", 145_000_000, 145_001_000, 100, 100, 0, False)
+    h.guard.keyed = True
+    await until(lambda: not s.running)
+    h.guard.keyed = False
+    await s.start("c1", 145_000_000, 145_001_000, 100, 100, 0, False)
+    h.lease.holds = lambda c: False                                      # somebody took control
+    await until(lambda: not s.running)
+
+
+async def test_refuses_bad_ranges_and_memory_mode():
+    d = FakeDriver(); h = FakeHub(d); s = RangeScanner(h)
+    for args in [(145_100_000, 145_000_000, 100), (145_000_000, 145_000_100, 1), (145_000_000, 600_000_000, 100), (145_000_000, 146_000_000, 10)]:
+        with pytest.raises(ScanError):
+            await s.start("c1", *args, 100, 0, False)
+    d.state["vfo_memory"] = "memory"
+    with pytest.raises(ScanError, match="memory"):
+        await s.start("c1", 145_000_000, 145_000_300, 100, 100, 0, False)
+    d.state["vfo_memory"] = "vfo"; h.guard.keyed = True
+    with pytest.raises(ScanError, match="transmitting"):
+        await s.start("c1", 145_000_000, 145_000_300, 100, 100, 0, False)
+    assert not s.running
+
+
+async def test_a_radio_error_ends_the_scan_without_crashing():
+    d = FakeDriver(); h = FakeHub(d); s = RangeScanner(h)
+
+    async def boom(hz):
+        raise RuntimeError("radio offline")
+    d.set_frequency = boom
+    await s.start("c1", 145_000_000, 145_000_300, 100, 100, 0, False)
+    await until(lambda: not s.running)
+    assert h.pushed[-1]["range_scan"] is None

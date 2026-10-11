@@ -1,6 +1,7 @@
 """Radio abstraction: capabilities + RadioDriver interface + state container."""
 from __future__ import annotations
 
+import asyncio
 import tomllib
 from abc import ABC, abstractmethod
 from pathlib import Path
@@ -129,6 +130,11 @@ class RadioDriver(ABC):
 
     async def tune_stop(self) -> None:
         return None
+
+    async def read_signal(self, settle_s: float) -> int | None:
+        """The S-meter reading (raw 0..255) a moment after a frequency change; the range scan calls this at every step."""
+        await asyncio.sleep(settle_s)
+        return self.state.get("smeter")
 
     def diagnostics(self) -> dict:
         """Driver-specific facts for the diagnostics page (never secrets)."""

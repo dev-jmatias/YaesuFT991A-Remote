@@ -230,6 +230,11 @@ class YaesuCatDriver(RadioDriver):
             if self._consec_timeouts >= self.t.max_timeouts:
                 raise RadioError("radio stopped answering") from None
 
+    async def read_signal(self, settle_s: float) -> int | None:
+        await asyncio.sleep(settle_s)
+        await self._read(self.proto.S_METER_READ, PRIO_METER)           # ask now: the periodic reading may still belong to the previous frequency
+        return self.state.get("smeter")
+
     async def _poll_meters(self) -> None:
         tx_cycle = self.proto.TX_METER_CYCLE            # PO, SWR, ALC, COMP
         i = 0
