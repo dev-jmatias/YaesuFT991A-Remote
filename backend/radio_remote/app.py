@@ -43,7 +43,7 @@ FLUSH_INTERVAL_S = 0.05
 MAX_WS_CLIENTS = 24
 CMD_RATE, CMD_BURST, MAX_STRIKES = 40.0, 80, 200
 LEASE_OPS = {"request_control", "respond_control", "release_control", "force_control"}
-SCAN_KEEPS = {"scan_range", "scan_range_stop", "set_level", "set_control", "freedv"}     # commands that leave a running range scan alone
+SCAN_KEEPS = {"scan_range", "scan_range_stop", "set_level", "set_control", "freedv", "set_eq", "rec"}     # commands that leave a running range scan alone
 
 
 def _int(v, lo=None, hi=None) -> int:
@@ -76,6 +76,7 @@ class Hub:
         self.ui: dict = {}
         self.reporter = None                     # FreeDV Reporter (set by create_app)
         self.scanner = RangeScanner(self)        # the start/stop frequency scan (scan.py)
+        self.eq_path: Path | None = None         # where the equalizer settings are kept (eq.json in the data folder)
         self._last_freq = driver.state.get("frequency") or 0
         self.mic_reset_delay_s = 15.0            # how long the radio stays on REAR after the last operator left (a reload or a network blip is not "left")
         self._mic_reset_task: asyncio.Task | None = None
@@ -235,6 +236,38 @@ class Hub:
             self.auth.audit("scan_range", session.username, f"{vals[0]}-{vals[1]} step {vals[2]}")
         elif typ == "scan_range_stop":
             await self.scanner.stop("stopped by the operator")
+        elif typ == "rec":
+            rec = self.audio.recorder if self.audio else None
+            if rec is None:
+                raise CommandError("audio is not available")
+            on = msg.get("on")
+            if not isinstance(on, bool):
+                raise CommandError("'on' must be boolean")
+            if on:
+                st = self.driver.state
+                rec.start({"frequency": st.get("frequency"), "mode": st.get("mode"),
+                           "freedv": self.audio.freedv_mode if self.audio.freedv_state().get("on") else None})
+            else:
+                rec.stop()                                               # saves the clip (a few MB at most) and drops the oldest beyond five
+            self.auth.audit("rec_start" if on else "rec_stop", session.username, None)
+        elif typ == "set_eq":
+            if not self.audio:
+                raise CommandError("audio is not available")
+            kw: dict = {}
+            for k in ("rx_on", "tx_on"):
+                if k in msg:
+                    if not isinstance(msg[k], bool):
+                        raise CommandError(f"{k} must be true or false")
+                    kw[k] = msg[k]
+            for k in ("rx", "tx"):
+                if k in msg:
+                    kw[k] = msg[k]
+            try:
+                self.audio.set_eq(**kw)
+            except ValueError as e:
+                raise CommandError(str(e)) from None
+            self.push({"eq": self.audio.eq_state()})                    # every connected page follows
+            self._save_eq()
         elif typ == "set_frequency":
             hz = _int(msg.get("hz"), 1)
             if not caps.frequency_ok(hz):
@@ -383,21 +416,74 @@ class Hub:
                 except Exception:
                     log.exception("FreeDV transmit drain failed; releasing PTT anyway")
             test = on and msg.get("test") is True
+            play = msg.get("play") if on else None
             if test and not (self.audio and self.audio.freedv_state().get("on")):
                 raise CommandError("the level test needs FreeDV switched on")
+            if play is not None and (test or not isinstance(play, str)):
+                raise CommandError("play must be the id of a recording (and not together with the level test)")
+            samples = None
+            if play is not None:
+                samples = self.audio.recorder.read(play) if self.audio and self.audio.recorder else None
+                if samples is None:
+                    raise CommandError("that recording no longer exists")
             if self.audio:
                 self.audio.set_level_test(test)                          # a steady tone instead of the microphone, for setting the level (ALC / power meters)
+                self.audio.arm_playback(samples, conn_id)                # or a recording of received audio, sent as the report
             try:
                 await self.guard.request(conn_id, on)
             except TxRefused as e:
                 if self.audio:
                     self.audio.set_level_test(False)
+                    self.audio.arm_playback(None)
                 raise CommandError(str(e)) from None
             self._broadcast({"t": "patch", "d": {"ptt_owner": self.guard.owner}})
             self.auth.audit("ptt_on" if on else "ptt_off", session.username, None)
         else:
             raise CommandError("unknown command")
         return None
+
+    def _playback_done(self) -> None:
+        """The recording that PTT was sending has ended: release PTT after a moment, so the last of it goes out and the operator need not catch the moment."""
+        if self.guard.keyed and self.guard.owner is not None:
+            asyncio.get_running_loop().create_task(self._release_after_playback(self.guard.owner))
+
+    async def _release_after_playback(self, owner: str) -> None:
+        await asyncio.sleep(0.4)
+        if not (self.guard.keyed and self.guard.owner == owner):
+            return
+        try:
+            if self.audio:
+                await self.audio.drain_freedv_tx()
+            await self.guard.request(owner, False)
+        except Exception:
+            log.exception("could not release PTT after the recording")
+            return
+        if self.audio:
+            self.audio.arm_playback(None)
+        self._broadcast({"t": "patch", "d": {"ptt_owner": self.guard.owner}})
+        log.info("the recording has been sent; PTT released")
+
+    def _save_eq(self) -> None:
+        if self.eq_path is None or self.audio is None:
+            return
+        try:
+            st = self.audio.eq_state()
+            tmp = self.eq_path.with_suffix(".tmp")
+            tmp.write_text(json.dumps({"rx": st["rx"], "tx": st["tx"]}), encoding="utf-8")
+            tmp.replace(self.eq_path)
+        except OSError:
+            log.warning("could not save the equalizer settings", exc_info=True)
+
+    def load_eq(self) -> None:
+        """At start: the settings saved by the last session (a missing or damaged file just leaves the equalizers flat and off)."""
+        if self.eq_path is not None and self.audio is not None:
+            try:
+                d = json.loads(self.eq_path.read_text(encoding="utf-8"))
+                self.audio.set_eq(rx_on=bool(d["rx"]["on"]), tx_on=bool(d["tx"]["on"]), rx=d["rx"]["gains"], tx=d["tx"]["gains"])
+            except (OSError, ValueError, KeyError, TypeError):
+                log.info("no usable saved equalizer settings; starting flat and off")
+        if self.audio is not None:
+            self.extra["eq"] = self.audio.eq_state()
 
     def _not_while_transmitting(self) -> None:
         """Changing which VFO transmits, or swapping VFOs, mid-transmission would move the signal: refuse."""
@@ -592,6 +678,7 @@ async def ws_handler(request):
             await hub.scanner.stop("the operator left")
         if app[K_AUDIO]:
             app[K_AUDIO].set_level_test(False)
+            app[K_AUDIO].arm_playback(None)
         if app[K_AUDIO]:
             await app[K_AUDIO].close_conn(conn_id)
         await hub.lease.on_disconnect(conn_id)
@@ -664,6 +751,36 @@ async def freedv_reporter_status(request):
 
 async def audio_status(request):
     return web.json_response(request.app[K_AUDIO].status())
+
+
+async def recordings_list(request):
+    rec = request.app[K_AUDIO].recorder if request.app[K_AUDIO] else None
+    return web.json_response({"recordings": rec.list() if rec else []})
+
+
+async def recording_file(request):
+    """One saved clip as a WAV file (the page's player streams it; ?download=1 saves it). Any signed-in user may listen. {clip}.raw.wav is the radio's own audio before FreeDV
+    decoding (kept only for clips recorded with FreeDV on), for analysis."""
+    rec = request.app[K_AUDIO].recorder if request.app[K_AUDIO] else None
+    p = rec.path(request.match_info["clip"], raw=request.path.endswith(".raw.wav")) if rec else None
+    if p is None:
+        raise web.HTTPNotFound(text="no such recording")
+    headers = {"Content-Type": "audio/wav", "Cache-Control": "no-store"}
+    if request.query.get("download") == "1":
+        headers["Content-Disposition"] = f'attachment; filename="{p.name}"'
+    return web.FileResponse(p, headers=headers)
+
+
+async def recording_delete(request):
+    if request[K_SESSION].role == "viewer":
+        raise web.HTTPForbidden(text="viewers cannot delete recordings")
+    app = request.app
+    rec = app[K_AUDIO].recorder if app[K_AUDIO] else None
+    if rec is None or not rec.delete(request.match_info["clip"]):
+        raise web.HTTPNotFound(text="no such recording")
+    app[K_HUB].push({"recordings": rec.list()})
+    app[K_AUTH].audit("rec_delete", request[K_SESSION].username, client_ip(request), request.match_info["clip"])
+    return web.json_response({"ok": True})
 
 
 async def memories(request):
@@ -802,6 +919,12 @@ def create_app(cfg: dict, driver: RadioDriver | None = None, auth: AuthStore | N
         on_levels=app[K_HUB].push,
     )
     app[K_AUDIO] = app[K_HUB].audio = audio
+    app[K_HUB].eq_path = Path(cfg["storage"]["data_dir"]) / "eq.json"
+    app[K_HUB].load_eq()
+    from .audio.recorder import Recorder
+    audio.recorder = Recorder(Path(cfg["storage"]["data_dir"]) / "recordings", on_change=app[K_HUB].push)    # the last five clips of received audio
+    audio.on_playback_done = app[K_HUB]._playback_done
+    app[K_HUB].extra.update(rec=audio.recorder.state(), recordings=audio.recorder.list())
     audio.set_freedv_params(cfg["freedv"]["mode"], cfg["freedv"]["tx_level_db"])
     app[K_HUB].ui = {"steps": cfg["ui"]["tuning_steps_hz"],
                      "meter": {"alc_full": cfg["ui"]["meter_alc_full"], "comp_full": cfg["ui"]["meter_comp_full"],
@@ -857,6 +980,10 @@ def create_app(cfg: dict, driver: RadioDriver | None = None, auth: AuthStore | N
     app.router.add_get("/api/freedv/reporter", freedv_reporter_status)
     app.router.add_get("/ws/audio", audio_ws)
     app.router.add_get("/api/audio/devices", audio_devices)
+    app.router.add_get("/api/recordings", recordings_list)
+    app.router.add_get(r"/api/recordings/{clip:[0-9a-z]+}.wav", recording_file)
+    app.router.add_get(r"/api/recordings/{clip:[0-9a-z]+}.raw.wav", recording_file)
+    app.router.add_post(r"/api/recordings/{clip:[0-9a-z]+}/delete", recording_delete)
     app.router.add_get("/api/memories", memories)
     app.router.add_post("/api/memories/{channel}", memory_write)
     app.router.add_get("/api/memories/{channel}/tone", memory_tone)

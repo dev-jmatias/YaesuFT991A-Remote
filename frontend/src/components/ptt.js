@@ -22,7 +22,7 @@ export function createPtt(host, ctx) {
   // stray touch or click does not transmit. It is a convenience of THIS device (remembered in the browser); the server's own TX
   // safeguards (permission, control, heartbeat, time limit) are unchanged.
   const ICON_LOCK = `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2" fill="currentColor" stroke="none"/><path class="shackle" d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>`;
-  const lockBtn = el(`<button class="lockbtn" aria-pressed="false" aria-label="Lock PTT">${ICON_LOCK}</button>`);
+  const lockBtn = el(`<button class="lockbtn" aria-pressed="false" aria-label="Lock the screen">${ICON_LOCK}</button>`);
   lockBtn.hidden = blocked;
   root.querySelector(".pttrow").append(lockBtn);
   lockBtn.onclick = () => { ctx.setPttLock(!ctx.ui.pttLock); if (ctx.ui.pttLock) release(); };      // (release is hoisted below)
@@ -35,7 +35,9 @@ export function createPtt(host, ctx) {
   const showCue = (on, text) => { cue.hidden = !on; if (on) cue.textContent = text; };
   const err = (m) => { root.querySelector(".err").textContent = m || ""; if (m) setTimeout(() => (root.querySelector(".err").textContent = ""), 4000); };
 
+  let sendingClip = false;
   const release = () => {
+    sendingClip = false;
     latched = false; sawTx = false; showCue(false); btn.classList.remove("latched");
     if (!held) return;
     held = false;
@@ -71,6 +73,20 @@ export function createPtt(host, ctx) {
   window.addEventListener("blur", () => { if (!latched) release(); }, { signal });
   document.addEventListener("visibilitychange", () => document.hidden && release(), { signal });
 
+  // Voice keyer: send a recording over the air. The page keys PTT like a latched transmission (heartbeat, time limit, lock and the rest apply), the server plays the clip on its own
+  // clock and releases PTT when it ends; a tap on the PTT button or on Stop ends it earlier.
+  async function sendClip(id) {
+    if (btn.disabled || held || !id) return;
+    held = true; latched = true; sendingClip = true; sawTx = false;
+    btn.classList.add("latched");
+    showCue(true, "Sending the recording - tap the button to stop");
+    try {
+      await sock.send("ptt", { on: true, play: id });
+      hb = setInterval(() => sock.ping("ptt_hb"), 250);
+    } catch (x) { held = false; latched = false; sendingClip = false; btn.classList.remove("latched"); showCue(false); err(x.message); }
+  }
+  ctx.pttApi = { sendClip, stop: release, get sending() { return sendingClip; } };
+
   return {
     update() {
       const s = S.state, tx = !!s.tx, locked = !!ctx.ui.pttLock;
@@ -81,8 +97,8 @@ export function createPtt(host, ctx) {
       btn.disabled = blocked || (locked && !tx);                     // a transmission that is already running can still be released
       lockBtn.classList.toggle("on", locked);
       lockBtn.setAttribute("aria-pressed", String(locked));
-      lockBtn.title = locked ? "PTT and TUNE are locked on this device. Tap to unlock." : "Lock PTT and TUNE on this device so a stray touch cannot transmit";
-      if (!blocked) btn.textContent = tx ? (s.tx_source === "radio" ? "TX (radio keyed)" : latched ? "TRANSMITTING - TAP TO STOP" : "TRANSMITTING") : locked ? "PTT LOCKED" : ctx.ui.levelTest && s.freedv_mode ? "HOLD FOR LEVEL TEST TONE" : "HOLD TO TRANSMIT";
+      lockBtn.title = locked ? "The screen is locked on this device (PTT, TUNE and every control). Tap to unlock." : "Lock the whole screen on this device so a stray touch changes nothing and cannot transmit";
+      if (!blocked) btn.textContent = tx ? (s.tx_source === "radio" ? "TX (radio keyed)" : latched ? "TRANSMITTING - TAP TO STOP" : "TRANSMITTING") : locked ? "SCREEN LOCKED" : ctx.ui.levelTest && s.freedv_mode ? "HOLD FOR LEVEL TEST TONE" : "HOLD TO TRANSMIT";
       if (tx && !tick) {
         txStart = performance.now();
         tick = setInterval(() => {

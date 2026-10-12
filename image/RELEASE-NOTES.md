@@ -42,6 +42,13 @@ and goes back by itself if the new version does not start. Settings and accounts
 | `radio-remote-rade-linux-aarch64.tar.xz` | the optional RADE library (FreeDV neural modes V1 and V2) for a Raspberry Pi, installed with `install_rade.sh` (the PC build is `…-x86_64.tar.xz`) |
 | `SHA256SUMS` | checksums of all of the above |
 
+### What is new in 1.1.25
+
+- **8-band equalizer for what you hear (RX) and what you send (TX).** On the **Audio** tab: 63 Hz, 125, 250, 500, 1k, 2k, 4k and 8k, each -12 to +12 dB, with presets (Voice, Bass cut, Treble cut, Bass boost, Treble boost) and Reset. Two buttons on the Radio tab after Memories, **RX EQ** and **TX EQ**, switch each one on and off. One setting for everyone connected, kept across restarts. FreeDV's modem tones are never equalized: the receive equalizer works on the decoded speech and the transmit one on your voice before the modem. It adds about 10 ms of delay while on.
+- **Recorder** (a block under *Mode* on the Radio tab, four buttons of one size): **REC** records what you hear (up to 2 minutes, before the equalizer, nothing while you transmit), **Play** plays the last recording in the browser, **Send** sends the last recording over the air like a **voice keyer** (PTT is keyed, the clip plays on the server's own clock, PTT is released by itself when it ends; the usual safeguards apply), and **Recordings** opens the last five with player, download, send and delete. A new recording replaces the oldest. With FreeDV on, each recording also keeps the **radio's own audio before decoding** (16 kHz): the file to analyse why a station decodes badly.
+- **The lock switch beside PTT now locks the whole screen** of the device: every control, the top bar, the tabs and the keyboard shortcuts stop responding and only the padlock stays live (scrolling still works). Locking while a Tune is running stops the tune first.
+- **Tuning step block:** the buttons (- step +, Tune, Scan, Memories, RX EQ, TX EQ) are on one line and one size on wide screens (VFO tools gives way), get a full-width row on tablets and a tidy grid on phones.
+
 ### What is new in 1.1.24
 
 - **FreeDV level test.** A **Level test** checkbox on the FreeDV tab makes the PTT button send a steady 1500 Hz tone at the modem level (up to 15 seconds) instead of your voice, so the transmit level can be set by the radio's ALC and power meters without another station listening. Hold PTT and raise the level until the ALC just starts to move; the manual has the steps and a measured example.

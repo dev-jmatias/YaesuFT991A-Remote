@@ -14,6 +14,7 @@ import fractions
 import logging
 import secrets
 import time
+import types
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Callable
@@ -21,6 +22,8 @@ from typing import Callable
 import numpy as np
 
 from . import devices, freedv, opus_tuning
+from . import eq as eqmod
+from . import recorder as recmod
 from .backends import (AlsaSink, AlsaSource, AudioDeviceError, RecordingSink, Sink, Source, ToneSource)
 from .levels import FRAME_BYTES, FRAME_SAMPLES, RATE, apply_gain, db_to_gain, level_pct
 
@@ -138,6 +141,18 @@ class AudioService:
         self._tx_primed = True                           # FreeDV transmit: the cushion (TX_PREFILL_FRAMES) is in place and the tones are flowing
         self._tx_ending = False                          # PTT is being released: the queue running dry is the end of the over, not a hole
         self.tx_dropped = 0                              # FreeDV transmit: tone frames thrown away because the queue was full (the sender stalled for over 480 ms)
+        self.recorder: recmod.Recorder | None = None     # set by the app: the last clips of received audio
+        self._player_task = None
+        self._player_running = False                     # a clip is being fed by the server's own clock: the microphone frames are ignored
+        self._play_req = None                            # a clip (16 kHz samples) the next PTT sends instead of the microphone (set by the hub)
+        self._play_data = None                           # the clip being sent in this over
+        self._play_pos = 0
+        self._play_up = None
+        self._play_done = False
+        self.on_playback_done: Callable[[], None] | None = None
+        self.eq_rx = eqmod.Equalizer()                   # the 8-band equalizers: what the listeners hear / what the operator sends (never the modem tones)
+        self.eq_tx = eqmod.Equalizer()
+        self._play_active = False
         self._test_req = False                           # the PTT that is about to open the gate asked for the level test tone (set by the hub)
         self._test_active = False                        # this over is a level test: a steady tone instead of the microphone's modem tones
         self._test_n = 0                                 # samples of tone sent so far (phase and duration)
@@ -242,6 +257,62 @@ class AudioService:
         from . import rade
         rade.reset(force=True)                       # also drops an older library that is already loaded: the newly installed one is used the next time FreeDV is switched on
         self.freedv_ok, self.freedv_reason = freedv.available()
+
+    def set_eq(self, rx_on=None, tx_on=None, rx=None, tx=None) -> None:
+        """Raises ValueError for bad gains (eq.clean_gains)."""
+        self.eq_rx.set(on=rx_on, gains=rx)
+        self.eq_tx.set(on=tx_on, gains=tx)
+
+    def eq_state(self) -> dict:
+        return {"rx": self.eq_rx.state(), "tx": self.eq_tx.state(), "bands": list(eqmod.BANDS_HZ), "max_db": eqmod.MAX_DB}
+
+    def arm_playback(self, samples, owner: str | None = None) -> None:
+        """The next PTT sends this recording (16 kHz int16 samples) in place of the microphone; None cancels. With an owner (the connection that is keying) the clip is fed on the
+        server's own clock as soon as that connection holds PTT, like a voice keyer: it does not wait for the browser's microphone frames (which are ignored meanwhile)."""
+        t, self._player_task = self._player_task, None
+        if t is not None and not t.done():
+            t.cancel()
+        self._player_running = False
+        self._play_req = None if samples is None else samples
+        if samples is not None and owner is not None:
+            self._player_running = True
+            self._player_task = asyncio.get_running_loop().create_task(self._player(owner))
+
+    async def _player(self, owner: str) -> None:
+        peer = types.SimpleNamespace(conn_id=owner)
+        loop = asyncio.get_running_loop()
+        try:
+            waited = 0.0
+            while not self.tx_gate(owner):                               # PTT is being keyed
+                await asyncio.sleep(0.02)
+                waited += 0.02
+                if waited > 3.0:
+                    self._play_req = None
+                    return
+            nxt = loop.time()
+            while self.tx_gate(owner):                                   # until the clip has gone out, or PTT is released / lost / times out
+                self._mic_frame(peer, bytes(FRAME_BYTES), synthetic=True)
+                if self._play_done:
+                    return
+                nxt += 0.02
+                await asyncio.sleep(max(0.0, nxt - loop.time()))
+        finally:
+            self._player_running = False
+
+    def _play_frame(self) -> bytes:
+        """The next 20 ms of the clip as 48 kHz audio (silence once it has ended, after telling the hub so it can release PTT)."""
+        n = recmod.FRAME_IN
+        if self._play_data is None or self._play_pos >= len(self._play_data):
+            if not self._play_done:
+                self._play_done = True
+                if self.on_playback_done:
+                    self.on_playback_done()
+            return bytes(FRAME_BYTES)
+        chunk = self._play_data[self._play_pos:self._play_pos + n].astype(np.float64)
+        self._play_pos += n
+        if len(chunk) < n:
+            chunk = np.concatenate((chunk, np.zeros(n - len(chunk))))
+        return np.clip(np.rint(self._play_up.process(chunk)), -32768, 32767).astype("<i2").tobytes()
 
     def set_level_test(self, on: bool) -> None:
         """The next PTT (or the one in progress) sends a steady tone at the modem level instead of the microphone: for setting the level by the ALC and power meters."""
@@ -382,6 +453,7 @@ class AudioService:
                     # a boost must not clip hard, but with FreeDV on the limiter would distort the modem signal the decoder works on (it hard-clips at full scale instead)
                     pcm = apply_gain(await src.read_frame(), self.rx_gain, limit=self.rx_gain > 1.0 and self._fd_rx is None)
                     self._level("audio_rx_level", level_pct(pcm))                # the meter shows what the radio sends (the modem tones)
+                    raw_pcm = pcm                                                # the radio's own audio, before FreeDV decodes it (the recorder keeps it for analysis)
                     if self._fd_rx is not None and self._tx_gate_open:
                         pcm = bytes(FRAME_BYTES)                                 # transmitting: never decode (and replay) our own signal
                         self._rx_hold = RX_HOLD_FRAMES
@@ -426,6 +498,9 @@ class AudioService:
                         except Exception:
                             log.exception("FreeDV receive failed; switching it off")
                             self.set_freedv(False)
+                    if self.recorder is not None and self.recorder.on and not self._tx_gate_open:
+                        self.recorder.frame(pcm, raw_pcm if self._fd_rx is not None else None)      # what the receiver produced, before the equalizer; not while we transmit
+                    pcm = self.eq_rx.process(pcm)                                # the listeners' equalizer: speech (decoded, when FreeDV is on), never the modem tones
                     self._rx_q.append(pcm)
                     self._rx_event.set()
                     self._push_ws_peers(pcm)
@@ -549,8 +624,10 @@ class AudioService:
                     p.out.get_nowait()                         # a slow link loses its oldest audio instead of falling behind
                 p.out.put_nowait(pkt)
 
-    def _mic_frame(self, peer: Peer, pcm: bytes) -> None:
-        """One 20 ms mic frame from a peer (either transport). THE GATE: it only passes while this peer owns an active transmission."""
+    def _mic_frame(self, peer: Peer, pcm: bytes, synthetic: bool = False) -> None:
+        """One 20 ms mic frame from a peer (either transport). THE GATE: it only passes while this peer owns an active transmission. (synthetic: the recording player's own frame.)"""
+        if self._player_running and not synthetic:
+            return                                           # a recording is being sent: the microphone is not used
         self.frames_in += 1
         if self.tx_gate(peer.conn_id):
             self._gate_seen = time.monotonic()
@@ -561,6 +638,10 @@ class AudioService:
                 self._tx_primed = self._fd_tx is None    # FreeDV: wait for the cushion before the tones start
                 self._tx_ending = False
                 self._test_active, self._test_req, self._test_n = self._test_req and self._fd_tx is not None, False, 0
+                self.eq_tx.reset()
+                self._play_active = self._play_req is not None
+                self._play_data, self._play_req, self._play_pos, self._play_done = self._play_req, None, 0, False
+                self._play_up = recmod.Interpolator() if self._play_active else None
                 self._over_underruns = self._over_frames = 0
                 self._tx_proc_ms_max = 0.0
                 self._level("freedv_tx_underruns", 0)
@@ -573,6 +654,8 @@ class AudioService:
                     self._tx_q.append(tone)
                     self._level("audio_tx_level", level_pct(tone))
                 return
+            pcm = self._play_frame() if self._play_active else self.eq_tx.process(pcm)      # a recording is sent as it is (no equalizer) in place of the microphone
+            # the operator's equalizer, on the microphone speech (before the modem, or before the limiter)
             if self._fd_tx is not None:
                 # FreeDV: the microphone speech becomes modem tones. The mic gain still applies; the limiter does not (it would distort the
                 # tones), the modem output level (freedv.tx_level_db) takes its place.

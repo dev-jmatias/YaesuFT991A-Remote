@@ -707,3 +707,62 @@ html[data-tablet] .app[data-tab=freedv] [data-pane=vfo], html[data-tablet] .app[
 .steprow .tune { margin-left: 10px; }
 .vfob-read { text-align: center; }
 .vfob-ctl .bform { justify-content: center; }.meter-off { opacity: .45; }
+
+/* equalizer (Audio tab) and its two buttons on the Radio tab */
+.eqcard { margin-top: 14px; padding: 10px; border: 1px solid var(--line2); border-radius: 12px; background: var(--panel); }
+.eqnote { margin: 4px 0 10px; font-size: .82rem; }
+.eqblock { margin: 10px 0 14px; }
+.eqhead { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 6px; }
+.eqhead b { margin-right: auto; }
+.eqbands { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 2px; }
+.eqband { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; }
+.eqval { font-size: .72rem; color: var(--dim); min-height: 1em; }
+.eqhz { font-size: .78rem; color: var(--dim); }
+.eqslide { position: relative; width: 100%; height: 130px; }
+.eqslide input { position: absolute; left: 50%; top: 50%; width: 120px; height: 30px; margin: 0; padding: 0; transform: translate(-50%, -50%) rotate(-90deg); touch-action: none; }
+.eqblock.flat .eqval { opacity: .55; }
+.eqbtn.on { box-shadow: inset 0 0 0 1px #2bb8cf; }
+
+/* Tuning step block: the buttons are on one line and of one size. Wide screens: the block takes the width it needs and VFO tools gives way; tablets: it gets a full-width row;
+   phones: a tidy grid of equal buttons (- step + / Tune Scan Memories / RX EQ TX EQ). */
+.steprow .tune { margin-left: 0; }
+@media (min-width: 700px) {
+  .block.tuning .steprow { flex-wrap: nowrap !important; gap: 4px; }
+  .block.tuning .steprow > button { white-space: nowrap; }
+  .block.tuning .steprow > button:not(#dn):not(#up) { flex: 1 1 6.4em; min-width: 6.4em; padding-left: 14px; padding-right: 8px; }
+  .block.tuning .steprow > button#dn, .block.tuning .steprow > button#up { flex: 0 0 34px; padding-left: 0; padding-right: 0; }
+  .block.tuning .steprow > select { flex: 0 0 auto; }
+}
+@media (min-width: 1060px) { .toolrow { grid-template-columns: minmax(0, 1fr) auto; } }
+@media (min-width: 700px) and (max-width: 1059px) { .toolrow { grid-template-columns: minmax(0, 1fr); gap: 0; } }
+@media (max-width: 699px) {
+  .block.tuning .steprow { display: grid !important; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px; }
+  .block.tuning .steprow > button#dn, .block.tuning .steprow > button#up { grid-column: span 1; padding-left: 0; padding-right: 0; }
+  .block.tuning .steprow > select { grid-column: span 4; }
+  .block.tuning .steprow > button:not(#dn):not(#up) { grid-column: span 2; white-space: nowrap; padding-left: 12px; padding-right: 4px; }
+  .block.tuning .steprow > button[data-tovfo] { grid-column: span 6; }
+}
+
+/* recordings (Audio tab) */
+.reccard { margin-top: 14px; padding: 10px; border: 1px solid var(--line2); border-radius: 12px; background: var(--panel); }
+.recnote { margin: 4px 0 10px; font-size: .82rem; }
+.recctl { align-items: center; gap: 10px; margin-bottom: 8px; }
+.recbtn { min-width: 6.5em; font-weight: 700; color: #ff9aa9; }
+.recbtn.on { background: linear-gradient(180deg, #ff5a75, var(--red)); border-color: transparent; color: #fff; animation: pulse 1s infinite; }
+.rectime { font-variant-numeric: tabular-nums; color: var(--dim); }
+.recarmed { margin: 6px 0 8px; padding: 6px 8px; border: 1px dashed var(--yellow); border-radius: 8px; font-size: .84rem; }
+.recrow { padding: 7px 0; border-top: 1px solid var(--line); display: grid; gap: 5px; }
+.recrow.armed { outline: 1px solid var(--yellow); outline-offset: 2px; border-radius: 6px; }
+.reclabel { font-size: .84rem; }
+.reclist audio, [data-pane=audio] .reclist audio { display: block !important; width: 100%; height: 34px; }
+.btnlink { display: inline-flex; align-items: center; min-height: 30px; padding: 2px 10px; border: 1px solid var(--line2); border-radius: 8px; color: inherit; text-decoration: none; font-size: .82rem; }
+
+/* the lock switch locks the whole screen: everything but the PTT area is inert (see applyScreenLock in pages/radio.js) */
+.screen-locked [inert] { opacity: .78; user-select: none; }
+
+/* the Recorder block under Mode: four buttons of one size */
+.recbar { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; }
+.recbar button { white-space: nowrap; padding-left: 14px; padding-right: 6px; }
+.recbar .recb { color: #ff9aa9; font-weight: 700; }
+.recbar .recb.on { background: linear-gradient(180deg, #ff5a75, var(--red)); border-color: transparent; color: #fff; animation: pulse 1s infinite; }
+.recbar .recb.on::before { background: #fff; }

@@ -5,6 +5,8 @@ import { createVfoB } from "../components/vfo-b.js";
 import { createTuningStrip } from "../components/tuning-strip.js";
 import { createDgHint, createFilters, createLevels, createSquelch, createTuneButton } from "../components/controls.js";
 import { createScanButton } from "../components/scan.js";
+import { createEqButtons, createEqualizer } from "../components/equalizer.js";
+import { createRecBar } from "../components/recordings.js";
 import { createPtt } from "../components/ptt.js";
 import { createFreeDV } from "../components/freedv.js";
 import { createMemoryButtons } from "../components/memories.js";
@@ -76,6 +78,7 @@ export function renderRadio(root, { onLogout, onAuthLost }) {
     setStep: (hz) => { ui.step = hz; repaint(); },
     setPttLock: (on) => {
       ui.pttLock = !!on;
+      if (on && S.state.tuning) send("tune_stop");                  // locking the screen must not leave a tune running (its button is locked too)
       try { localStorage.setItem("rr.pttLock", on ? "1" : "0"); } catch { /* not remembered */ }
       repaint();
     },
@@ -83,7 +86,16 @@ export function renderRadio(root, { onLogout, onAuthLost }) {
   };
 
   let lastBand = null, stepBeforeAir = null;
-  function repaint() { for (const p of parts) p.update?.(); paintChrome(); }
+  function repaint() { for (const p of parts) p.update?.(); paintChrome(); applyScreenLock(); }
+
+  // The lock switch beside the PTT button locks the WHOLE screen, not only PTT and TUNE: everything except the PTT area (which holds the lock switch itself) becomes inert, so a stray
+  // touch, click, wheel turn or key press changes nothing. Scrolling still works. (An "inert" subtree takes no input at all.)
+  function applyScreenLock() {
+    const lock = !!ui.pttLock;
+    for (const n of [view.querySelector("header.topbar"), view.querySelector(".radiobar"), view.querySelector("nav.tabs"), ...view.querySelectorAll("[data-pane]:not([data-pane=ptt])")]) n?.toggleAttribute("inert", lock);
+    document.querySelectorAll(".sheet").forEach((n) => n.toggleAttribute("inert", lock));
+    view.classList.toggle("screen-locked", lock);
+  }
 
   function paintChrome() {
     const s = S.state;
@@ -229,6 +241,7 @@ export function renderRadio(root, { onLogout, onAuthLost }) {
     parts.push(createTuneButton(stepRow, ctx));                       // TUNE (antenna tuner) right next to the tuning step
     parts.push(createScanButton(stepRow, ctx));                       // SCAN / Stop scan beside TUNE
     parts.push(createMemoryButtons(stepRow, ctx));                    // Memories / Back to VFO beside TUNE
+    parts.push(createEqButtons(stepRow, ctx));                        // RX EQ / TX EQ on-off after Memories (settings: Audio tab)
 
     const bandBox = block(vfo, "Band select");
     const bands = c.bands.filter((b) => (b !== "2m" || c.features.vhf) && (b !== "70cm" || c.features.uhf));
@@ -263,6 +276,9 @@ export function renderRadio(root, { onLogout, onAuthLost }) {
     parts.push(createDgHint(modeBox, ctx));
     parts.push(createSquelch(modeBox, ctx));
 
+    // Recorder (under Mode): REC / Play / Send (voice keyer) / the last five recordings
+    if (S.audio?.available && S.state.rec) parts.push(createRecBar(block(vfo, "Recorder"), ctx));
+
 
     // PTT
     const pp = pane("ptt", "", "pttpane");
@@ -280,6 +296,7 @@ export function renderRadio(root, { onLogout, onAuthLost }) {
     const ap = pane("audio", "");
     audio.mount(ap);
     parts.push({ update: () => audio.update(S.state) });
+    parts.push(createEqualizer(ap, ctx));                              // the 8-band equalizers, under the audio controls
 
     // FreeDV (when the RADE library is installed, or can be installed from the tab's button; see docs/freedv.md): a tab beside Audio on phones and tablets, a card under the Levels/Audio row on wide screens
     const fdOk = !!(S.audio?.freedv?.show ?? S.audio?.freedv?.available);
@@ -312,6 +329,7 @@ export function renderRadio(root, { onLogout, onAuthLost }) {
 
     // Keyboard: arrows tune (when no form control has focus), PageUp/PageDown = x10
     window.addEventListener("keydown", (e) => {
+      if (ui.pttLock) return;                                      // the screen is locked
       if (/^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement?.tagName) || document.activeElement?.closest?.(".dial")) return;
       const k = { ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1, PageUp: 10, PageDown: -10 }[e.key];
       if (k) { e.preventDefault(); ctx.tune(k * ui.step); }

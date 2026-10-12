@@ -114,7 +114,7 @@ Rules that always apply:
 * Only the client with control can transmit; microphone audio reaches the radio only while that client is keyed.
 * **The microphone button** (top right of the frequency panel) does two things at once: it arms your microphone in the browser and sets the radio's input to **REAR**, so the radio takes its audio from the USB port. On an FT-991A that is menu 106 (SSB MIC SELECT), 045 (AM MIC SELECT), 074 (FM MIC SELECT) and 070 (DATA IN SELECT), all together, so it works in every mode. Switching it off puts 106, 045 and 074 back to **MIC** (the front microphone), which is what local operation needs; so does the automatic return when the last operator has left (a menu left on REAR by hand is put back too). Menu 070 is left on REAR: it only matters in the DATA modes, and REAR is how digital programs and the FreeDV guide use it. It is locked while the radio is transmitting. If you close the page without switching it off, the Pi puts the radio back on **MIC** by itself about 15 seconds after the last operator (or administrator) connection has gone; a page reload or a short network drop does not trigger it, and a listen-only account does not keep it on REAR. It is left alone while the radio is transmitting.
 * **Tune** makes the radio transmit a carrier for a few seconds while the antenna tuner matches. Use an antenna or dummy load.
-* **Lock PTT** (the round padlock beside *Hold to transmit*) prevents accidental transmissions from **this device**:
+* **Lock** (the round padlock beside *Hold to transmit*) locks the **whole screen** of **this device**, so nothing can be changed or transmitted by accident: the frequency, the buttons, the tabs and the keyboard shortcuts stop responding, and only the padlock stays live (scrolling still works). It also prevents accidental transmissions:
   while it is on (amber) the PTT button and **Tune** cannot be used. A transmission that is already running can still be
   released, and switching the lock on while holding PTT lets go at once. The choice is remembered in this browser; other devices have
   their own switch. It is a convenience, not a security setting: the server's own safeguards (permission, control, heartbeat, time
@@ -134,6 +134,26 @@ Rules that always apply:
   than boosting in software; see [audio](04-audio.md).
 * **Radio meters (raw)** shows the radio's raw 0-255 ALC, COMP, power, SWR and S values and the ALC/COMP peak of the last transmission,
   which is what to read when calibrating the percentage scales.
+
+### Equalizer
+
+The **Audio** tab has an 8-band equalizer for what you hear (**Receive**) and for what you send (**Transmit**): 63 Hz, 125, 250, 500, 1k, 2k, 4k and 8k, each from -12 to +12 dB, with a few presets (Voice, Bass cut, Treble cut, Bass boost, Treble boost) and Reset.
+It is one setting for the whole radio, shared by everyone connected, and it is kept across restarts. Two buttons on the Radio tab, **RX EQ** and **TX EQ** (after Memories), switch each equalizer on and off
+so you can compare. It adds about 10 ms of delay while it is on. With FreeDV the equalizer works on the speech only: the modem tones are never equalized.
+
+### Recorder (REC, Play, Send, Recordings)
+
+A **Recorder** block under *Mode* on the Radio tab has four buttons of one size:
+
+* **REC** records what you hear (the decoded speech when FreeDV is on, otherwise the radio's audio, before the equalizer; nothing is recorded while you transmit), up to two minutes. The button shows the elapsed time; press it again to stop.
+  The Pi keeps the **last five** clips: a new recording replaces the oldest.
+* **Play** plays the last recording here, in your browser (it is not sent to the radio).
+* **Send** sends the last recording over the air like a **voice keyer**: PTT is keyed, the clip plays, and PTT is released by itself when it ends. It uses the same safeguards as any transmission (control, heartbeat,
+  time limit, the screen lock) and does not need your microphone. Tap the PTT button or **Stop** to end it earlier. Use it to give another station an audio report: send only audio you may retransmit, such as
+  their own signal back to them, and give your callsign.
+* **Recordings** opens the last five, each with a player, **Download** (a WAV file), **Send** and **Delete**.
+  When FreeDV is on, each recording also keeps the **radio's own audio before decoding** (the modem signal, 16 kHz): **Download raw radio audio** gives that file. It is what to analyse when a station decodes
+  badly (sync, SNR, frequency offset, level, gaps): the speech alone cannot show why.
 
 ## 7. Remote access
 
