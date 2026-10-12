@@ -43,7 +43,7 @@ FLUSH_INTERVAL_S = 0.05
 MAX_WS_CLIENTS = 24
 CMD_RATE, CMD_BURST, MAX_STRIKES = 40.0, 80, 200
 LEASE_OPS = {"request_control", "respond_control", "release_control", "force_control"}
-SCAN_KEEPS = {"scan_range", "scan_range_stop", "set_level", "set_control", "freedv", "set_eq", "rec"}     # commands that leave a running range scan alone
+SCAN_KEEPS = {"scan_range", "scan_range_stop", "set_level", "set_control", "freedv", "set_eq", "set_dyn", "rec"}     # commands that leave a running range scan alone
 
 
 def _int(v, lo=None, hi=None) -> int:
@@ -250,6 +250,15 @@ class Hub:
             else:
                 rec.stop()                                               # saves the clip (a few MB at most) and drops the oldest beyond five
             self.auth.audit("rec_start" if on else "rec_stop", session.username, None)
+        elif typ == "set_dyn":
+            if not self.audio:
+                raise CommandError("audio is not available")
+            try:
+                self.audio.set_dyn({k: msg[k] for k in ("leveler", "limiter") if k in msg})
+            except ValueError as e:
+                raise CommandError(str(e)) from None
+            self.push({"dyn": self.audio.dyn_state()})
+            self._save_eq()
         elif typ == "set_eq":
             if not self.audio:
                 raise CommandError("audio is not available")
@@ -259,7 +268,7 @@ class Hub:
                     if not isinstance(msg[k], bool):
                         raise CommandError(f"{k} must be true or false")
                     kw[k] = msg[k]
-            for k in ("rx", "tx"):
+            for k in ("rx", "tx", "rx_cut", "tx_cut"):
                 if k in msg:
                     kw[k] = msg[k]
             try:
@@ -469,7 +478,7 @@ class Hub:
         try:
             st = self.audio.eq_state()
             tmp = self.eq_path.with_suffix(".tmp")
-            tmp.write_text(json.dumps({"rx": st["rx"], "tx": st["tx"]}), encoding="utf-8")
+            tmp.write_text(json.dumps({"rx": st["rx"], "tx": st["tx"], "dyn": self.audio.tx_dyn.state()}), encoding="utf-8")
             tmp.replace(self.eq_path)
         except OSError:
             log.warning("could not save the equalizer settings", exc_info=True)
@@ -479,11 +488,17 @@ class Hub:
         if self.eq_path is not None and self.audio is not None:
             try:
                 d = json.loads(self.eq_path.read_text(encoding="utf-8"))
-                self.audio.set_eq(rx_on=bool(d["rx"]["on"]), tx_on=bool(d["tx"]["on"]), rx=d["rx"]["gains"], tx=d["tx"]["gains"])
+                from .audio import eq as eqmod
+                conv = lambda side: eqmod.from_old_gains(side["gains"]) if "gains" in side else side["bands"]       # the first version saved 8 fixed gains
+                self.audio.set_eq(rx_on=bool(d["rx"]["on"]), tx_on=bool(d["tx"]["on"]), rx=conv(d["rx"]), tx=conv(d["tx"]),
+                                  rx_cut=d["rx"].get("cut", {"low": 0, "high": 0}), tx_cut=d["tx"].get("cut", {"low": 0, "high": 0}))
+                if "dyn" in d:
+                    self.audio.set_dyn(d["dyn"])
             except (OSError, ValueError, KeyError, TypeError):
                 log.info("no usable saved equalizer settings; starting flat and off")
         if self.audio is not None:
             self.extra["eq"] = self.audio.eq_state()
+            self.extra["dyn"] = self.audio.dyn_state()
 
     def _not_while_transmitting(self) -> None:
         """Changing which VFO transmits, or swapping VFOs, mid-transmission would move the signal: refuse."""

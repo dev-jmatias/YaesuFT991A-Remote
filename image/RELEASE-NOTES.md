@@ -42,6 +42,13 @@ and goes back by itself if the new version does not start. Settings and accounts
 | `radio-remote-rade-linux-aarch64.tar.xz` | the optional RADE library (FreeDV neural modes V1 and V2) for a Raspberry Pi, installed with `install_rade.sh` (the PC build is `…-x86_64.tar.xz`) |
 | `SHA256SUMS` | checksums of all of the above |
 
+### What is new in 1.1.26
+
+- **Parametric equalizer** (Audio tab, Receive and Transmit): 5, 10 or 18 bands, each with its own frequency, gain and Q, like the parametric EQ of Thetis. Drag a node on the graph to set its frequency and gain, turn the mouse wheel over the graph to change the selected band's Q (or type values: Freq, Gain and Q are on one line), double-click a node to zero it. Presets (Voice, Bass cut, Treble cut, Bass boost, Treble boost) and Reset. It replaces the 8 fixed sliders of 1.1.25; saved settings are converted. The RX EQ and TX EQ buttons still switch each one on and off.
+- **Transmit low-cut and high-cut** (24 dB per octave, 30 Hz to 1 kHz and 1 kHz to 12 kHz, off until ticked): type a frequency or drag the dashed L and H markers on the graph.
+- **Transmit leveler and limiter** (off until ticked): the leveler brings your voice toward a target level (it only adds gain, up to a maximum, follows a louder voice at once and a quieter one slowly, and holds in pauses); the limiter keeps the peaks under a ceiling. They work on the speech only (a FreeDV signal is made from the leveled speech; a recording sent with Send is not touched), add no delay, and show the gain and the reduction while you transmit. Set the radio's own speech processor to off and watch the ALC.
+- **Recordings keep the radio's raw audio when FreeDV is on** (Recordings > Download raw radio audio): the signal before decoding, to analyse why a station decodes badly.
+
 ### What is new in 1.1.25
 
 - **8-band equalizer for what you hear (RX) and what you send (TX).** On the **Audio** tab: 63 Hz, 125, 250, 500, 1k, 2k, 4k and 8k, each -12 to +12 dB, with presets (Voice, Bass cut, Treble cut, Bass boost, Treble boost) and Reset. Two buttons on the Radio tab after Memories, **RX EQ** and **TX EQ**, switch each one on and off. One setting for everyone connected, kept across restarts. FreeDV's modem tones are never equalized: the receive equalizer works on the decoded speech and the transmit one on your voice before the modem. It adds about 10 ms of delay while on.

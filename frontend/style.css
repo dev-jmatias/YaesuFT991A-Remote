@@ -766,3 +766,48 @@ html[data-tablet] .app[data-tab=freedv] [data-pane=vfo], html[data-tablet] .app[
 .recbar .recb { color: #ff9aa9; font-weight: 700; }
 .recbar .recb.on { background: linear-gradient(180deg, #ff5a75, var(--red)); border-color: transparent; color: #fff; animation: pulse 1s infinite; }
 .recbar .recb.on::before { background: #fff; }
+
+/* parametric equalizer graph (Audio tab) */
+.eqgraph { width: 100%; max-width: 820px; }
+.eqsvg { width: 100%; height: auto; display: block; background: #0a101e; border: 1px solid var(--line); border-radius: 8px; user-select: none; }
+.eqgrid line { stroke: var(--line); stroke-width: 1; } .eqgrid line.zero { stroke: #3a4a70; }
+.eqgrid text { fill: var(--dim); font-size: 10px; }
+.eqcurve { fill: none; stroke: #2bb8cf; stroke-width: 2; }
+.eqnode { cursor: grab; outline: none; }
+.eqnode .hit { fill: transparent; }
+.eqnode .dot { fill: #19264a; stroke: #7fd6e6; stroke-width: 2; }
+.eqnode text { fill: #fff; font-size: 9px; font-weight: 700; pointer-events: none; }
+.eqnode.sel .dot { fill: var(--yellow); stroke: #fff; }
+.eqnode.sel text { fill: #1a1100; }
+.eqnode:focus-visible .dot { stroke: #fff; stroke-width: 3; }
+.eqsel { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 6px; font-size: .84rem; }
+.eqsel input { width: 5.6em; }
+.eqcount { display: inline-flex; gap: 4px; align-items: center; font-size: .84rem; }
+.eqnode text.big { font-size: 11px; }
+.eqgrid text { font-size: 10px; }
+@media (max-width: 699px) { .eqgrid text { font-size: 12px; } }
+
+/* the selected band's Freq, Gain and Q on one line; the transmit low-cut / high-cut under it */
+.eqsel { display: grid; grid-template-columns: auto repeat(3, minmax(0, 1fr)); gap: 8px; align-items: end; max-width: 520px; }
+.eqsel label { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.eqsel label small { font-size: .7rem; color: var(--dim); }
+.eqsel input { width: 100%; min-width: 0; }
+.eqsel [data-selname] { align-self: center; white-space: nowrap; }
+.eqcuts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 8px; max-width: 520px; }
+.eqcuts label { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: .84rem; }
+.eqcuts input[type=number] { width: 5.6em; }
+.eqcutmark { cursor: ew-resize; }
+.eqcutmark line { stroke: #ff9aa9; stroke-width: 1.5; stroke-dasharray: 4 3; }
+.eqcutmark .tab { fill: #3a1c28; stroke: #ff9aa9; stroke-width: 1.5; }
+.eqcutmark text { fill: #ffd0d8; font-size: 11px; font-weight: 700; pointer-events: none; }
+@media (max-width: 699px) { .eqcuts { grid-template-columns: minmax(0, 1fr); } .eqcuts label { flex-wrap: nowrap; } }
+
+/* transmit leveler / limiter */
+.eqdyn { margin-top: 10px; display: grid; gap: 8px; max-width: 520px; }
+.dynrow { display: grid; grid-template-columns: 6.2em repeat(3, minmax(0, 1fr)); gap: 8px; align-items: end; }
+.dynrow label { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.dynrow label.chk { flex-direction: row; align-items: center; gap: 6px; align-self: center; font-size: .86rem; }
+.dynrow label small { font-size: .7rem; color: var(--dim); }
+.dynrow input[type=number] { width: 100%; min-width: 0; }
+.dynmeter { grid-column: 1 / -1; font-size: .78rem; min-height: 1em; }
+.dynmeter:empty { display: none; }

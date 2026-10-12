@@ -22,6 +22,7 @@ from typing import Callable
 import numpy as np
 
 from . import devices, freedv, opus_tuning
+from . import dynamics as dynmod
 from . import eq as eqmod
 from . import recorder as recmod
 from .backends import (AlsaSink, AlsaSource, AudioDeviceError, RecordingSink, Sink, Source, ToneSource)
@@ -152,6 +153,7 @@ class AudioService:
         self.on_playback_done: Callable[[], None] | None = None
         self.eq_rx = eqmod.Equalizer()                   # the 8-band equalizers: what the listeners hear / what the operator sends (never the modem tones)
         self.eq_tx = eqmod.Equalizer()
+        self.tx_dyn = dynmod.TxDynamics()                # the transmit leveler and limiter (on the speech, before the modem or the radio's limiter)
         self._play_active = False
         self._test_req = False                           # the PTT that is about to open the gate asked for the level test tone (set by the hub)
         self._test_active = False                        # this over is a level test: a steady tone instead of the microphone's modem tones
@@ -258,13 +260,23 @@ class AudioService:
         rade.reset(force=True)                       # also drops an older library that is already loaded: the newly installed one is used the next time FreeDV is switched on
         self.freedv_ok, self.freedv_reason = freedv.available()
 
-    def set_eq(self, rx_on=None, tx_on=None, rx=None, tx=None) -> None:
-        """Raises ValueError for bad gains (eq.clean_gains)."""
-        self.eq_rx.set(on=rx_on, gains=rx)
-        self.eq_tx.set(on=tx_on, gains=tx)
+    def set_eq(self, rx_on=None, tx_on=None, rx=None, tx=None, rx_cut=None, tx_cut=None) -> None:
+        """rx / tx: 5, 10 or 18 bands [{f, g, q}, ...]. Raises ValueError for bad bands (eq.clean_bands)."""
+        self.eq_rx.set(on=rx_on, bands=rx, cut=rx_cut)
+        self.eq_tx.set(on=tx_on, bands=tx, cut=tx_cut)
+
+    def set_dyn(self, value) -> None:
+        """Leveler / limiter settings, e.g. {"leveler": {"on": True, "max_gain": 12}}; what is not mentioned stays. Raises ValueError."""
+        self.tx_dyn.set(value)
+
+    def dyn_state(self) -> dict:
+        return {**self.tx_dyn.state(), "limits": {"max_gain": list(dynmod.MAX_GAIN), "target": list(dynmod.TARGET), "decay": list(dynmod.DECAY),
+                                                  "ceiling": list(dynmod.CEILING), "release": list(dynmod.RELEASE)}}
 
     def eq_state(self) -> dict:
-        return {"rx": self.eq_rx.state(), "tx": self.eq_tx.state(), "bands": list(eqmod.BANDS_HZ), "max_db": eqmod.MAX_DB}
+        return {"rx": self.eq_rx.state(), "tx": self.eq_tx.state(), "layouts": eqmod.LAYOUTS,
+                "limits": {"f": [eqmod.MIN_HZ, eqmod.MAX_HZ], "g": eqmod.MAX_DB, "q": [eqmod.MIN_Q, eqmod.MAX_Q],
+                           "low": list(eqmod.LOW_CUT), "high": list(eqmod.HIGH_CUT)}}
 
     def arm_playback(self, samples, owner: str | None = None) -> None:
         """The next PTT sends this recording (16 kHz int16 samples) in place of the microphone; None cancels. With an owner (the connection that is keying) the clip is fed on the
@@ -639,6 +651,7 @@ class AudioService:
                 self._tx_ending = False
                 self._test_active, self._test_req, self._test_n = self._test_req and self._fd_tx is not None, False, 0
                 self.eq_tx.reset()
+                self.tx_dyn.reset()
                 self._play_active = self._play_req is not None
                 self._play_data, self._play_req, self._play_pos, self._play_done = self._play_req, None, 0, False
                 self._play_up = recmod.Interpolator() if self._play_active else None
@@ -656,12 +669,16 @@ class AudioService:
                 return
             pcm = self._play_frame() if self._play_active else self.eq_tx.process(pcm)      # a recording is sent as it is (no equalizer) in place of the microphone
             # the operator's equalizer, on the microphone speech (before the modem, or before the limiter)
+            dyn_on = self.tx_dyn.active and not self._play_active           # the leveler and limiter, after the mic gain; a recording is sent as it is
             if self._fd_tx is not None:
                 # FreeDV: the microphone speech becomes modem tones. The mic gain still applies; the limiter does not (it would distort the
                 # tones), the modem output level (freedv.tx_level_db) takes its place.
                 try:
                     t0 = time.perf_counter()
-                    tones = self._fd_tx.process(apply_gain(pcm, self.tx_gain))
+                    tones = self._fd_tx.process(self.tx_dyn.process(apply_gain(pcm, self.tx_gain)) if dyn_on else apply_gain(pcm, self.tx_gain))
+                    if dyn_on:
+                        self._level("tx_lev_db", self.tx_dyn.lev_db)
+                        self._level("tx_lim_db", self.tx_dyn.lim_db)
                     self._tx_proc_ms_max = max(self._tx_proc_ms_max, (time.perf_counter() - t0) * 1000.0)
                     for tone in tones:
                         if len(self._tx_q) == self._tx_q.maxlen:
@@ -673,7 +690,12 @@ class AudioService:
                 except Exception:
                     log.exception("FreeDV transmit failed")
                 return
-            pcm = apply_gain(pcm, self.tx_gain, limit=True)
+            if dyn_on:
+                pcm = apply_gain(self.tx_dyn.process(apply_gain(pcm, self.tx_gain)), 1.0, limit=True)
+                self._level("tx_lev_db", self.tx_dyn.lev_db)
+                self._level("tx_lim_db", self.tx_dyn.lim_db)
+            else:
+                pcm = apply_gain(pcm, self.tx_gain, limit=True)
             self._tx_q.append(pcm)
             self._level("audio_tx_level", level_pct(pcm))
         elif not self._tx_gate_open or peer.conn_id == self._tx_owner:
@@ -681,6 +703,8 @@ class AudioService:
             # silent frames, and those used to close the gate every 20 ms and restart the modem in the middle of the owner's over.
             self._tx_gate_open = False
             self._level("audio_tx_level", 0)
+            self._level("tx_lev_db", 0.0)
+            self._level("tx_lim_db", 0.0)
 
     async def _consume_mic(self, peer: Peer, track) -> None:
         from av import AudioResampler

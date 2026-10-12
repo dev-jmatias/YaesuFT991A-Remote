@@ -137,9 +137,22 @@ Rules that always apply:
 
 ### Equalizer
 
-The **Audio** tab has an 8-band equalizer for what you hear (**Receive**) and for what you send (**Transmit**): 63 Hz, 125, 250, 500, 1k, 2k, 4k and 8k, each from -12 to +12 dB, with a few presets (Voice, Bass cut, Treble cut, Bass boost, Treble boost) and Reset.
-It is one setting for the whole radio, shared by everyone connected, and it is kept across restarts. Two buttons on the Radio tab, **RX EQ** and **TX EQ** (after Memories), switch each equalizer on and off
-so you can compare. It adds about 10 ms of delay while it is on. With FreeDV the equalizer works on the speech only: the modem tones are never equalized.
+The **Audio** tab has a **parametric equalizer** for what you hear (**Receive**) and for what you send (**Transmit**), like the one in Thetis: **5, 10 or 18 bands**, each with its own **frequency**, **gain** (-12 to +12 dB) and **Q** (width, 0.3 to 10).
+**Drag a node** on the graph to set its frequency (left/right) and gain (up/down); the **mouse wheel** over the graph changes the selected band's Q (on a phone use the Q box); **double-click** a node to zero it; the boxes under the graph give exact values
+for the selected band. The curve shows the combined response. **Bands** changes the number of bands (it starts again flat), **Preset** (Voice, Bass cut, Treble cut, Bass boost, Treble boost) sets the gains at your band frequencies, **Reset** zeroes all gains.
+It is one setting for the whole radio, shared by everyone connected, and it is kept across restarts. The **Transmit** side also has a **Low-cut** and a **High-cut** (24 dB per octave, off until you tick them; defaults 150 Hz and 2800 Hz): tick the box and type a frequency, or drag the dashed **L** and **H** markers on the graph. They keep unwanted rumble and hiss out of the signal and out of the radio's own filter edges. The selected band's Freq, Gain and Q are on one line under the graph. Two buttons on the Radio tab, **RX EQ** and **TX EQ** (after Memories), switch each equalizer (and the cuts) on and off so you can compare.
+It adds about 10 ms of delay while on; very narrow bands below about 150 Hz come out a little wider and weaker than drawn. With FreeDV the equalizer works on the speech only: the modem tones are never equalized.
+
+#### Transmit leveler and limiter
+
+Under the Transmit graph, two more stages for your voice (they are shared and kept like the equalizer, and they work on the speech only: a FreeDV signal is made from the leveled speech, and a recording sent with *Send* is not touched):
+
+* **Leveler** brings your voice toward a **Target** level (default -18 dB). It only adds gain, up to **Max** (default 12 dB), follows a louder voice at once and a quieter one slowly (**Decay**, default 300 ms), and holds its gain in pauses instead of boosting the room noise.
+  It evens out a voice that moves around the microphone, so the average power is higher for the same peaks. The readout beside it shows the gain it is adding while you transmit.
+* **Limiter** keeps the peaks under a **Ceiling** (default -3 dB) and lets go with the **Rel.**(ease) time (default 100 ms); the readout shows how many dB it is reducing. Together with the leveler it is the ALC of a good SSB transmitter: set the radio's own
+  speech processor to **off**, watch the radio's **ALC** and the power on a dummy load, and lower the Target or the Ceiling if the ALC goes over its mark.
+
+Both are off until you tick them. Start with the leveler's defaults and the limiter at about -3 dB.
 
 ### Recorder (REC, Play, Send, Recordings)
 
