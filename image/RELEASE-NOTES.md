@@ -42,6 +42,16 @@ and goes back by itself if the new version does not start. Settings and accounts
 | `radio-remote-rade-linux-aarch64.tar.xz` | the optional RADE library (FreeDV neural modes V1 and V2) for a Raspberry Pi, installed with `install_rade.sh` (the PC build is `…-x86_64.tar.xz`) |
 | `SHA256SUMS` | checksums of all of the above |
 
+### What is new in 1.1.27
+
+- **FreeDV in the DATA modes: the radio's filter width (important).** An FT-991A in DATA-L / DATA-U starts with a **500 Hz** receive filter, which passes only a third of RADE's carriers (about 750 to 2250 Hz): nothing could decode. Found by analysing raw recordings with the reference RADE decoder; after widening the filter to 3000 Hz the same radio locked on a station (42 of 49 seconds, SNR up to 8 dB) and the app's live decoding matched the reference.
+  - The Filters tab now has a **Width** list for DATA-U and DATA-L (500 Hz up to 3000 Hz; code 10 = 500 Hz was measured, the others are from the manual).
+  - The FreeDV tab shows a warning with a **Widen** button while FreeDV is on and the radio's filter is under 2400 Hz.
+  - **Open the radio's filter automatically** (FreeDV tab, on by default, administrators can switch it off): a moment after FreeDV is switched on or the mode changes, a narrower filter is opened to the widest value up to 3000 Hz.
+- **Equalizer:** a **FreeDV speech** preset (less bass, more presence at 1 to 4 kHz: decoded RADE speech is bass-heavy), and the **low-cut and high-cut now on the Receive graph too** (defaults 200 Hz and 6000 Hz, off until ticked).
+- Recordings: **Download raw radio audio** (with FreeDV on) is how the width problem was found.
+- Manual: the FreeDV chapter has a section on the radio's filter width.
+
 ### What is new in 1.1.26
 
 - **Parametric equalizer** (Audio tab, Receive and Transmit): 5, 10 or 18 bands, each with its own frequency, gain and Q, like the parametric EQ of Thetis. Drag a node on the graph to set its frequency and gain, turn the mouse wheel over the graph to change the selected band's Q (or type values: Freq, Gain and Q are on one line), double-click a node to zero it. Presets (Voice, Bass cut, Treble cut, Bass boost, Treble boost) and Reset. It replaces the 8 fixed sliders of 1.1.25; saved settings are converted. The RX EQ and TX EQ buttons still switch each one on and off.

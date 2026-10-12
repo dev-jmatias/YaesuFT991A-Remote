@@ -811,3 +811,5 @@ html[data-tablet] .app[data-tab=freedv] [data-pane=vfo], html[data-tablet] .app[
 .dynrow input[type=number] { width: 100%; min-width: 0; }
 .dynmeter { grid-column: 1 / -1; font-size: .78rem; min-height: 1em; }
 .dynmeter:empty { display: none; }
+.fdv-widthwarn { margin: 6px 0; padding: 6px 8px; border: 1px solid var(--yellow); border-radius: 8px; font-size: .86rem; }
+.fdv-autow { margin: 4px 0 8px; }

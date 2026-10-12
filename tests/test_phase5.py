@@ -27,7 +27,7 @@ def test_width_options_by_mode_class():
 
 
 def test_width_unavailable_where_not_documented():
-    for mode in ("AM", "FM", "C4FM", "DATA-U", "DATA-L", None):
+    for mode in ("AM", "FM", "C4FM", "DATA-FM", None):                    # (DATA-U / DATA-L use the RTTY/PSK table since the bench found 500 Hz there)
         assert fc.width_options(mode, False) == []
         assert fc.width_hz(mode, False, 5) is None
 

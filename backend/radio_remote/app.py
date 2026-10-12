@@ -76,6 +76,8 @@ class Hub:
         self.ui: dict = {}
         self.reporter = None                     # FreeDV Reporter (set by create_app)
         self.scanner = RangeScanner(self)        # the start/stop frequency scan (scan.py)
+        self.auto_width = lambda: True           # freedv.auto_width (set by create_app): widen a narrow radio filter when FreeDV is on
+        self._widen_task: asyncio.Task | None = None
         self.eq_path: Path | None = None         # where the equalizer settings are kept (eq.json in the data folder)
         self._last_freq = driver.state.get("frequency") or 0
         self.mic_reset_delay_s = 15.0            # how long the radio stays on REAR after the last operator left (a reload or a network blip is not "left")
@@ -91,7 +93,38 @@ class Hub:
         self.extra.update(fields)
         self._on_change(fields)
 
+    def _schedule_widen(self) -> None:
+        """FreeDV needs a radio filter of about 2400 Hz or more (RADE V1 occupies 750..2250 Hz of the audio). A radio left in a narrow filter (a DATA mode defaults to 500 Hz) can never decode it:
+        a moment after FreeDV is switched on, or the mode changes while it is on, a narrower filter is opened up (freedv.auto_width)."""
+        if not self.auto_width():
+            return
+        if self._widen_task is not None and not self._widen_task.done():
+            self._widen_task.cancel()
+        self._widen_task = asyncio.get_running_loop().create_task(self._widen_after(0.9))
+
+    async def _widen_after(self, delay: float) -> None:
+        await asyncio.sleep(delay)                                  # the mode change and the new width have to be read back first
+        try:
+            await self._widen_now()
+        except Exception:
+            log.warning("could not widen the radio's filter for FreeDV", exc_info=True)
+
+    async def _widen_now(self) -> None:
+        d, st = self.driver, self.driver.state
+        if not (self.audio and self.audio.freedv_state().get("on") and st.get("connected")) or st.get("tx") or st.get("tuning") or st.get("narrow"):
+            return
+        width, opts = st.get("width"), st.get("width_options") or []
+        if not width or width >= 2400:
+            return
+        target = max((o["hz"] for o in opts if o["hz"] <= 3000), default=0)
+        if target < 2400:
+            return
+        await d.set_control("width", target)
+        log.info("FreeDV: the radio's %s filter was %s Hz wide; widened to %s Hz", st.get("mode"), width, target)
+
     def _on_change(self, changed: dict) -> None:
+        if "mode" in changed and self.audio is not None and self.audio.freedv_state().get("on"):
+            self._schedule_widen()
         if "frequency" in changed:                                   # FreeDV keeps its software tuning when the dial moves a little
             old, self._last_freq = self._last_freq, changed["frequency"] or 0
             if self.reporter is not None:
@@ -354,6 +387,8 @@ class Hub:
             except AudioUnavailable as e:
                 raise CommandError(str(e)) from None
             self.auth.audit("freedv_on" if on else "freedv_off", session.username, None, self.audio.freedv_mode if on else "")
+            if on:
+                self._schedule_widen()
         elif typ == "set_level":
             name = msg.get("name")
             rng = caps.level_range(name) if isinstance(name, str) else None
@@ -751,7 +786,7 @@ async def freedv_info(request):
     app = request.app
     fd, audio = app[K_CFG]["freedv"], app[K_AUDIO]
     st = audio.freedv_state()
-    return web.json_response({**st, "tx_level_db": fd["tx_level_db"], "data_mode": bool(fd.get("data_mode", False)), "install_rade": "sudo /opt/radio-remote/current/scripts/install_rade.sh",
+    return web.json_response({**st, "tx_level_db": fd["tx_level_db"], "data_mode": bool(fd.get("data_mode", False)), "auto_width": bool(fd.get("auto_width", True)), "install_rade": "sudo /opt/radio-remote/current/scripts/install_rade.sh",
                           "rade_installable": _rade.installable(), "arch": platform.machine(),
                           "rade_path": _rade.loaded_path(),
                           "tune": {m: {"centre": p["centre"], "width": p["width"]} for m, p in _tune.PARAMS.items()}, "channels": [
@@ -934,6 +969,7 @@ def create_app(cfg: dict, driver: RadioDriver | None = None, auth: AuthStore | N
         on_levels=app[K_HUB].push,
     )
     app[K_AUDIO] = app[K_HUB].audio = audio
+    app[K_HUB].auto_width = lambda: bool(app[K_CFG]["freedv"].get("auto_width", True))
     app[K_HUB].eq_path = Path(cfg["storage"]["data_dir"]) / "eq.json"
     app[K_HUB].load_eq()
     from .audio.recorder import Recorder

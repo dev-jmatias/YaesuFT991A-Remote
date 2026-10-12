@@ -66,6 +66,12 @@ for the FT-991A ([freedv.org/getting-started-yaesu](https://freedv.org/getting-s
 Then switch on **Use the radio's DATA-USB / DATA-LSB mode** in the FreeDV tab (administrators): FreeDV then puts the radio in DATA-USB (DATA-LSB below 10 MHz) instead of USB (LSB).
 It is off by default because it needs the menus above. The receive level that goes to the Pi is then menu **073 DATA OUT LEVEL** (in USB/LSB it is 107 SSB OUT LEVEL).
 
+**The radio's filter width: at least 2400 Hz, the widest you can (BENCH-FOUND).** RADE V1 occupies about **750 to 2250 Hz** of the audio. An FT-991A in a DATA mode starts with a **500 Hz** receive filter (width code 10 in the
+radio's table): a recording of the noise in DATA-L spanned exactly 1225 to 1750 Hz, and the reference RADE decoder found nothing in it, because only a third of the carriers get through. The width is kept per mode (USB and DATA-L have
+their own), and the DATA modes have no width key on the radio's front panel, so the Filters tab now shows a **Width** list for DATA-U and DATA-L as well (500 Hz up to **3000 Hz**), and the FreeDV tab shows a warning with a **Widen** button
+when the filter is under 2400 Hz while FreeDV is on. With **Open the radio's filter automatically** ticked (the default; administrators can change it), the app widens a narrow filter by itself a moment after FreeDV is switched on or the mode
+changes, to the widest value up to 3000 Hz. Check it with a recording of the noise (REC on the Radio tab, then *Download raw radio audio*): it should span roughly 750 to 2250 Hz or more.
+
 **Always:** speech processor off, no equaliser tricks (the radio must pass the modem tones unchanged).
 
 * Set the transmit level so that the **ALC barely moves**: the tones are a continuous signal with high peaks, and an overdriven signal

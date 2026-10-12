@@ -15,6 +15,8 @@ const PRESETS = {
   "Treble cut": [[2000, 0], [4000, -3], [6000, -7], [8000, -12]],
   "Bass boost": [[63, 8], [125, 6], [250, 3], [500, 0]],
   "Treble boost": [[2000, 0], [4000, 3], [6000, 6], [8000, 9]],
+  // decoded RADE speech is bass-heavy and a little muddy: less below 500 Hz, more presence at 1-4 kHz, a touch less at the top (found on a real receiver, 2026-10)
+  "FreeDV speech": [[60, -12], [125, -8], [250, -3], [500, 0], [1000, 3], [2000, 5], [3000, 4], [4000, 3], [6000, -0.5], [8000, -3]],
 };
 const curveAt = (pts, f) => {
   if (f <= pts[0][0]) return pts[0][1];
@@ -73,7 +75,7 @@ export function createEqualizer(host, ctx) {
         <label><small>Freq (Hz)</small><input type="number" data-f min="${FMIN}" max="${FMAX}" step="1" inputmode="numeric"></label>
         <label><small>Gain (dB)</small><input type="number" data-gain min="-${maxDb}" max="${maxDb}" step="0.5" inputmode="decimal"></label>
         <label><small>Q</small><input type="number" data-q min="${QMIN}" max="${QMAX}" step="0.1" inputmode="decimal"></label></div>
-      ${dir === "tx" ? `<div class="eqcuts">
+      ${true ? `<div class="eqcuts">
         <label class="chk"><input type="checkbox" data-lowon> Low-cut <input type="number" data-lowf min="${lim.low[0]}" max="${lim.low[1]}" step="5" inputmode="numeric"> Hz</label>
         <label class="chk"><input type="checkbox" data-highon> High-cut <input type="number" data-highf min="${lim.high[0]}" max="${lim.high[1]}" step="50" inputmode="numeric"> Hz</label></div>` : ""}
       ${dir === "tx" && S.state.dyn ? `<div class="eqdyn">
@@ -89,7 +91,7 @@ export function createEqualizer(host, ctx) {
     root.append(b);
     const svg = svgEl("svg", { viewBox: `0 0 ${W} ${H}`, class: "eqsvg", role: "img", "aria-label": `${title} equalizer graph` });
     b.querySelector("[data-g]").append(svg);
-    const st = { bands: [], sel: 0, dragging: false, edited: 0, nodes: [], curve: null, timer: 0, cut: { low: 0, high: 0 }, cutTimer: 0, cutDrag: false, cutMem: { low: 150, high: 2800 } };
+    const st = { bands: [], sel: 0, dragging: false, edited: 0, nodes: [], curve: null, timer: 0, cut: { low: 0, high: 0 }, cutTimer: 0, cutDrag: false, cutMem: dir === "tx" ? { low: 150, high: 2800 } : { low: 200, high: 6000 } };
     const cutMarks = {};
     blocks[dir] = { b, svg, st };
 
@@ -176,9 +178,9 @@ export function createEqualizer(host, ctx) {
     svg.style.touchAction = "none";
     st.setBands = (bands) => { const rebuild = bands.length !== st.bands.length; st.bands = bands.map((x) => ({ ...x })); if (rebuild) { st.sel = Math.min(st.sel, bands.length - 1); buildNodes(); } redraw(); };
 
-    // low-cut / high-cut (transmit): a draggable vertical marker for each, and a switch with its frequency
-    if (dir === "tx") {
-      const pushCut = () => { clearTimeout(st.cutTimer); st.cutTimer = 0; st.edited = performance.now(); send("set_eq", { tx_cut: { low: st.cut.low, high: st.cut.high } }); };
+    // low-cut / high-cut (receive and transmit): a draggable vertical marker for each, and a switch with its frequency
+    {
+      const pushCut = () => { clearTimeout(st.cutTimer); st.cutTimer = 0; st.edited = performance.now(); send("set_eq", { [`${dir}_cut`]: { low: st.cut.low, high: st.cut.high } }); };
       const pushCutSoon = () => { st.edited = performance.now(); clearTimeout(st.cutTimer); st.cutTimer = setTimeout(pushCut, 90); };
       const range = { low: lim.low, high: lim.high }, step = { low: 5, high: 50 };
       const setCut = (k, v) => {

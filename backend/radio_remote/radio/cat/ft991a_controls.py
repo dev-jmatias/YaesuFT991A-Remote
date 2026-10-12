@@ -29,8 +29,9 @@ TABLES = {
     ("RTTY", True): {**_CW_N, 0: 300},
     ("RTTY", False): {0: 500, 10: 500, **_NARROW_WIDE_HI},
 }
-# DATA-* modes are deliberately absent: the manual's "RTTY/PSK" column is not explicitly tied to them.
-MODE_CLASS = {"LSB": "SSB", "USB": "SSB", "CW-U": "CW", "CW-L": "CW", "RTTY-L": "RTTY", "RTTY-U": "RTTY"}
+# DATA-L / DATA-U use the "RTTY/PSK" column: BENCH-FOUND on a real FT-991A in DATA-L, whose receive filter measured 500 Hz wide (the noise band in a recording spanned exactly that) while the radio
+# reported width code 10, which this table gives as 500 Hz. The other codes of the column (up to 17 = 3000 Hz) are from the manual. DATA-FM has no width table.
+MODE_CLASS = {"LSB": "SSB", "USB": "SSB", "CW-U": "CW", "CW-L": "CW", "RTTY-L": "RTTY", "RTTY-U": "RTTY", "DATA-L": "RTTY", "DATA-U": "RTTY"}
 
 
 def width_options(mode: str | None, narrow: bool | None) -> list[dict]:

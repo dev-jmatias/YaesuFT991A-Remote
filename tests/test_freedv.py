@@ -16,7 +16,7 @@ from radio_remote.audio import freedv, service
 from radio_remote.audio.backends import RecordingSink, ToneSource
 from radio_remote.audio.levels import FRAME_BYTES
 from radio_remote.audio.service import AudioService, AudioUnavailable
-from radio_remote.common import K_AUDIO
+from radio_remote.common import K_AUDIO, K_HUB
 
 SPEECH = b"\x07\x00" * (FRAME_BYTES // 2)            # what the fake receive modem "decodes"
 TONES = b"\x09\x00" * (FRAME_BYTES // 2)             # what the fake transmit modem "modulates"
@@ -529,3 +529,38 @@ def test_the_transmit_level_may_go_up_to_plus_3_db():
     cfg["freedv"]["tx_level_db"] = 4
     with pytest.raises(config.ConfigError):
         config.validate(cfg)
+
+
+def test_the_data_modes_have_a_width_table_and_500_hz_is_what_a_real_radio_reported():
+    from radio_remote.radio.cat import ft991a_controls as fc
+    assert fc.width_hz("DATA-L", False, 10) == 500 and fc.width_hz("DATA-U", False, 17) == 3000       # bench: DATA-L code 10 measured 500 Hz
+    assert {o["hz"] for o in fc.width_options("DATA-L", False)} >= {500, 800, 1700, 2400, 3000}
+    assert fc.width_options("DATA-FM", False) == []
+
+
+async def test_freedv_opens_up_a_narrow_radio_filter_once_and_only_when_it_is_needed(make_app, caplog):
+    client = await make_app()
+    hub = client.server.app[K_HUB]
+    calls = []
+
+    async def fake_set_control(name, value, receiver="main"):
+        calls.append((name, value))
+    hub.driver.set_control = fake_set_control
+    opts = [{"code": c, "hz": h} for c, h in ((10, 500), (11, 800), (14, 1700), (16, 2400), (17, 3000))]
+    hub.driver.state.update(connected=True, tx=False, tuning=False, narrow=False, mode="DATA-L", width=500, width_options=opts)
+    hub.audio.freedv_state = lambda: {"on": True}
+    await hub._widen_now()
+    assert calls == [("width", 3000)]                                           # 500 Hz cannot carry RADE: the widest (3000 Hz) is chosen
+    for change in ({"width": 2400}, {"width": 3000}, {"narrow": True}, {"tx": True}, {"connected": False}, {"width": None}):
+        calls.clear()
+        hub.driver.state.update(connected=True, tx=False, narrow=False, width=500)
+        hub.driver.state.update(change)
+        await hub._widen_now()
+        assert calls == [], change                                              # wide enough, narrow filter chosen on purpose, transmitting, offline, or unknown: left alone
+    hub.audio.freedv_state = lambda: {"on": False}
+    hub.driver.state.update(connected=True, tx=False, narrow=False, width=500)
+    await hub._widen_now()
+    assert calls == []                                                          # FreeDV off: nothing to do
+    hub.auto_width = lambda: False
+    hub._schedule_widen()
+    assert hub._widen_task is None or hub._widen_task.done()                    # switched off in the settings
