@@ -42,6 +42,11 @@ and goes back by itself if the new version does not start. Settings and accounts
 | `radio-remote-rade-linux-aarch64.tar.xz` | the optional RADE library (FreeDV neural modes V1 and V2) for a Raspberry Pi, installed with `install_rade.sh` (the PC build is `…-x86_64.tar.xz`) |
 | `SHA256SUMS` | checksums of all of the above |
 
+### What is new in 1.1.28
+
+- **Noise gate, on both sides** (Audio tab, under each equalizer graph; off until ticked): Thresh., Range, Hold and Rel. It turns the audio down by Range dB when the level stays under the threshold, waits the hold time before closing and opens again at once, with hysteresis so it does not flutter and word endings are not chopped. Receive takes the hiss out of the pauses between words (also decoded FreeDV speech); Transmit keeps the microphone's room noise out of the signal and out of the leveler. A readout shows how many dB it is taking off.
+- **Saved equalizer sets:** **My sets…** saves the current bands (frequency, gain, Q) and the low-cut and high-cut under a name; Use puts a set on Receive or Transmit, Delete removes it, and your sets appear in the Preset list under *My sets*. Up to 20, shared by Receive and Transmit and by everyone connected, kept across restarts.
+
 ### What is new in 1.1.27
 
 - **FreeDV in the DATA modes: the radio's filter width (important).** An FT-991A in DATA-L / DATA-U starts with a **500 Hz** receive filter, which passes only a third of RADE's carriers (about 750 to 2250 Hz): nothing could decode. Found by analysing raw recordings with the reference RADE decoder; after widening the filter to 3000 Hz the same radio locked on a station (42 of 49 seconds, SNR up to 8 dB) and the app's live decoding matched the reference.

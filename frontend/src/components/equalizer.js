@@ -45,7 +45,7 @@ const NS = "http://www.w3.org/2000/svg";
 const svgEl = (tag, attrs = {}) => { const n = document.createElementNS(NS, tag); for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v); return n; };
 
 export function createEqualizer(host, ctx) {
-  const { S, send } = ctx;
+  const { S, send, toast } = ctx;
   if (!S.audio?.available || !S.state.eq) return { update() {} };
   const lim = S.state.eq.limits, FMIN = lim.f[0], FMAX = lim.f[1], maxDb = lim.g, QMIN = lim.q[0], QMAX = lim.q[1];
   const canEdit = S.user.role !== "viewer";
@@ -68,8 +68,9 @@ export function createEqualizer(host, ctx) {
       <div class="eqhead"><b>${title}</b>
         <button type="button" class="led" data-on>Off</button>
         <label class="eqcount">Bands <select data-count aria-label="Number of bands">${[5, 10, 18].map((n) => `<option value="${n}">${n}</option>`).join("")}</select></label>
-        <select data-preset aria-label="Preset"><option value="">Preset…</option>${Object.keys(PRESETS).map((p) => `<option>${p}</option>`).join("")}</select>
-        <button type="button" data-reset>Reset</button></div>
+        <select data-preset aria-label="Preset"><option value="">Preset…</option>${Object.keys(PRESETS).map((p) => `<option>${p}</option>`).join("")}<optgroup label="My sets" data-mine></optgroup></select>
+        <button type="button" data-reset>Reset</button>
+        <button type="button" data-mysets title="Save the current bands and cuts under a name, and use or delete the sets you saved">My sets…</button></div>
       <div class="eqgraph" data-g></div>
       <div class="eqsel"><span data-selname class="dim">Select a node</span>
         <label><small>Freq (Hz)</small><input type="number" data-f min="${FMIN}" max="${FMAX}" step="1" inputmode="numeric"></label>
@@ -78,8 +79,14 @@ export function createEqualizer(host, ctx) {
       ${true ? `<div class="eqcuts">
         <label class="chk"><input type="checkbox" data-lowon> Low-cut <input type="number" data-lowf min="${lim.low[0]}" max="${lim.low[1]}" step="5" inputmode="numeric"> Hz</label>
         <label class="chk"><input type="checkbox" data-highon> High-cut <input type="number" data-highf min="${lim.high[0]}" max="${lim.high[1]}" step="50" inputmode="numeric"> Hz</label></div>` : ""}
-      ${dir === "tx" && S.state.dyn ? `<div class="eqdyn">
-        <div class="dynrow"><label class="chk"><input type="checkbox" data-lvon> Leveler</label>
+      ${S.state.dyn ? `<div class="eqdyn">
+        <div class="dynrow gate"><label class="chk"><input type="checkbox" data-gton> Noise gate</label>
+          <label><small>Thresh. (dB)</small><input type="number" data-gtthr step="1" inputmode="decimal"></label>
+          <label><small>Range (dB)</small><input type="number" data-gtrange step="1" inputmode="decimal"></label>
+          <label><small>Hold (ms)</small><input type="number" data-gthold step="10" inputmode="numeric"></label>
+          <label><small>Rel. (ms)</small><input type="number" data-gtrel step="50" inputmode="numeric"></label>
+          <span class="dim dynmeter" data-gtmeter></span></div>
+        ${dir === "tx" ? `<div class="dynrow"><label class="chk"><input type="checkbox" data-lvon> Leveler</label>
           <label><small>Max (dB)</small><input type="number" data-lvmax step="1" inputmode="decimal"></label>
           <label><small>Target (dB)</small><input type="number" data-lvtarget step="1" inputmode="decimal"></label>
           <label><small>Decay (ms)</small><input type="number" data-lvdecay step="50" inputmode="numeric"></label>
@@ -87,7 +94,7 @@ export function createEqualizer(host, ctx) {
         <div class="dynrow"><label class="chk"><input type="checkbox" data-lmon> Limiter</label>
           <label><small>Ceiling (dB)</small><input type="number" data-lmceil step="1" inputmode="decimal"></label>
           <label><small>Rel. (ms)</small><input type="number" data-lmrel step="10" inputmode="numeric"></label>
-          <span class="dim dynmeter" data-lmmeter></span></div></div>` : ""}</div>`);
+          <span class="dim dynmeter" data-lmmeter></span></div>` : ""}</div>` : ""}</div>`);
     root.append(b);
     const svg = svgEl("svg", { viewBox: `0 0 ${W} ${H}`, class: "eqsvg", role: "img", "aria-label": `${title} equalizer graph` });
     b.querySelector("[data-g]").append(svg);
@@ -210,27 +217,40 @@ export function createEqualizer(host, ctx) {
       }
     }
 
-    // transmit leveler and limiter: switches and numbers, shared and saved on the server like the equalizer
-    if (dir === "tx" && S.state.dyn) {
-      const dl = S.state.dyn.limits;
-      const q = (s) => b.querySelector(s);
-      const lim2 = { "[data-lvmax]": dl.max_gain, "[data-lvtarget]": dl.target, "[data-lvdecay]": dl.decay, "[data-lmceil]": dl.ceiling, "[data-lmrel]": dl.release };
+    // noise gate (both sides) and the transmit leveler and limiter: switches and numbers, shared and saved on the server like the equalizer
+    if (S.state.dyn) {
+      const dl = S.state.dyn.limits, gk = dir === "tx" ? "gate" : "rx_gate", isTx = dir === "tx";
+      const q = (x) => b.querySelector(x);
+      const lim2 = { "[data-gtthr]": dl.threshold, "[data-gtrange]": dl.range, "[data-gthold]": dl.hold, "[data-gtrel]": dl.gate_release };
+      if (isTx) Object.assign(lim2, { "[data-lvmax]": dl.max_gain, "[data-lvtarget]": dl.target, "[data-lvdecay]": dl.decay, "[data-lmceil]": dl.ceiling, "[data-lmrel]": dl.release });
       for (const [sel, [lo, hi]] of Object.entries(lim2)) { q(sel).min = lo; q(sel).max = hi; }
-      const sendDyn = () => send("set_dyn", {
-        leveler: { on: q("[data-lvon]").checked, max_gain: +q("[data-lvmax]").value, target: +q("[data-lvtarget]").value, decay: +q("[data-lvdecay]").value },
-        limiter: { on: q("[data-lmon]").checked, ceiling: +q("[data-lmceil]").value, release: +q("[data-lmrel]").value },
-      });
-      for (const sel of ["[data-lvon]", "[data-lvmax]", "[data-lvtarget]", "[data-lvdecay]", "[data-lmon]", "[data-lmceil]", "[data-lmrel]"]) { q(sel).disabled = !canEdit; q(sel).onchange = sendDyn; }
+      const sendDyn = () => {
+        const msg = { [gk]: { on: q("[data-gton]").checked, threshold: +q("[data-gtthr]").value, range: +q("[data-gtrange]").value, hold: +q("[data-gthold]").value, release: +q("[data-gtrel]").value } };
+        if (isTx) {
+          msg.leveler = { on: q("[data-lvon]").checked, max_gain: +q("[data-lvmax]").value, target: +q("[data-lvtarget]").value, decay: +q("[data-lvdecay]").value };
+          msg.limiter = { on: q("[data-lmon]").checked, ceiling: +q("[data-lmceil]").value, release: +q("[data-lmrel]").value };
+        }
+        send("set_dyn", msg);
+      };
+      const fields = ["[data-gton]", "[data-gtthr]", "[data-gtrange]", "[data-gthold]", "[data-gtrel]"];
+      if (isTx) fields.push("[data-lvon]", "[data-lvmax]", "[data-lvtarget]", "[data-lvdecay]", "[data-lmon]", "[data-lmceil]", "[data-lmrel]");
+      for (const sel of fields) { q(sel).disabled = !canEdit; q(sel).onchange = sendDyn; }
       st.paintDyn = () => {
         const d = S.state.dyn;
         if (!d) return;
         const set = (sel, v) => { const e = q(sel); if (document.activeElement !== e) e.value = v; };
-        q("[data-lvon]").checked = d.leveler.on; q("[data-lmon]").checked = d.limiter.on;
-        set("[data-lvmax]", d.leveler.max_gain); set("[data-lvtarget]", d.leveler.target); set("[data-lvdecay]", d.leveler.decay);
-        set("[data-lmceil]", d.limiter.ceiling); set("[data-lmrel]", d.limiter.release);
-        const tx = !!S.state.tx;
-        q("[data-lvmeter]").textContent = d.leveler.on && tx ? `+${(S.state.tx_lev_db || 0).toFixed(1)} dB` : "";
-        q("[data-lmmeter]").textContent = d.limiter.on && tx ? `-${(S.state.tx_lim_db || 0).toFixed(1)} dB` : "";
+        const g = d[gk];
+        q("[data-gton]").checked = g.on;
+        set("[data-gtthr]", g.threshold); set("[data-gtrange]", g.range); set("[data-gthold]", g.hold); set("[data-gtrel]", g.release);
+        const tx = !!S.state.tx, gr = +(S.state[isTx ? "tx_gate_db" : "rx_gate_db"] || 0);
+        q("[data-gtmeter]").textContent = g.on && (isTx ? tx : true) && gr > 0.5 ? `gate closed: -${gr.toFixed(0)} dB` : "";
+        if (isTx) {
+          q("[data-lvon]").checked = d.leveler.on; q("[data-lmon]").checked = d.limiter.on;
+          set("[data-lvmax]", d.leveler.max_gain); set("[data-lvtarget]", d.leveler.target); set("[data-lvdecay]", d.leveler.decay);
+          set("[data-lmceil]", d.limiter.ceiling); set("[data-lmrel]", d.limiter.release);
+          q("[data-lvmeter]").textContent = d.leveler.on && tx ? `+${(S.state.tx_lev_db || 0).toFixed(1)} dB` : "";
+          q("[data-lmmeter]").textContent = d.limiter.on && tx ? `-${(S.state.tx_lim_db || 0).toFixed(1)} dB` : "";
+        }
       };
       st.paintDyn();
     }
@@ -251,9 +271,13 @@ export function createEqualizer(host, ctx) {
     const count = b.querySelector("[data-count]"), preset = b.querySelector("[data-preset]");
     for (const n of [b.querySelector("[data-on]"), count, preset, b.querySelector("[data-reset]")]) n.disabled = !canEdit;
     count.onchange = () => { st.sel = 0; send("set_eq", { [dir]: S.state.eq.layouts[count.value] }); };
+    b.querySelector("[data-mysets]").onclick = () => openSets(dir);
+    b.querySelector("[data-mysets]").disabled = !canEdit;
     preset.onchange = () => {
+      const mine = preset.value.startsWith("mine:") ? (S.state.eq_presets || {})[preset.value.slice(5)] : null;
       const pts = PRESETS[preset.value];
       preset.value = "";
+      if (mine) { send("set_eq", { [dir]: mine.bands, [`${dir}_cut`]: mine.cut }); return; }
       if (!pts) return;
       send("set_eq", { [dir]: st.bands.map((x) => ({ ...x, g: Math.round(clamp(curveAt(pts, x.f), -maxDb, maxDb) * 2) / 2 })) });
     };
@@ -262,12 +286,60 @@ export function createEqualizer(host, ctx) {
     if (S.state.eq[dir].cut) { st.cut = { ...S.state.eq[dir].cut }; redraw(); }
   }
 
+  // the saved sets: name, apply, delete, and "save the current settings"; shared by Receive and Transmit and by everyone connected
+  function openSets(dir) {
+    const st = blocks[dir].st, title = dir === "rx" ? "Receive" : "Transmit";
+    const sheet = el(`<div class="sheet eqsets" role="dialog" aria-label="My equalizer sets"><div class="sheetbox">
+      <div class="sheethead"><h2>My equalizer sets</h2><button class="icon wide" data-x>Close</button></div>
+      <p class="dim">A set is the bands (frequency, gain and Q) and the low-cut and high-cut. Sets are shared by Receive and Transmit and by everyone connected; up to 20 are kept.
+        <b>Use</b> puts a set on the ${title} equalizer.</p>
+      <div class="row eqsave"><input data-name maxlength="24" placeholder="Name for the ${title} settings now" aria-label="Name"><button type="button" class="active" data-save>Save current</button></div>
+      <div class="setlist" data-list></div></div></div>`);
+    document.body.append(sheet);
+    const list = sheet.querySelector("[data-list]");
+    let shown = "";
+    const close = () => { clearInterval(iv); sheet.remove(); document.removeEventListener("keydown", onKey); };
+    const onKey = (e) => { if (e.key === "Escape") close(); };
+    document.addEventListener("keydown", onKey);
+    sheet.addEventListener("click", (e) => { if (e.target === sheet) close(); });
+    sheet.querySelector("[data-x]").onclick = close;
+    sheet.querySelector("[data-save]").onclick = () => {
+      const name = sheet.querySelector("[data-name]").value.trim();
+      if (!name) { toast("Type a name first"); return; }
+      const sets = S.state.eq_presets || {};
+      if (sets[name] && !confirm(`Replace the saved set "${name}"?`)) return;
+      send("eq_preset_save", { name, bands: st.bands, cut: st.cut });
+      sheet.querySelector("[data-name]").value = "";
+    };
+    const paint = () => {
+      const sets = S.state.eq_presets || {}, key = JSON.stringify(sets);
+      if (key === shown) return;
+      shown = key;
+      const names = Object.keys(sets).sort((x, y) => x.localeCompare(y));
+      list.replaceChildren(...(names.length ? names.map((n) => {
+        const p = sets[n], cuts = [p.cut?.low ? `low-cut ${p.cut.low} Hz` : "", p.cut?.high ? `high-cut ${p.cut.high} Hz` : ""].filter(Boolean).join(", ");
+        const r = el(`<div class="setrow"><div><b></b><div class="dim">${p.bands.length} bands${cuts ? ", " + cuts : ""}</div></div><div class="row"><button type="button" class="active" data-use>Use</button><button type="button" class="danger" data-del>Delete</button></div></div>`);
+        r.querySelector("b").textContent = n;
+        r.querySelector("[data-use]").onclick = () => { send("set_eq", { [dir]: p.bands, [`${dir}_cut`]: p.cut }); close(); };
+        r.querySelector("[data-del]").onclick = () => { if (confirm(`Delete the saved set "${n}"?`)) send("eq_preset_delete", { name: n }); };
+        return r;
+      }) : [el(`<p class="dim">Nothing saved yet. Set up the equalizer, type a name above and press Save current.</p>`)]));
+    };
+    const iv = setInterval(paint, 500);
+    paint();
+  }
+
   return {
     update() {
       const eq = S.state.eq;
       if (!eq) return;
+      const mineKey = JSON.stringify(Object.keys(S.state.eq_presets || {}));
       for (const [dir] of DIRS) {
         const { b, st } = blocks[dir];
+        if (st.mineKey !== mineKey) {                                          // the saved sets changed: refresh the "My sets" group of the preset list
+          st.mineKey = mineKey;
+          b.querySelector("[data-mine]").replaceChildren(...Object.keys(S.state.eq_presets || {}).sort((x, y) => x.localeCompare(y)).map((n) => { const o = document.createElement("option"); o.value = `mine:${n}`; o.textContent = n; return o; }));
+        }
         const cur = eq[dir];
         const on = b.querySelector("[data-on]");
         on.classList.toggle("on", !!cur.on);

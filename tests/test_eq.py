@@ -162,3 +162,52 @@ def test_the_cuts_are_checked():
     for bad in ({"low": 10}, {"low": 2000}, {"high": 500}, {"high": 20000}, {"low": 1000, "high": 1000}, {"low": True}, {"low": "x"}, {"low": float("nan")}, [], None):
         with pytest.raises(ValueError):
             eq.clean_cut(bad)
+
+
+async def test_saved_equalizer_sets_and_the_gates_over_the_websocket(make_app, tmp_path):
+    from test_phase8 import admin_user
+    from test_web import recv_until
+    from radio_remote.common import K_AUDIO, K_HUB
+    client = await make_app()
+    root = await admin_user(client)
+    audio, hub = client.server.app[K_AUDIO], client.server.app[K_HUB]
+    hub.eq_path = tmp_path / "eq.json"
+    hub.eq_presets.clear()
+    ws, hello = await root.ws()
+    assert hello["state"]["eq_presets"] == {} and "rx_gate" in hello["state"]["dyn"] and "gate" in hello["state"]["dyn"]
+    bands = eq.default_bands(5)
+    bands[1]["g"] = 5
+
+    async def cmd(i, **kw):
+        await ws.send_json({"id": i, "type": kw.pop("type"), **kw})
+        return (await recv_until(ws, lambda m: m["t"] == "ack" and m["id"] == i))["ok"]
+
+    assert await cmd(1, type="eq_preset_save", name="  My voice ", bands=bands, cut={"low": 150, "high": 0}) is True
+    patch = await recv_until(ws, lambda m: m["t"] == "patch" and "eq_presets" in m["d"])
+    assert list(patch["d"]["eq_presets"]) == ["My voice"] and patch["d"]["eq_presets"]["My voice"]["cut"]["low"] == 150.0
+    saved = json.loads(hub.eq_path.read_text())
+    assert saved["presets"]["My voice"]["bands"][1]["g"] == 5
+    assert await cmd(2, type="eq_preset_save", name="My voice", bands=eq.default_bands(10)) is True            # the same name: replaced
+    assert len(hub.eq_presets["My voice"]["bands"]) == 10
+    for i, bad in enumerate([dict(name=""), dict(name="x" * 25), dict(name="a\nb"), dict(name=5), dict(name="ok", bands=bands[:3]), dict(name="ok", bands=bands, cut={"low": 5})], start=3):
+        kw = {"bands": bands, **bad}
+        assert await cmd(i, type="eq_preset_save", **kw) is False
+    for k in range(25):
+        ok = await cmd(100 + k, type="eq_preset_save", name=f"set {k}", bands=bands)
+        assert ok is (k < 19)                                                                                 # "My voice" plus 19 more makes twenty; then it refuses
+    assert len(hub.eq_presets) == 20
+    hub.eq_presets.clear(); hub.eq_presets["a"] = {"bands": bands, "cut": {"low": 0, "high": 0}}
+    hub._save_eq()
+    hub.eq_presets.clear()
+    hub.load_eq()
+    assert list(hub.eq_presets) == ["a"]                                                                      # restored after a restart
+    assert await cmd(200, type="eq_preset_delete", name="a") is True and hub.eq_presets == {}
+    assert await cmd(201, type="eq_preset_delete", name="a") is False
+
+    assert await cmd(300, type="set_dyn", rx_gate={"on": True, "threshold": -45}, gate={"on": True, "range": 40}) is True
+    assert audio.rx_gate.cfg["on"] and audio.rx_gate.cfg["threshold"] == -45 and audio.tx_dyn.cfg["gate"]["range"] == 40 and audio.tx_dyn.gate.cfg["on"]
+    assert await cmd(301, type="set_dyn", rx_gate={"range": 99}) is False and audio.rx_gate.cfg["threshold"] == -45
+    assert await cmd(302, type="set_dyn", rx_gate={"threshold": -60}, limiter={"ceiling": 5}) is False
+    assert audio.rx_gate.cfg["threshold"] == -45                                                              # a bad part changes nothing at all
+    audio.set_dyn({"rx_gate": {"on": False}, "gate": {"on": False}})
+    await ws.close()

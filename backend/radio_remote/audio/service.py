@@ -153,6 +153,7 @@ class AudioService:
         self.on_playback_done: Callable[[], None] | None = None
         self.eq_rx = eqmod.Equalizer()                   # the 8-band equalizers: what the listeners hear / what the operator sends (never the modem tones)
         self.eq_tx = eqmod.Equalizer()
+        self.rx_gate = dynmod.NoiseGate()                # the receive noise gate (what the listeners hear), before the receive equalizer
         self.tx_dyn = dynmod.TxDynamics()                # the transmit leveler and limiter (on the speech, before the modem or the radio's limiter)
         self._play_active = False
         self._test_req = False                           # the PTT that is about to open the gate asked for the level test tone (set by the hub)
@@ -266,12 +267,26 @@ class AudioService:
         self.eq_tx.set(on=tx_on, bands=tx, cut=tx_cut)
 
     def set_dyn(self, value) -> None:
-        """Leveler / limiter settings, e.g. {"leveler": {"on": True, "max_gain": 12}}; what is not mentioned stays. Raises ValueError."""
-        self.tx_dyn.set(value)
+        """Noise gate / leveler / limiter settings for the transmit side, e.g. {"leveler": {"on": True, "max_gain": 12}}, and "rx_gate" for the receive noise gate; what is not mentioned
+        stays. Raises ValueError (and changes nothing)."""
+        if not isinstance(value, dict):
+            raise ValueError("expected {gate, leveler, limiter, rx_gate}")
+        value = dict(value)
+        rx = value.pop("rx_gate", None)
+        if rx is not None:
+            dynmod._clean_part("gate", self.rx_gate.cfg, rx)                  # check it first, so a bad transmit part cannot leave the receive part half applied
+        if value:
+            self.tx_dyn.set(value)
+        if rx is not None:
+            self.rx_gate.set(rx)
+
+    def dyn_save(self) -> dict:
+        return {**self.tx_dyn.state(), "rx_gate": self.rx_gate.state()}
 
     def dyn_state(self) -> dict:
-        return {**self.tx_dyn.state(), "limits": {"max_gain": list(dynmod.MAX_GAIN), "target": list(dynmod.TARGET), "decay": list(dynmod.DECAY),
-                                                  "ceiling": list(dynmod.CEILING), "release": list(dynmod.RELEASE)}}
+        return {**self.dyn_save(), "limits": {"max_gain": list(dynmod.MAX_GAIN), "target": list(dynmod.TARGET), "decay": list(dynmod.DECAY),
+                                              "ceiling": list(dynmod.CEILING), "release": list(dynmod.RELEASE), "threshold": list(dynmod.GATE_THRESHOLD),
+                                              "range": list(dynmod.GATE_RANGE), "hold": list(dynmod.GATE_HOLD), "gate_release": list(dynmod.GATE_RELEASE)}}
 
     def eq_state(self) -> dict:
         return {"rx": self.eq_rx.state(), "tx": self.eq_tx.state(), "layouts": eqmod.LAYOUTS,
@@ -512,6 +527,9 @@ class AudioService:
                             self.set_freedv(False)
                     if self.recorder is not None and self.recorder.on and not self._tx_gate_open:
                         self.recorder.frame(pcm, raw_pcm if self._fd_rx is not None else None)      # what the receiver produced, before the equalizer; not while we transmit
+                    if self.rx_gate.cfg["on"]:
+                        pcm = self.rx_gate.process(pcm)                          # the receive noise gate: the hiss between words
+                        self._level("rx_gate_db", round(self.rx_gate.reduction_db, 1))
                     pcm = self.eq_rx.process(pcm)                                # the listeners' equalizer: speech (decoded, when FreeDV is on), never the modem tones
                     self._rx_q.append(pcm)
                     self._rx_event.set()
@@ -679,6 +697,7 @@ class AudioService:
                     if dyn_on:
                         self._level("tx_lev_db", self.tx_dyn.lev_db)
                         self._level("tx_lim_db", self.tx_dyn.lim_db)
+                        self._level("tx_gate_db", round(self.tx_dyn.gate.reduction_db, 1))
                     self._tx_proc_ms_max = max(self._tx_proc_ms_max, (time.perf_counter() - t0) * 1000.0)
                     for tone in tones:
                         if len(self._tx_q) == self._tx_q.maxlen:
@@ -694,6 +713,7 @@ class AudioService:
                 pcm = apply_gain(self.tx_dyn.process(apply_gain(pcm, self.tx_gain)), 1.0, limit=True)
                 self._level("tx_lev_db", self.tx_dyn.lev_db)
                 self._level("tx_lim_db", self.tx_dyn.lim_db)
+                self._level("tx_gate_db", round(self.tx_dyn.gate.reduction_db, 1))
             else:
                 pcm = apply_gain(pcm, self.tx_gain, limit=True)
             self._tx_q.append(pcm)

@@ -813,3 +813,11 @@ html[data-tablet] .app[data-tab=freedv] [data-pane=vfo], html[data-tablet] .app[
 .dynmeter:empty { display: none; }
 .fdv-widthwarn { margin: 6px 0; padding: 6px 8px; border: 1px solid var(--yellow); border-radius: 8px; font-size: .86rem; }
 .fdv-autow { margin: 4px 0 8px; }
+
+/* noise gate row (four numbers) and the saved sets sheet */
+.dynrow.gate { grid-template-columns: 6.2em repeat(4, minmax(0, 1fr)); }
+.eqsets .sheetbox { width: min(100%, 560px); }
+.eqsave { gap: 8px; margin: 8px 0; flex-wrap: nowrap; }
+.eqsave input { flex: 1 1 auto; min-width: 0; }
+.setrow { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 7px 0; border-top: 1px solid var(--line); }
+.dynrow.gate input[type=number] { padding-left: 5px; padding-right: 2px; font-size: .88rem; }

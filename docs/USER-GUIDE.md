@@ -143,9 +143,19 @@ for the selected band. The curve shows the combined response. **Bands** changes 
 It is one setting for the whole radio, shared by everyone connected, and it is kept across restarts. Both sides have a **Low-cut** and a **High-cut** (24 dB per octave, off until you tick them; defaults 150 Hz and 2800 Hz for Transmit, 200 Hz and 6000 Hz for Receive): tick the box and type a frequency, or drag the dashed **L** and **H** markers on the graph. They keep unwanted rumble and hiss out of the signal and out of the radio's own filter edges. The selected band's Freq, Gain and Q are on one line under the graph. Two buttons on the Radio tab, **RX EQ** and **TX EQ** (after Memories), switch each equalizer (and the cuts) on and off so you can compare.
 It adds about 10 ms of delay while on; very narrow bands below about 150 Hz come out a little wider and weaker than drawn. With FreeDV the equalizer works on the speech only: the modem tones are never equalized.
 
+#### Noise gate (Receive and Transmit)
+
+Each side has a **Noise gate** under the graph (off until ticked). It turns the audio down by **Range** dB (default 30) when the level stays under **Thresh.** (default -50 dB), waits **Hold** ms (default 150) before it starts to close and closes over **Rel.** ms (default 250), and opens again at once when the level comes back,
+so word endings are not chopped. **Receive** takes the hiss out of the pauses between words (it also works on decoded FreeDV speech); **Transmit** keeps the microphone's room noise out of the signal and out of the leveler, which would otherwise raise it. A readout shows how many dB the gate is taking off while it is closed.
+Set **Thresh.** just above the noise in the pauses and below your quiet words, then listen for chopped word beginnings and lower it if you hear them.
+
+#### Saved equalizer sets
+
+**My sets…** (beside Reset) saves the current bands (frequency, gain and Q) and the low-cut and high-cut under a name; **Use** puts a saved set on the Receive or the Transmit equalizer, and **Delete** removes it. Your sets also appear in the **Preset** list under *My sets*. Up to 20 sets are kept; they are shared by Receive and Transmit and by everyone connected, and kept across restarts.
+
 #### Transmit leveler and limiter
 
-Under the Transmit graph, two more stages for your voice (they are shared and kept like the equalizer, and they work on the speech only: a FreeDV signal is made from the leveled speech, and a recording sent with *Send* is not touched):
+Under the Transmit graph, two more stages for your voice, after the noise gate (they are shared and kept like the equalizer, and they work on the speech only: a FreeDV signal is made from the leveled speech, and a recording sent with *Send* is not touched):
 
 * **Leveler** brings your voice toward a **Target** level (default -18 dB). It only adds gain, up to **Max** (default 12 dB), follows a louder voice at once and a quieter one slowly (**Decay**, default 300 ms), and holds its gain in pauses instead of boosting the room noise.
   It evens out a voice that moves around the microphone, so the average power is higher for the same peaks. The readout beside it shows the gain it is adding while you transmit.

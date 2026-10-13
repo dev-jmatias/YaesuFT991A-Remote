@@ -43,7 +43,8 @@ FLUSH_INTERVAL_S = 0.05
 MAX_WS_CLIENTS = 24
 CMD_RATE, CMD_BURST, MAX_STRIKES = 40.0, 80, 200
 LEASE_OPS = {"request_control", "respond_control", "release_control", "force_control"}
-SCAN_KEEPS = {"scan_range", "scan_range_stop", "set_level", "set_control", "freedv", "set_eq", "set_dyn", "rec"}     # commands that leave a running range scan alone
+MAX_EQ_PRESETS = 20
+SCAN_KEEPS = {"scan_range", "scan_range_stop", "set_level", "set_control", "freedv", "set_eq", "set_dyn", "eq_preset_save", "eq_preset_delete", "rec"}     # commands that leave a running range scan alone
 
 
 def _int(v, lo=None, hi=None) -> int:
@@ -78,6 +79,7 @@ class Hub:
         self.scanner = RangeScanner(self)        # the start/stop frequency scan (scan.py)
         self.auto_width = lambda: True           # freedv.auto_width (set by create_app): widen a narrow radio filter when FreeDV is on
         self._widen_task: asyncio.Task | None = None
+        self.eq_presets: dict[str, dict] = {}    # the equalizer sets saved by the operators (name -> {bands, cut}), shared like the equalizer itself
         self.eq_path: Path | None = None         # where the equalizer settings are kept (eq.json in the data folder)
         self._last_freq = driver.state.get("frequency") or 0
         self.mic_reset_delay_s = 15.0            # how long the radio stays on REAR after the last operator left (a reload or a network blip is not "left")
@@ -287,10 +289,32 @@ class Hub:
             if not self.audio:
                 raise CommandError("audio is not available")
             try:
-                self.audio.set_dyn({k: msg[k] for k in ("leveler", "limiter") if k in msg})
+                self.audio.set_dyn({k: msg[k] for k in ("gate", "leveler", "limiter", "rx_gate") if k in msg})
             except ValueError as e:
                 raise CommandError(str(e)) from None
             self.push({"dyn": self.audio.dyn_state()})
+            self._save_eq()
+        elif typ == "eq_preset_save":
+            from .audio import eq as eqmod
+            name = msg.get("name")
+            if not isinstance(name, str) or not 1 <= len(name.strip()) <= 24 or not name.strip().isprintable():
+                raise CommandError("the name must be 1 to 24 printable characters")
+            name = name.strip()
+            try:
+                preset = {"bands": eqmod.clean_bands(msg.get("bands")), "cut": eqmod.clean_cut(msg.get("cut", {}))}
+            except ValueError as e:
+                raise CommandError(str(e)) from None
+            if name not in self.eq_presets and len(self.eq_presets) >= MAX_EQ_PRESETS:
+                raise CommandError(f"at most {MAX_EQ_PRESETS} saved sets: delete one first")
+            self.eq_presets[name] = preset
+            self.push({"eq_presets": self.eq_presets})
+            self._save_eq()
+        elif typ == "eq_preset_delete":
+            name = msg.get("name")
+            if not isinstance(name, str) or name not in self.eq_presets:
+                raise CommandError("no such saved set")
+            del self.eq_presets[name]
+            self.push({"eq_presets": self.eq_presets})
             self._save_eq()
         elif typ == "set_eq":
             if not self.audio:
@@ -513,7 +537,7 @@ class Hub:
         try:
             st = self.audio.eq_state()
             tmp = self.eq_path.with_suffix(".tmp")
-            tmp.write_text(json.dumps({"rx": st["rx"], "tx": st["tx"], "dyn": self.audio.tx_dyn.state()}), encoding="utf-8")
+            tmp.write_text(json.dumps({"rx": st["rx"], "tx": st["tx"], "dyn": self.audio.dyn_save(), "presets": self.eq_presets}), encoding="utf-8")
             tmp.replace(self.eq_path)
         except OSError:
             log.warning("could not save the equalizer settings", exc_info=True)
@@ -529,11 +553,17 @@ class Hub:
                                   rx_cut=d["rx"].get("cut", {"low": 0, "high": 0}), tx_cut=d["tx"].get("cut", {"low": 0, "high": 0}))
                 if "dyn" in d:
                     self.audio.set_dyn(d["dyn"])
+                for name, p in (d.get("presets") or {}).items():                  # the saved sets (an entry that no longer validates is dropped)
+                    try:
+                        self.eq_presets[str(name)] = {"bands": eqmod.clean_bands(p["bands"]), "cut": eqmod.clean_cut(p.get("cut", {}))}
+                    except (ValueError, KeyError, TypeError, AttributeError):
+                        pass
             except (OSError, ValueError, KeyError, TypeError):
                 log.info("no usable saved equalizer settings; starting flat and off")
         if self.audio is not None:
             self.extra["eq"] = self.audio.eq_state()
             self.extra["dyn"] = self.audio.dyn_state()
+            self.extra["eq_presets"] = self.eq_presets
 
     def _not_while_transmitting(self) -> None:
         """Changing which VFO transmits, or swapping VFOs, mid-transmission would move the signal: refuse."""

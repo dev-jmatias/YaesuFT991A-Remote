@@ -93,7 +93,7 @@ def test_settings_are_checked_and_merged():
     d = dyn.TxDynamics()
     d.set({"leveler": {"on": True, "max_gain": 9}})
     d.set({"limiter": {"on": True}})
-    assert d.state() == {"leveler": {"on": True, "max_gain": 9.0, "target": -18.0, "decay": 300.0}, "limiter": {"on": True, "ceiling": -3.0, "release": 100.0}}
+    assert d.state() == {"gate": dyn.DEFAULT_GATE, "leveler": {"on": True, "max_gain": 9.0, "target": -18.0, "decay": 300.0}, "limiter": {"on": True, "ceiling": -3.0, "release": 100.0}}
     for bad in ({"leveler": {"max_gain": 30}}, {"leveler": {"on": 1}}, {"limiter": {"ceiling": 3}}, {"limiter": {"release": 5}}, {"limiter": {"x": 1}},
                 {"mixer": {}}, {"leveler": []}, [], None, {"leveler": {"decay": float("nan")}}, {"leveler": {"target": True}}):
         with pytest.raises(ValueError):
@@ -144,3 +144,73 @@ async def test_the_transmit_path_applies_the_leveler_and_limiter_only_when_they_
     hub.load_eq()
     assert audio.tx_dyn.cfg["leveler"]["on"] is True and audio.tx_dyn.cfg["leveler"]["max_gain"] == 9.0
     await ws.close()
+
+
+def speechlike(db_speech=-20, db_noise=-62, words=4, word_s=0.4, gap_s=0.5):
+    """Words (a tone burst) separated by pauses of low noise."""
+    rng = np.random.default_rng(3)
+    noise = lambda secs: (rng.normal(0, 32768 * 10 ** (db_noise / 20), int(48000 * secs))).astype("<i2")
+    parts = []
+    for _ in range(words):
+        parts += [noise(gap_s), (tone(db_speech, 500, word_s).astype(float) + noise(word_s)).clip(-32768, 32767).astype("<i2")]
+    parts.append(noise(gap_s))
+    return np.concatenate(parts)
+
+
+def test_the_noise_gate_closes_in_the_pauses_and_opens_for_the_words():
+    g = dyn.NoiseGate()
+    g.set({"on": True, "threshold": -45, "range": 30, "hold": 100, "release": 200})
+    x = speechlike()
+    y = run(g, x)
+    n = len(y)
+    word = slice(int(48000 * 0.5) + 2400, int(48000 * 0.5) + 16000)       # inside the first word
+    pause = slice(int(48000 * 1.2), int(48000 * 1.38))   # late in the second pause (0.9 to 1.4 s): closed by then
+    assert abs(rms_db(y[word]) - rms_db(x[word].astype(float))) < 0.3                # a word goes through untouched
+    assert rms_db(y[pause]) < rms_db(x[pause].astype(float)) - 25                    # the pause noise is turned down by about the range
+    assert g.reduction_db > 20
+
+
+def test_the_noise_gate_holds_before_closing_and_does_not_chatter_or_chop_a_word_end():
+    g = dyn.NoiseGate()
+    g.set({"on": True, "threshold": -45, "range": 30, "hold": 200, "release": 300})
+    word = tone(-20, 500, 0.3)
+    run(g, word)
+    run(g, np.zeros(int(48000 * 0.1), "<i2"))                                          # 100 ms of silence: still inside the hold
+    assert g.reduction_db < 0.5
+    run(g, np.zeros(int(48000 * 0.3), "<i2"))                                          # a further 300 ms: closing now
+    assert 3 < g.reduction_db < 30
+    run(g, np.zeros(48000, "<i2"))
+    assert g.reduction_db == pytest.approx(30, abs=0.1)                                # closed for good: the whole range
+    run(g, tone(-20, 500, 0.05))                                                       # a word begins: open at once
+    assert g.reduction_db < 0.5
+    near = tone(-47, 500, 1.0)                                                         # a level 2 dB under the threshold, inside the 3 dB hysteresis: it does not flap
+    g2 = dyn.NoiseGate()
+    g2.set({"on": True, "threshold": -45, "hold": 0})
+    run(g2, tone(-30, 500, 0.2))
+    seen = set()
+    for i in range(0, 48000, N):
+        g2.process(near[i:i + N].tobytes())
+        seen.add(round(g2.reduction_db, 1))
+    assert len(seen) <= 20 and g2.reduction_db >= 0
+
+
+def test_the_gate_off_is_free_and_the_settings_are_checked():
+    g = dyn.NoiseGate()
+    pcm = tone(-60)[:N].tobytes()
+    assert g.process(pcm) == pcm
+    for bad in ({"threshold": -10}, {"range": 1}, {"hold": 2000}, {"release": 5}, {"x": 1}, {"on": "yes"}, [], None):
+        with pytest.raises(ValueError):
+            g.set(bad)
+    g.set({"on": True})
+    assert g.state() == dict(dyn.DEFAULT_GATE, on=True)
+
+
+def test_the_transmit_gate_comes_before_the_leveler_so_the_leveler_does_not_raise_the_noise():
+    d = dyn.TxDynamics()
+    d.set({"gate": {"on": True, "threshold": -50, "range": 40, "hold": 50, "release": 100}, "leveler": {"on": True, "max_gain": 20, "target": -18}})
+    assert d.active
+    x = speechlike(db_speech=-30, db_noise=-65)
+    y = run(d, x)
+    pause = slice(int(48000 * 1.2), int(48000 * 1.38))
+    assert rms_db(y[pause]) < rms_db(x[pause].astype(float)) - 20                    # the room noise is not boosted by the leveler
+    assert d.meters()["gate"] >= 0
