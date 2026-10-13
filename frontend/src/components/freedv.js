@@ -41,8 +41,8 @@ export function createFreeDV(host, ctx) {
     <p class="dim fdv-note" id="fdv-note" hidden></p>
     <p class="fdv-widthwarn" id="fdv-alcwarn" hidden>The radio's <b>ALC</b> is above its mark while you transmit: the radio is compressing the FreeDV signal, and a compressed RADE signal cannot be decoded at the other station. Lower the <b>Transmit level of the modem tones</b> (or the radio's power) until the ALC just touches.</p>
     <p class="fdv-widthwarn" id="fdv-widthwarn" hidden><span id="fdv-widthtext"></span> <button type="button" id="fdv-widen" class="active">Widen</button></p>
-    <label class="chk fdv-autow" id="fdv-autow-row" hidden title="RADE V1 occupies about 750 to 2250 Hz of the audio. A radio in a narrow filter (a DATA mode starts at 500 Hz on an FT-991A) can never decode it. With this on, the radio's filter is opened to the widest value up to 3000 Hz when FreeDV is switched on or the mode changes.">
-      <input type="checkbox" id="fdv-autow"> Open the radio's filter automatically (FreeDV needs about 2400 Hz or more)</label>
+    <label class="chk fdv-autow" id="fdv-autow-row" hidden title="RADE V1 occupies about 750 to 2250 Hz of the audio. A radio in a narrow filter (a DATA mode starts at 500 Hz on an FT-991A) can never decode it. With this on, a too-narrow filter is opened to about 2000 Hz (DATA modes) or 2400 Hz (USB/LSB) when FreeDV is switched on or the mode changes.">
+      <input type="checkbox" id="fdv-autow"> Open the radio's filter automatically (RADE V1 needs about 1500 Hz of audio)</label>
     <label class="chk fdv-data" id="fdv-data-row" hidden title="The FreeDV guide for the FT-991A uses the radio's DATA-USB / DATA-LSB mode: the audio then bypasses the radio's microphone processing and filters. It needs the radio's menus set as in the manual (FreeDV chapter), for example 070 DATA IN SELECT = REAR (the microphone button sets it)."><input type="checkbox" id="fdv-data"> Use the radio's DATA-USB / DATA-LSB mode (recommended by FreeDV; see the manual)</label>
     <div class="row fdv-rade" id="fdv-rade-row" hidden>
       <button type="button" id="fdv-rade-install" class="active" hidden>Install RADE</button>
@@ -94,7 +94,7 @@ export function createFreeDV(host, ctx) {
     if (info.rade_installable) {
       b.hidden = false;
       b.textContent = have ? "Reinstall RADE" : "Install RADE";
-      msg.textContent = have ? `RADE is installed (${info.rade_path || "system library"}).`
+      msg.textContent = have ? `RADE is installed (${info.rade_path || "system library"}).${info.tx_bpf === false ? " It is an older build: its V1 transmit signal is not band-limited (about 7 % of the power falls outside the signal's band, and the other station may see it wider than it should be). Reinstall RADE for the filtered signal." : ""}`
         : "RADE is not installed. The button downloads the library (about 22 MB) from the project's release page and starts using it at once.";
     } else {
       b.hidden = true;
@@ -170,8 +170,10 @@ export function createFreeDV(host, ctx) {
   };
   modeSel.onchange = () => { if (on()) send("freedv", { on: true, mode: modeSel.value }); };
 
-  const widest = () => Math.max(0, ...((S.state.width_options || []).map((o) => o.hz).filter((h) => h <= 3000)));
-  $("fdv-widen").onclick = () => { const t = widest(); if (t >= 2400) send("set_control", { name: "width", value: t }); };
+  // RADE V1 needs about 1500 Hz (audio 750-2250 Hz). DATA modes: the filter is centred on 1500 Hz, so 1700 Hz is the least and about 2000 Hz comfortable; USB/LSB: the passband starts near 300 Hz, so about 2100 Hz.
+  const widthRule = () => (/^DATA-[LU]$/.test(S.state.mode) ? { need: 1700, want: 2000 } : { need: 2100, want: 2400 });
+  const widest = () => { const { want } = widthRule(); return Math.min(Infinity, ...((S.state.width_options || []).map((o) => o.hz).filter((h) => h >= want && h <= 3000))); };
+  $("fdv-widen").onclick = () => { const t = widest(); if (Number.isFinite(t)) send("set_control", { name: "width", value: t }); };
   $("fdv-autow").onchange = async (e) => {
     try { await api("/api/config", "PUT", { freedv: { auto_width: e.target.checked } }); info.auto_width = e.target.checked; } catch (x) { toast(x.message); e.target.checked = !e.target.checked; }
   };
@@ -337,10 +339,10 @@ export function createFreeDV(host, ctx) {
       : !streaming ? `FreeDV ${modeName(s.freedv_mode)} is on. Tap the speaker icon (Listen) to hear and decode.`
       : !modeOk(s.mode) ? `FreeDV ${modeName(s.freedv_mode)} is on, but the radio is in ${s.mode}: use ${info.data_mode && hasData() ? "DATA-U (DATA-L below 10 MHz)" : "USB (LSB below 10 MHz)"}`
       : locked ? `FreeDV ${modeName(s.freedv_mode)} locked on a signal (SNR ${(+s.freedv_snr || 0).toFixed(1)} dB)` : `FreeDV ${modeName(s.freedv_mode)} listening, no signal locked yet`;
-    const w = +s.width || 0, narrowNow = onNow && w > 0 && w < 2400 && !s.narrow && widest() >= 2400;          // the radio's filter is too narrow for RADE
+    const w = +s.width || 0, rule = widthRule(), narrowNow = onNow && w > 0 && w < rule.need && !s.narrow && Number.isFinite(widest());          // the radio's filter is too narrow for RADE
     $("fdv-widthwarn").hidden = !narrowNow;
     $("fdv-alcwarn").hidden = !(onNow && s.tx && s.tx_source !== "radio" && pct(+s.alc || 0, S.ui?.meter?.alc_full || 160) >= 55);          // above the mark (50 %) where the radio's ALC zone begins
-    if (narrowNow) { $("fdv-widthtext").textContent = `The radio's ${s.mode} filter is only ${w} Hz wide: RADE needs about 2400 Hz or more, so nothing can decode.`; $("fdv-widen").textContent = `Widen to ${widest()} Hz`; }
+    if (narrowNow) { $("fdv-widthtext").textContent = `The radio's ${s.mode} filter is only ${w} Hz wide: RADE V1 needs about 1500 Hz of the audio (750 to 2250 Hz), so it cannot decode.`; $("fdv-widen").textContent = `Widen to ${widest()} Hz`; }
     for (const c of $("fdv-ch").querySelectorAll(".fdv-c")) c.classList.toggle("active", onNow && Math.abs(hz() - +c.dataset.hz) < 500 && s.freedv_mode === c.dataset.mode);
     paintTune();
   }

@@ -66,11 +66,13 @@ for the FT-991A ([freedv.org/getting-started-yaesu](https://freedv.org/getting-s
 Then switch on **Use the radio's DATA-USB / DATA-LSB mode** in the FreeDV tab (administrators): FreeDV then puts the radio in DATA-USB (DATA-LSB below 10 MHz) instead of USB (LSB).
 It is off by default because it needs the menus above. The receive level that goes to the Pi is then menu **073 DATA OUT LEVEL** (in USB/LSB it is 107 SSB OUT LEVEL).
 
-**The radio's filter width: at least 2400 Hz, the widest you can (BENCH-FOUND).** RADE V1 occupies about **750 to 2250 Hz** of the audio. An FT-991A in a DATA mode starts with a **500 Hz** receive filter (width code 10 in the
-radio's table): a recording of the noise in DATA-L spanned exactly 1225 to 1750 Hz, and the reference RADE decoder found nothing in it, because only a third of the carriers get through. The width is kept per mode (USB and DATA-L have
-their own), and the DATA modes have no width key on the radio's front panel, so the Filters tab now shows a **Width** list for DATA-U and DATA-L as well (500 Hz up to **3000 Hz**), and the FreeDV tab shows a warning with a **Widen** button
-when the filter is under 2400 Hz while FreeDV is on. With **Open the radio's filter automatically** ticked (the default; administrators can change it), the app widens a narrow filter by itself a moment after FreeDV is switched on or the mode
-changes, to the widest value up to 3000 Hz. Check it with a recording of the noise (REC on the Radio tab, then *Download raw radio audio*): it should span roughly 750 to 2250 Hz or more.
+**The radio's filter width: RADE V1 needs about 1500 Hz of the audio, and the DATA modes start too narrow (BENCH-FOUND).** RADE V1 occupies about **1500 Hz: the audio from about 750 to 2250 Hz** (V2 about 900 Hz, around 1000 to 1900 Hz).
+An FT-991A in a DATA mode starts with a **500 Hz** receive filter (width code 10 in the radio's table): a recording of the noise in DATA-L spanned exactly 1225 to 1750 Hz, and the reference RADE decoder found nothing in it,
+because only a third of the carriers get through. The DATA filter is centred on 1500 Hz, so **1700 Hz is the least that carries V1 and about 2000 Hz is comfortable**; in USB/LSB the passband starts near 300 Hz, so about 2100 Hz is needed
+and the default 2400 Hz is fine. More than that only lets in more noise and neighbouring stations (it does not help RADE). The width is kept per mode (USB and DATA-L have their own), and the DATA modes have no width key on the
+radio's front panel, so the Filters tab shows a **Width** list for DATA-U and DATA-L as well, and the FreeDV tab shows a warning with a **Widen** button when the filter is too narrow while FreeDV is on. With
+**Open the radio's filter automatically** ticked (the default; administrators can change it), the app opens a too-narrow filter by itself a moment after FreeDV is switched on or the mode changes, to the narrowest value from 2000 Hz
+(DATA) or 2400 Hz (USB/LSB) up. Check it with a recording of the noise (REC on the Radio tab, then *Download raw radio audio*): it should span roughly 750 to 2250 Hz or more.
 
 **Always:** speech processor off, no equaliser tricks (the radio must pass the modem tones unchanged).
 
@@ -120,6 +122,15 @@ signal by itself. **A V1 station cannot decode a V2 station and the other way ro
 * The FreeDV Reporter lists V2 stations as "RADE V2"; the site's mode name for V2 is `RADEV2` (as other open-source clients report it).
 
 ### When your transmission is unreadable at the other station
+
+**First check that you and the other station use the same RADE version.** V1 and V2 are different waveforms and do not decode each other at all (the reference decoder gave 0 % lock on a V2 recording with V1 and
+the other way round). Many stations on the air use V2 now (about 900 Hz wide, around 1000 to 1900 Hz of the audio) while others use V1 (about 1500 Hz, 750 to 2250 Hz). Ask the station, look at the mode on the
+FreeDV Reporter list, and set the same one on the FreeDV tab; a station that "cannot understand anything" is very often on the other version.
+
+**Check that the transmitted signal stays in its band.** The V1 modem's output is made of OFDM carriers with sharp edges; without a band-pass filter about **7 % of its power falls outside 700 to 2300 Hz**
+(skirts down to the audio floor and up past 3 kHz), so on someone's waterfall it looks wider than it should and the radio's ALC and filters see it. RADE V2 has its filter on by default; for V1 the library has it
+but leaves it off. Libraries installed from **1.1.30** on have it switched on (1.6 % outside the band, a lower peak-to-average ratio): if the FreeDV tab says the installed RADE library is older, press **Reinstall RADE**.
+
 
 RADE needs a continuous stream of tones, with no holes in it. The Pi therefore keeps a small cushion (about 0.2 s) of modem tones queued before it starts sending them to the radio, so an uneven network (Wi-Fi, a remote connection)
 cannot put gaps into the signal; when you release PTT the Pi first sends the last modem frame (silence completes it) and lets the queued tones reach the radio, so the end of the over is not cut off; the radio is unkeyed about half a second after you let go.

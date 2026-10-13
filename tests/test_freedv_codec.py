@@ -142,3 +142,19 @@ def test_flush_completes_the_last_modem_frame_and_sends_nothing_extra_when_nothi
     last = tx.flush()
     assert last and all(len(f) == len(got[0]) for f in last)        # whole 20 ms frames of tones
     assert tx.fd.pending() == 0 and tx.flush() == []                # now nothing waits, and a second flush adds nothing
+
+
+def test_the_v1_transmit_signal_stays_in_its_band_when_the_library_has_the_filter():
+    """Libraries built from 1.1.30 on switch the RADE V1 transmit band-pass filter on (about 7 % of the power was outside 700-2300 Hz without it; the filter brings it under 3 %)."""
+    from radio_remote.audio import rade
+    if not rade.tx_bpf_available():
+        pytest.skip("this RADE library is older: no transmit band-pass filter")
+    tx = freedv.TxChain("RADE", level=1.0)
+    mic = speechlike(700, seed=3)
+    tones = [np.frombuffer(f, dtype="<i2").astype(float) for i in range(700) for f in tx.process(mic[i * FRAME_SAMPLES:(i + 1) * FRAME_SAMPLES].tobytes())]
+    m = np.concatenate(tones)[RATE * 2:]
+    S = np.abs(np.fft.rfft(m * np.hanning(len(m)))) ** 2
+    f = np.fft.rfftfreq(len(m), 1 / RATE)
+    outside = S[(f < 700) | (f >= 2300)].sum() / S.sum()
+    assert outside < 0.03, f"{100 * outside:.1f} % of the transmit power is outside the band"
+    assert S[f >= 3000].sum() / S.sum() < 0.005                           # and almost nothing above 3 kHz

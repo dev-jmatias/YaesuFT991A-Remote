@@ -22,6 +22,12 @@ echo "==> Fetching rade_c ($RADE_C_REF)"
 git clone --quiet "$RADE_C_URL" "$WORK/rade_c"
 git -C "$WORK/rade_c" checkout --quiet "$RADE_C_REF"
 
+echo "==> Switching on the RADE V1 transmit band-pass filter (V2 has it on by default; the FreeDV program uses it too)"
+# Without it about 7 % of the V1 transmit power falls outside the signal's 750-2250 Hz (99 % of it is under 2.8 kHz, with the OFDM skirts down to the audio floor); with it 1.6 % (99 % under 2.2 kHz)
+# and the peak-to-average ratio is lower. Measured with the real library, 2026-10-13.
+sed -i 's|int bpf_en = 0;  /\* BPF disabled by default \*/|int bpf_en = 1;  /* BPF enabled (Radio Remote patch) */|' "$WORK/rade_c/src/rade_api.c"
+grep -q 'int bpf_en = 1;' "$WORK/rade_c/src/rade_api.c" || { echo "could not enable the V1 transmit band-pass filter in rade_api.c" >&2; exit 1; }
+
 echo "==> Adding the Radio Remote glue to the library"
 cp "$HERE/native/rade/rade_glue.c" "$WORK/rade_c/src/rade_glue.c"
 # put the glue into the same shared library as rade_api.c (it needs the Opus FARGAN/LPCNet code that library already contains)

@@ -54,6 +54,9 @@ typedef struct rg {
 static int g_init;
 
 RG_EXPORT int rg_abi_version(void) { return RG_ABI_VERSION; }
+/* Present (and 1) only in libraries built by scripts/build_rade.sh from 1.1.30 on: the V1 transmit band-pass filter is switched on in them (an older library sends the V1 signal
+ * with its OFDM skirts unfiltered; the page tells the administrator to reinstall RADE). */
+RG_EXPORT int rg_tx_bpf(void) { return 1; }
 
 /* v2 = 0: RADE V1; v2 = 1: RADE V2 (experimental upstream). The library that has this function can do V2; an older one only has rg_open. */
 RG_EXPORT rg *rg_open_mode(int v2) {

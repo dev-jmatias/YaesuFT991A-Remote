@@ -550,8 +550,13 @@ async def test_freedv_opens_up_a_narrow_radio_filter_once_and_only_when_it_is_ne
     hub.driver.state.update(connected=True, tx=False, tuning=False, narrow=False, mode="DATA-L", width=500, width_options=opts)
     hub.audio.freedv_state = lambda: {"on": True}
     await hub._widen_now()
-    assert calls == [("width", 3000)]                                           # 500 Hz cannot carry RADE: the widest (3000 Hz) is chosen
-    for change in ({"width": 2400}, {"width": 3000}, {"narrow": True}, {"tx": True}, {"connected": False}, {"width": None}):
+    assert calls == [("width", 2400)]                                           # 500 Hz cannot carry RADE (V1 needs about 1500 Hz): the narrowest value from 2000 Hz up is chosen
+    calls.clear()
+    hub.driver.state.update(mode="USB", width=1800, width_options=[{"code": 9, "hz": 1800}, {"code": 11, "hz": 2100}, {"code": 14, "hz": 2400}, {"code": 17, "hz": 2700}])
+    await hub._widen_now()
+    assert calls == [("width", 2400)]                                           # in USB the passband starts near 300 Hz: 1800 Hz is too little, 2400 Hz the default
+    hub.driver.state.update(mode="DATA-L", width_options=opts)
+    for change in ({"width": 1700}, {"width": 2400}, {"width": 3000}, {"narrow": True}, {"tx": True}, {"connected": False}, {"width": None}):
         calls.clear()
         hub.driver.state.update(connected=True, tx=False, narrow=False, width=500)
         hub.driver.state.update(change)

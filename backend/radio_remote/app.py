@@ -96,8 +96,9 @@ class Hub:
         self._on_change(fields)
 
     def _schedule_widen(self) -> None:
-        """FreeDV needs a radio filter of about 2400 Hz or more (RADE V1 occupies 750..2250 Hz of the audio). A radio left in a narrow filter (a DATA mode defaults to 500 Hz) can never decode it:
-        a moment after FreeDV is switched on, or the mode changes while it is on, a narrower filter is opened up (freedv.auto_width)."""
+        """RADE V1 needs about 1500 Hz (750..2250 Hz of the audio), V2 about 900 Hz. A radio left in a narrow filter (a DATA mode defaults to 500 Hz) can never decode it. In the DATA modes the
+        filter is centred on 1500 Hz, so 1700 Hz is the least that carries V1 and about 2000 Hz is comfortable; in USB/LSB the passband starts near 300 Hz, so it needs about 2100 Hz.
+        A moment after FreeDV is switched on, or the mode changes while it is on, a filter under that is opened to the narrowest comfortable value (freedv.auto_width)."""
         if not self.auto_width():
             return
         if self._widen_task is not None and not self._widen_task.done():
@@ -116,10 +117,12 @@ class Hub:
         if not (self.audio and self.audio.freedv_state().get("on") and st.get("connected")) or st.get("tx") or st.get("tuning") or st.get("narrow"):
             return
         width, opts = st.get("width"), st.get("width_options") or []
-        if not width or width >= 2400:
+        data = st.get("mode") in ("DATA-L", "DATA-U")
+        need, want = (1700, 2000) if data else (2100, 2400)
+        if not width or width >= need:
             return
-        target = max((o["hz"] for o in opts if o["hz"] <= 3000), default=0)
-        if target < 2400:
+        target = min((o["hz"] for o in opts if want <= o["hz"] <= 3000), default=0)
+        if target < need:
             return
         await d.set_control("width", target)
         log.info("FreeDV: the radio's %s filter was %s Hz wide; widened to %s Hz", st.get("mode"), width, target)
@@ -816,7 +819,7 @@ async def freedv_info(request):
     app = request.app
     fd, audio = app[K_CFG]["freedv"], app[K_AUDIO]
     st = audio.freedv_state()
-    return web.json_response({**st, "tx_level_db": fd["tx_level_db"], "data_mode": bool(fd.get("data_mode", False)), "auto_width": bool(fd.get("auto_width", True)), "install_rade": "sudo /opt/radio-remote/current/scripts/install_rade.sh",
+    return web.json_response({**st, "tx_level_db": fd["tx_level_db"], "data_mode": bool(fd.get("data_mode", False)), "auto_width": bool(fd.get("auto_width", True)), "tx_bpf": _rade.tx_bpf_available(), "install_rade": "sudo /opt/radio-remote/current/scripts/install_rade.sh",
                           "rade_installable": _rade.installable(), "arch": platform.machine(),
                           "rade_path": _rade.loaded_path(),
                           "tune": {m: {"centre": p["centre"], "width": p["width"]} for m, p in _tune.PARAMS.items()}, "channels": [

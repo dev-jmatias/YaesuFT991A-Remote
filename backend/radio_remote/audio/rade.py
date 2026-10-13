@@ -119,6 +119,12 @@ def available() -> tuple[bool, str]:
     return (True, "") if _load() else (False, _ERR)
 
 
+def tx_bpf_available() -> bool:
+    """True when the installed library has the V1 transmit band-pass filter switched on (libraries built from 1.1.30 on); an older one sends the V1 signal with unfiltered skirts."""
+    lib = _load()
+    return bool(lib is not None and hasattr(lib, "rg_tx_bpf"))
+
+
 def v2_available() -> tuple[bool, str]:
     """RADE V2 needs a library built from this version of Radio Remote on (an older V1-only library still works for V1)."""
     lib = _load()

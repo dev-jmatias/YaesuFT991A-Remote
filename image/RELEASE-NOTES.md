@@ -42,6 +42,12 @@ and goes back by itself if the new version does not start. Settings and accounts
 | `radio-remote-rade-linux-aarch64.tar.xz` | the optional RADE library (FreeDV neural modes V1 and V2) for a Raspberry Pi, installed with `install_rade.sh` (the PC build is `…-x86_64.tar.xz`) |
 | `SHA256SUMS` | checksums of all of the above |
 
+### What is new in 1.1.30
+
+- **The RADE V1 transmit signal is now band-limited. After updating, press Reinstall RADE (FreeDV tab, administrators) on every station that transmits.** The library has a transmit band-pass filter for V1 but leaves it off (RADE V2 has it on). Without it about **7 % of the V1 transmit power falls outside 700-2300 Hz**, up past 3 kHz, so the signal looked wider than it should on other stations' waterfalls and the radio's ALC and filters saw the skirts; with it 1.6 % is outside the band, the peak-to-average ratio is lower and the loopback decode locks better (98 % against 94 % in a test). The RADE library built from this release switches it on; the FreeDV tab says when the installed library is the older kind.
+- **The radio-filter rule is now what RADE really needs.** RADE V1 occupies about 1500 Hz (audio 750-2250 Hz), V2 about 900 Hz. The DATA filter is centred on 1500 Hz, so 1700 Hz is the least that carries V1 and about 2000 Hz is comfortable; in USB/LSB about 2100 Hz is needed (the default 2400 Hz is fine). 1.1.27's "at least 2400 Hz, widen to 3000 Hz" asked for more than that. The FreeDV tab's warning and its Widen button, and the automatic widening (on by default), now open a too-narrow filter to the narrowest comfortable value (from 2000 Hz in DATA modes, 2400 Hz in USB/LSB) instead of the widest.
+- **FreeDV manual:** check first that both stations use the **same RADE version**: V1 and V2 are different waveforms and do not decode each other at all (a recording of a V2 station gave 0 % lock with V1 and the other way round); and a section on the transmit band limit.
+
 ### What is new in 1.1.29
 
 - **ALC warning on the FreeDV tab.** While you transmit with FreeDV on and the radio's ALC is above its mark (about 55 % of the meter), a message says the radio is compressing the FreeDV signal and tells you to lower the transmit level of the modem tones (or the radio's power) until the ALC just touches. RADE carries information in both amplitude and phase: a signal compressed by the radio's ALC cannot be decoded at the other station.
