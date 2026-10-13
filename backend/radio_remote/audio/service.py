@@ -481,6 +481,7 @@ class AudioService:
                     pcm = apply_gain(await src.read_frame(), self.rx_gain, limit=self.rx_gain > 1.0 and self._fd_rx is None)
                     self._level("audio_rx_level", level_pct(pcm))                # the meter shows what the radio sends (the modem tones)
                     raw_pcm = pcm                                                # the radio's own audio, before FreeDV decodes it (the recorder keeps it for analysis)
+                    rec_diag = None
                     if self._fd_rx is not None and self._tx_gate_open:
                         pcm = bytes(FRAME_BYTES)                                 # transmitting: never decode (and replay) our own signal
                         self._rx_hold = RX_HOLD_FRAMES
@@ -516,6 +517,7 @@ class AudioService:
                                     log.warning("FreeDV receive: a 20 ms audio frame took %.0f ms (%.0f ms of it inside the decoder; %d such frames so far; averages: %.1f ms in total, %.1f ms decoding): "
                                                 "if the decoding is the long part the PC is too slow for this mode, otherwise something else keeps the server busy", ms, work, self.rx_slow, self.rx_ms_avg, self.rx_work_avg)
                             ch = self._fd_rx
+                            rec_diag = (int(ch.sync), float(ch.snr), float(ch.afc.offset) if hasattr(ch, "afc") else 0.0, ms)
                             self._levels.update(freedv_sync=ch.sync, freedv_snr=round(ch.snr, 1))
                             if hasattr(ch, "afc"):                                   # the tuning aid (freedv_tune.py): spectrum, level, where the signal is, what was corrected
                                 self._levels.update(freedv_offset=int(round(ch.afc.offset)), freedv_afc=ch.tune_state())
@@ -526,7 +528,7 @@ class AudioService:
                             log.exception("FreeDV receive failed; switching it off")
                             self.set_freedv(False)
                     if self.recorder is not None and self.recorder.on and not self._tx_gate_open:
-                        self.recorder.frame(pcm, raw_pcm if self._fd_rx is not None else None)      # what the receiver produced, before the equalizer; not while we transmit
+                        self.recorder.frame(pcm, raw_pcm if self._fd_rx is not None else None, rec_diag)      # what the receiver produced, before the equalizer; not while we transmit
                     if self.rx_gate.cfg["on"]:
                         pcm = self.rx_gate.process(pcm)                          # the receive noise gate: the hiss between words
                         self._level("rx_gate_db", round(self.rx_gate.reduction_db, 1))

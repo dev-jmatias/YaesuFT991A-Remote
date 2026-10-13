@@ -188,3 +188,19 @@ def test_the_radios_raw_audio_is_kept_beside_the_speech_only_when_it_is_given(tm
     info2 = r.stop()
     assert "raw" not in info2 and not (tmp_path / f"{info2['id']}.raw.wav").exists()
     assert r.delete(info["id"]) and not (tmp_path / f"{info['id']}.raw.wav").exists()
+
+
+def test_the_live_decoders_view_is_summarised_per_second_and_saved_with_the_clip(tmp_path):
+    r = rec.Recorder(tmp_path)
+    r.start({"freedv": "RADE"})
+    sp = tone(300, 3.0)
+    for k, i in enumerate(range(0, len(sp) - N + 1, N)):
+        sec = k // 50
+        r.frame(sp[i:i + N].tobytes(), sp[i:i + N].tobytes(), (1 if sec != 1 else 0, 10.0 + sec, 5.0 * sec, 12 + (40 if k == 60 else 0)))
+    info = r.stop()
+    d = info["decoder"]
+    assert d["sync"] == [1.0, 0.0, 1.0] and d["snr"] == [10.0, 11.0, 12.0] and d["offset"] == [0, 5, 10] and d["ms"] == [12, 52, 12]
+    assert r.list()[0]["decoder"] == d                                            # kept in the index (and served as {id}.json)
+    r.start({})
+    feed(r, tone(300, 1.0))                                                        # no decoder information (FreeDV off): nothing extra
+    assert "decoder" not in r.stop()

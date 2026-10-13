@@ -42,6 +42,11 @@ and goes back by itself if the new version does not start. Settings and accounts
 | `radio-remote-rade-linux-aarch64.tar.xz` | the optional RADE library (FreeDV neural modes V1 and V2) for a Raspberry Pi, installed with `install_rade.sh` (the PC build is `…-x86_64.tar.xz`) |
 | `SHA256SUMS` | checksums of all of the above |
 
+### What is new in 1.1.29
+
+- **ALC warning on the FreeDV tab.** While you transmit with FreeDV on and the radio's ALC is above its mark (about 55 % of the meter), a message says the radio is compressing the FreeDV signal and tells you to lower the transmit level of the modem tones (or the radio's power) until the ALC just touches. RADE carries information in both amplitude and phase: a signal compressed by the radio's ALC cannot be decoded at the other station.
+- **Decoder log for recordings.** A recording made with FreeDV on now has a **Decoder log** (Recordings > Decoder log, JSON): what the live FreeDV decoder believed second by second (share of the second in sync, SNR, tuning offset, slowest frame in ms). Send it with the raw radio audio when a station decodes badly: it shows whether the live decoder lost lock where the reference decoder does not.
+
 ### What is new in 1.1.28
 
 - **Noise gate, on both sides** (Audio tab, under each equalizer graph; off until ticked): Thresh., Range, Hold and Rel. It turns the audio down by Range dB when the level stays under the threshold, waits the hold time before closing and opens again at once, with hysteresis so it does not flutter and word endings are not chopped. Receive takes the hiss out of the pauses between words (also decoded FreeDV speech); Transmit keeps the microphone's room noise out of the signal and out of the leveler. A readout shows how many dB it is taking off.

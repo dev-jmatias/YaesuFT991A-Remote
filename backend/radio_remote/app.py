@@ -851,6 +851,17 @@ async def recording_file(request):
     return web.FileResponse(p, headers=headers)
 
 
+async def recording_info(request):
+    """One clip's description as JSON, including what the live FreeDV decoder believed second by second (sync, SNR, tuning offset, slowest frame)."""
+    rec = request.app[K_AUDIO].recorder if request.app[K_AUDIO] else None
+    clip = request.match_info["clip"]
+    item = next((i for i in rec.list() if i["id"] == clip), None) if rec else None
+    if item is None:
+        raise web.HTTPNotFound(text="no such recording")
+    headers = {"Content-Disposition": f'attachment; filename="{clip}.json"'} if request.query.get("download") == "1" else {}
+    return web.json_response(item, headers=headers)
+
+
 async def recording_delete(request):
     if request[K_SESSION].role == "viewer":
         raise web.HTTPForbidden(text="viewers cannot delete recordings")
@@ -1064,6 +1075,7 @@ def create_app(cfg: dict, driver: RadioDriver | None = None, auth: AuthStore | N
     app.router.add_get("/api/recordings", recordings_list)
     app.router.add_get(r"/api/recordings/{clip:[0-9a-z]+}.wav", recording_file)
     app.router.add_get(r"/api/recordings/{clip:[0-9a-z]+}.raw.wav", recording_file)
+    app.router.add_get(r"/api/recordings/{clip:[0-9a-z]+}.json", recording_info)
     app.router.add_post(r"/api/recordings/{clip:[0-9a-z]+}/delete", recording_delete)
     app.router.add_get("/api/memories", memories)
     app.router.add_post("/api/memories/{channel}", memory_write)

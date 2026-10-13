@@ -1,4 +1,5 @@
 import { api } from "../api.js";
+import { pct } from "../meter-cal.js";
 import { el } from "../util.js";
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
@@ -38,6 +39,7 @@ export function createFreeDV(host, ctx) {
       <label class="fdv-mode">Mode <select id="fdv-mode" aria-label="FreeDV mode"></select></label>
     </div>
     <p class="dim fdv-note" id="fdv-note" hidden></p>
+    <p class="fdv-widthwarn" id="fdv-alcwarn" hidden>The radio's <b>ALC</b> is above its mark while you transmit: the radio is compressing the FreeDV signal, and a compressed RADE signal cannot be decoded at the other station. Lower the <b>Transmit level of the modem tones</b> (or the radio's power) until the ALC just touches.</p>
     <p class="fdv-widthwarn" id="fdv-widthwarn" hidden><span id="fdv-widthtext"></span> <button type="button" id="fdv-widen" class="active">Widen</button></p>
     <label class="chk fdv-autow" id="fdv-autow-row" hidden title="RADE V1 occupies about 750 to 2250 Hz of the audio. A radio in a narrow filter (a DATA mode starts at 500 Hz on an FT-991A) can never decode it. With this on, the radio's filter is opened to the widest value up to 3000 Hz when FreeDV is switched on or the mode changes.">
       <input type="checkbox" id="fdv-autow"> Open the radio's filter automatically (FreeDV needs about 2400 Hz or more)</label>
@@ -337,6 +339,7 @@ export function createFreeDV(host, ctx) {
       : locked ? `FreeDV ${modeName(s.freedv_mode)} locked on a signal (SNR ${(+s.freedv_snr || 0).toFixed(1)} dB)` : `FreeDV ${modeName(s.freedv_mode)} listening, no signal locked yet`;
     const w = +s.width || 0, narrowNow = onNow && w > 0 && w < 2400 && !s.narrow && widest() >= 2400;          // the radio's filter is too narrow for RADE
     $("fdv-widthwarn").hidden = !narrowNow;
+    $("fdv-alcwarn").hidden = !(onNow && s.tx && s.tx_source !== "radio" && pct(+s.alc || 0, S.ui?.meter?.alc_full || 160) >= 55);          // above the mark (50 %) where the radio's ALC zone begins
     if (narrowNow) { $("fdv-widthtext").textContent = `The radio's ${s.mode} filter is only ${w} Hz wide: RADE needs about 2400 Hz or more, so nothing can decode.`; $("fdv-widen").textContent = `Widen to ${widest()} Hz`; }
     for (const c of $("fdv-ch").querySelectorAll(".fdv-c")) c.classList.toggle("active", onNow && Math.abs(hz() - +c.dataset.hz) < 500 && s.freedv_mode === c.dataset.mode);
     paintTune();

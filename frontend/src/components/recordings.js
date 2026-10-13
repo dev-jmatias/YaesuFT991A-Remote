@@ -96,6 +96,7 @@ export function openRecordings(ctx) {
       const r = el(`<div class="recrow"><div class="reclabel">${esc(label(c))}</div>
         <audio controls preload="none" src="${url(c)}"></audio>
         <div class="row"><a class="btnlink" href="${url(c)}?download=1" download>Download</a>
+          ${c.decoder ? `<a class="btnlink" href="/api/recordings/${c.id}.json?download=1" download title="What the live FreeDV decoder believed second by second (sync, SNR, tuning offset, slowest frame): send it with the raw file">Decoder log</a>` : ""}
           ${c.raw ? `<a class="btnlink" href="${rawurl(c)}?download=1" download title="The radio's own audio before FreeDV decoding: the file to analyse why a station decodes badly">Download raw radio audio</a>` : ""}
           <button type="button" class="active" data-send>Send</button>
           <button type="button" class="danger" data-del>Delete</button></div></div>`);

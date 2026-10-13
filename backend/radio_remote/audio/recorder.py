@@ -130,13 +130,16 @@ class Recorder:
             return
         self._dec, self._chunks, self._n, self._meta, self.on = Decimator(), [], 0, dict(meta), True
         self._raw_dec, self._raw_chunks = Decimator(), []
+        self._diag: list[tuple] = []
         self._meta["t0"] = time.time()
         self._publish()
 
-    def frame(self, pcm: bytes, raw: bytes | None = None) -> None:
+    def frame(self, pcm: bytes, raw: bytes | None = None, diag: tuple | None = None) -> None:
         """One 20 ms frame (48 kHz, 16-bit mono) of what the receiver produced; raw: the radio's audio for the same 20 ms before FreeDV decoding (only while FreeDV is on)."""
         if not self.on:
             return
+        if diag is not None:
+            self._diag.append(diag)                                          # (sync, snr, tuning offset Hz, frame time ms) of the live FreeDV decoder for this 20 ms
         if raw is not None:
             self._raw_chunks.append(_to_i16(self._raw_dec.process(np.frombuffer(raw, dtype="<i2"))))
         y = _to_i16(self._dec.process(np.frombuffer(pcm, dtype="<i2")))
@@ -154,9 +157,10 @@ class Recorder:
         raw_chunks, self._raw_chunks, self._raw_dec = self._raw_chunks, [], None
         data = np.concatenate(chunks) if chunks else np.zeros(0, "<i2")
         raw = np.concatenate(raw_chunks) if raw_chunks else None
+        diag, self._diag = self._diag, []
         info = None
         if len(data) >= RATE_CLIP // 2:                                   # less than half a second is not a recording
-            info = self._save(data, raw)
+            info = self._save(data, raw, diag)
         self._publish()
         return info
 
@@ -168,7 +172,20 @@ class Recorder:
             w.setframerate(RATE_CLIP)
             w.writeframes(data.tobytes())
 
-    def _save(self, data: np.ndarray, raw: np.ndarray | None = None) -> dict:
+    @staticmethod
+    def _summarise(diag: list[tuple]) -> dict | None:
+        """Per second: the share of the second the decoder was in sync, its mean SNR, its mean tuning offset and its slowest frame (ms)."""
+        if not diag:
+            return None
+        d = np.array(diag, dtype=float)
+        sec = len(d) // 50
+        if sec == 0:
+            return None
+        d = d[:sec * 50].reshape(sec, 50, 4)
+        return {"sync": [round(float(v), 2) for v in d[:, :, 0].mean(1)], "snr": [round(float(v), 1) for v in d[:, :, 1].mean(1)],
+                "offset": [int(round(float(v))) for v in d[:, :, 2].mean(1)], "ms": [int(round(float(v))) for v in d[:, :, 3].max(1)]}
+
+    def _save(self, data: np.ndarray, raw: np.ndarray | None = None, diag: list[tuple] | None = None) -> dict:
         self.folder.mkdir(parents=True, exist_ok=True)
         t0 = self._meta.get("t0", time.time())
         cid = time.strftime("%Y%m%d%H%M%S", time.localtime(t0))
@@ -180,6 +197,9 @@ class Recorder:
         if raw is not None and len(raw) >= RATE_CLIP // 2:
             self._write_wav(self.folder / f"{cid}.raw.wav", raw)
             info["raw"] = True
+        summary = self._summarise(diag or [])
+        if summary:
+            info["decoder"] = summary
         items.append(info)
         items.sort(key=lambda i: i["t0"])
         while len(items) > MAX_CLIPS:                                     # the oldest makes room
