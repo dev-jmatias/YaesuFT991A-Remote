@@ -7,7 +7,6 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "
 // microphone into modem tones while that connection holds PTT (see docs/freedv.md). This tab: on/off, the mode, the preset channels and the
 // transmit level. By the FreeDV convention frequencies below 10 MHz use LSB and above use USB.
 export const ssbFor = (hz) => (hz < 10_000_000 ? "LSB" : "USB");
-const dataFor = (hz) => (hz < 10_000_000 ? "DATA-L" : "DATA-U");
 const MODE_LABEL = { RADE: "RADE V1", RADE2: "RADE V2" };
 const modeName = (m) => MODE_LABEL[m] || m;
 const fmtMHz = (hz) => (hz / 1e6).toFixed(hz % 1000 ? 4 : 3);
@@ -16,10 +15,9 @@ export function createFreeDV(host, ctx) {
   const { S, send, toast, signal } = ctx;
   const admin = S.user.role === "admin";
   let info = { channels: [], modes: ["RADE"], tx_level_db: -3, data_mode: false };
-  const hasData = () => (S.caps?.modes || []).includes("DATA-U") && (S.caps?.modes || []).includes("DATA-L");
   // The radio mode FreeDV uses: plain USB/LSB, or (option "DATA", the FreeDV guide's way for the FT-991A) DATA-USB/DATA-LSB, which bypass the radio's microphone processing.
-  const radioModeFor = (hz) => (info.data_mode && hasData() ? dataFor(hz) : ssbFor(hz));
-  const modeOk = (m) => (info.data_mode && hasData() ? ["DATA-U", "DATA-L"] : ["USB", "LSB"]).includes(m);
+  const radioModeFor = (hz) => ssbFor(hz);
+  const modeOk = (m) => ["USB", "LSB"].includes(m);
   const root = el(`<div class="fdv">
     <h2>FreeDV</h2>
     <div class="fdv-status" aria-live="polite"><i class="dot" id="fdv-dot"></i><span id="fdv-text">FreeDV is off</span></div>
@@ -43,7 +41,6 @@ export function createFreeDV(host, ctx) {
     <p class="fdv-widthwarn" id="fdv-widthwarn" hidden><span id="fdv-widthtext"></span> <button type="button" id="fdv-widen" class="active">Widen</button></p>
     <label class="chk fdv-autow" id="fdv-autow-row" hidden title="RADE V1 occupies about 750 to 2250 Hz of the audio. A radio in a narrow filter (a DATA mode starts at 500 Hz on an FT-991A) can never decode it. With this on, a too-narrow filter is opened to about 2000 Hz (DATA modes) or 2400 Hz (USB/LSB) when FreeDV is switched on or the mode changes.">
       <input type="checkbox" id="fdv-autow"> Open the radio's filter automatically (RADE V1 needs about 1500 Hz of audio)</label>
-    <label class="chk fdv-data" id="fdv-data-row" hidden title="The FreeDV guide for the FT-991A uses the radio's DATA-USB / DATA-LSB mode: the audio then bypasses the radio's microphone processing and filters. It needs the radio's menus set as in the manual (FreeDV chapter), for example 070 DATA IN SELECT = REAR (the microphone button sets it)."><input type="checkbox" id="fdv-data"> Use the radio's DATA-USB / DATA-LSB mode (recommended by FreeDV; see the manual)</label>
     <div class="row fdv-rade" id="fdv-rade-row" hidden>
       <button type="button" id="fdv-rade-install" class="active" hidden>Install RADE</button>
       <span class="dim" id="fdv-rade-msg"></span>
@@ -177,15 +174,6 @@ export function createFreeDV(host, ctx) {
   $("fdv-autow").onchange = async (e) => {
     try { await api("/api/config", "PUT", { freedv: { auto_width: e.target.checked } }); info.auto_width = e.target.checked; } catch (x) { toast(x.message); e.target.checked = !e.target.checked; }
   };
-  $("fdv-data").onchange = async (e) => {
-    try {
-      await api("/api/config", "PUT", { freedv: { data_mode: e.target.checked } });
-      info.data_mode = e.target.checked;
-      if (on() && !modeOk(S.state.mode)) await send("set_mode", { mode: radioModeFor(hz()) });
-      toast(e.target.checked ? "FreeDV now uses DATA-USB / DATA-LSB" : "FreeDV now uses USB / LSB");
-    } catch (x) { e.target.checked = !e.target.checked; toast(x.message); }
-  };
-
   $("fdv-test").onchange = (e) => { ctx.ui.levelTest = e.target.checked; $("fdv-test-note").hidden = !e.target.checked; };
   let lvTimer = 0;
   $("fdv-lvr").oninput = (e) => {
@@ -209,10 +197,8 @@ export function createFreeDV(host, ctx) {
     $("fdv-note").hidden = !missing.length;
     $("fdv-note").textContent = missing.map(([m, why]) => `${modeName(m)}: ${why}`).join("  ");
     paintRadeRow();
-    $("fdv-data-row").hidden = !(admin && hasData());
     $("fdv-autow-row").hidden = !admin;
     $("fdv-autow").checked = info.auto_width !== false;
-    $("fdv-data").checked = !!info.data_mode;
     $("fdv-lvr").value = info.tx_level_db; $("fdv-lv").textContent = info.tx_level_db;
     $("fdv-lvr").disabled = !admin;
     $("fdv-test-row").hidden = S.user.role === "viewer" || !S.caps.features.ptt;
@@ -337,7 +323,7 @@ export function createFreeDV(host, ctx) {
     const au = ctx.audio?.(), streaming = !!au && (au.hear || au.mic);          // the Pi only decodes while someone is listening
     $("fdv-text").textContent = !onNow ? "FreeDV is off"
       : !streaming ? `FreeDV ${modeName(s.freedv_mode)} is on. Tap the speaker icon (Listen) to hear and decode.`
-      : !modeOk(s.mode) ? `FreeDV ${modeName(s.freedv_mode)} is on, but the radio is in ${s.mode}: use ${info.data_mode && hasData() ? "DATA-U (DATA-L below 10 MHz)" : "USB (LSB below 10 MHz)"}`
+      : !modeOk(s.mode) ? `FreeDV ${modeName(s.freedv_mode)} is on, but the radio is in ${s.mode}: use USB (LSB below 10 MHz)`
       : locked ? `FreeDV ${modeName(s.freedv_mode)} locked on a signal (SNR ${(+s.freedv_snr || 0).toFixed(1)} dB)` : `FreeDV ${modeName(s.freedv_mode)} listening, no signal locked yet`;
     const w = +s.width || 0, rule = widthRule(), narrowNow = onNow && w > 0 && w < rule.need && !s.narrow && Number.isFinite(widest());          // the radio's filter is too narrow for RADE
     $("fdv-widthwarn").hidden = !narrowNow;

@@ -48,9 +48,24 @@ signals: RADE V1 locks only within about ±50 Hz, so the Pi does the fine tuning
 
 ### Radio settings that matter for FreeDV
 
-**FT-991A: use the radio's DATA mode (as the FreeDV guide does).** In plain USB/LSB the transmit audio goes through the radio's microphone chain (speech processor, the parametric equaliser, the
-SSB transmit filter, menu 110), which distorts the OFDM modem tones: the other station may receive a clean-looking signal it cannot decode. The DATA modes bypass that chain. FreeDV's own guide
-for the FT-991A ([freedv.org/getting-started-yaesu](https://freedv.org/getting-started-yaesu/)) sets these menus once on the radio:
+**FT-991A: use plain USB/LSB, like the other stations (recommended, and the default).** Below 10 MHz FreeDV uses LSB, above it USB, with the same dial frequencies as the channel list and the FreeDV Reporter. Every
+station you meet is on its radio's ordinary SSB mode, and a DATA mode can put your signal somewhere else (see below). In USB/LSB the radio's filter is 2400 Hz, which carries RADE V1 (audio 750 to 2250 Hz) and V2 (about 1000 to 1900 Hz), and
+the radio's own SSB transmit filter (menu 110, for example 400-2600 Hz) trims the edges of the signal. What the radio must **not** do is process the audio:
+
+| Menu / control | Value |
+|---|---|
+| Speech processor | **OFF** (also **RF/AF compression**, noise reduction, notch and contour on receive) |
+| Parametric microphone equalizer (menus for the mic EQ) | **OFF** |
+| 110 SSB TX BPF | at least 400-2600 Hz (100-2900 Hz is the widest of the usual choices) |
+| 106 SSB MIC SELECT, 109 SSB PORT SELECT | REAR, USB (the page's microphone button sets 106) |
+| 107 SSB OUT LEVEL | the receive level to the Pi: the tones clearly present, never clipping |
+
+Set the transmit level with the **Level test** (see below): the radio's **ALC must stay under its mark** and the power should be close to what you set; a compressed RADE signal cannot be decoded.
+
+**Alternative: the radio's DATA mode (the way the FreeDV guide for the FT-991A does it).** The DATA modes bypass the radio's microphone chain, but they have traps of their own: the receive filter starts at **500 Hz**
+(see the filter width below), the transmit band is not trimmed by menu 110, and the OTHER DISP / OTHER SHIFT menus (064, 065) change the relation between the displayed frequency and the carrier, so
+at the same displayed frequency your signal may sit up to 1500 Hz away from where a USB/LSB station expects it (V1 only locks within about 50 Hz: nothing would decode). Use it only if you have checked all three. FreeDV's own guide
+sets these menus once on the radio:
 
 | Menu | Name | Value |
 |---|---|---|

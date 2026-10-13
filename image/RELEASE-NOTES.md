@@ -42,6 +42,10 @@ and goes back by itself if the new version does not start. Settings and accounts
 | `radio-remote-rade-linux-aarch64.tar.xz` | the optional RADE library (FreeDV neural modes V1 and V2) for a Raspberry Pi, installed with `install_rade.sh` (the PC build is `…-x86_64.tar.xz`) |
 | `SHA256SUMS` | checksums of all of the above |
 
+### What is new in 1.1.31
+
+- **FreeDV now always uses USB (LSB below 10 MHz), like every other station.** The "use the radio's DATA-USB / DATA-LSB mode" option is gone from the FreeDV tab: a DATA mode starts with a 500 Hz filter and may put the signal away from where other stations expect it. Received in plain LSB, RADE V1 held sync for a whole recording on the Pi. The manual (`docs/freedv.md`) now recommends USB/LSB with a settings table.
+
 ### What is new in 1.1.30
 
 - **The RADE V1 transmit signal is now band-limited. After updating, press Reinstall RADE (FreeDV tab, administrators) on every station that transmits.** The library has a transmit band-pass filter for V1 but leaves it off (RADE V2 has it on). Without it about **7 % of the V1 transmit power falls outside 700-2300 Hz**, up past 3 kHz, so the signal looked wider than it should on other stations' waterfalls and the radio's ALC and filters saw the skirts; with it 1.6 % is outside the band, the peak-to-average ratio is lower and the loopback decode locks better (98 % against 94 % in a test). The RADE library built from this release switches it on; the FreeDV tab says when the installed library is the older kind.
