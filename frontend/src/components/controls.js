@@ -88,7 +88,7 @@ export function createLevels(host, ctx) {
 }
 // Full filter / DSP panel, grouped in tabs. Every control is one row with the same three columns: [button or label | bar or select | value].
 export function createFilters(host, ctx) {
-  const controls = ctx.S.caps.controls.filter((x) => !x.quick);      // quick ones (DG-ID) live next to the mode row
+  const controls = ctx.S.caps.controls.filter((x) => !x.quick && x.name !== "scan");      // quick ones (DG-ID) live next to the mode row; Scan is only on the front panel (the Scan button)
   if (!controls.length) { host.append(el(`<div class="dim">This radio exposes no adjustable filter controls.</div>`)); return { update() {} }; }
   const root = el(`<div class="filters tabbed"></div>`);
   host.append(root);

@@ -42,6 +42,11 @@ and goes back by itself if the new version does not start. Settings and accounts
 | `radio-remote-rade-linux-aarch64.tar.xz` | the optional RADE library (FreeDV neural modes V1 and V2) for a Raspberry Pi, installed with `install_rade.sh` (the PC build is `…-x86_64.tar.xz`) |
 | `SHA256SUMS` | checksums of all of the above |
 
+### What is new in 1.1.33
+
+- **New tuning scale.** A taller scale (92 px on large screens, 56 px on phones and tablets) in the style of an old meter face: cream paper with a lamp behind it, dark printed numbers (larger than before), a red needle with a shadow, a recessed frame with a contrasting border. It is still a straight horizontal scale. **Double-click it** to change the look: paper (default), old white, green or amber; each browser remembers its choice.
+- **Scan only on the front panel.** The Filters tab no longer has the "Tuning" group with the radio's own Scan switch; use the **Scan** button next to Tune.
+
 ### What is new in 1.1.32
 
 - **FreeDV transmit: end-of-over frame, and two queue fixes found in a code review. After updating, press Reinstall RADE (FreeDV tab, administrators) on every station that transmits.** Every over now ends with the end-of-over frame that the reference RADE transmitter sends (V1 and V2), so a receiver can tell that the transmission has ended; it needs the new RADE library, an older one sends none and works as before. The PTT-release drain no longer evicts queued tones when the queue is full (the flushed frames wait and join as it empties), and an over that lost frames to a full queue is no longer reported as "no holes": the log line counts them.

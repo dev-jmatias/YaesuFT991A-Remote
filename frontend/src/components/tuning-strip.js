@@ -2,11 +2,13 @@ import { buzz, el, fmtStep } from "../util.js";
 
 const PX_PER_STEP = 9;     // finger travel per tuning step
 const FRICTION = 0.93;     // momentum decay per animation frame
-const MIN_LABEL_PX = 84;   // closest spacing between two numbers on the scale
 
-// "Nice" label spacing (1, 2 or 5 x 10^k Hz) so that the numbers are never closer than MIN_LABEL_PX.
-function labelSpan(pxPerHz) {
-  for (let k = 0; k < 10; k++) for (const m of [1, 2, 5]) if (m * 10 ** k * pxPerHz >= MIN_LABEL_PX) return m * 10 ** k;
+// "Nice" label spacing (1, 2 or 5 x 10^k Hz) so that the numbers (font size fs px: "14.195" or, for finer spacing, "14.195.500") never touch.
+function labelSpan(pxPerHz, fs) {
+  for (let k = 0; k < 10; k++) for (const m of [1, 2, 5]) {
+    const span = m * 10 ** k;
+    if (span * pxPerHz >= (span >= 1000 ? 6 : 10) * fs * 0.62 + 18) return span;
+  }
   return 1e9;
 }
 
@@ -46,29 +48,47 @@ export function createTuningStrip(host, ctx) {
   function draw() {
     if (!W) return;
     const dpr = window.devicePixelRatio || 1, c = cv.getContext("2d");
-    const cs = getComputedStyle(cv), dim = cs.getPropertyValue("--seg-text").trim() || "#a9b7d3", mark = "#9fb2d6", minor = "#4b587a";
+    const cs = getComputedStyle(cv);
+    const glow = cs.getPropertyValue("--dial-glow").trim() || "#4ade80";                            // the colour of the scale: light that glows (dark looks) or printed ink (paper look)
+    const halo = parseFloat(cs.getPropertyValue("--dial-halo")), fade = parseFloat(cs.getPropertyValue("--dial-fade"));
+    const lit = () => {                                                                             // a glow around the strokes, or (paper) a hair of light under them like printed ink
+      if (halo > 0) { c.shadowColor = glow; c.shadowBlur = halo; c.shadowOffsetY = 0; }
+      else { c.shadowColor = "rgba(255,250,232,.7)"; c.shadowBlur = 0; c.shadowOffsetY = 1; }
+    };
     c.setTransform(dpr, 0, 0, dpr, 0, 0);
     c.clearRect(0, 0, W, H);
     const step = stepHz(), pxPerHz = PX_PER_STEP / step;
     const centre = (ctx.freq() || 0) + (acc * step) / PX_PER_STEP;
-    const span = labelSpan(pxPerHz), minorSpan = span / 5;
-    const lo = centre - (W / 2 + 40) / pxPerHz, hi = centre + (W / 2 + 40) / pxPerHz;
+    const fs = Math.max(14, Math.min(26, Math.round(H * 0.3)));
+    const span = labelSpan(pxPerHz, fs), minorSpan = span / 5;
+    const lo = centre - (W / 2 + 60) / pxPerHz, hi = centre + (W / 2 + 60) / pxPerHz;
     const xOf = (f) => W / 2 + (f - centre) * pxPerHz;
-    const tall = Math.min(17, Math.round(H * 0.28)), short = Math.round(tall / 2);          // tick heights follow the strip height
-    c.lineWidth = 1;
-    c.strokeStyle = minor; c.beginPath();
-    for (let f = Math.ceil(lo / minorSpan) * minorSpan; f <= hi; f += minorSpan) {
+    // like the lit glass scale of a vintage radio: the numbers and ticks are brightest in the middle (under the lamp) and fade towards the edges
+    const light = (x) => fade + (1 - fade) * Math.exp(-(((x - W / 2) / (W * 0.36)) ** 2));
+    const yb = Math.round(H * 0.72), tall = Math.round(H * 0.30), short = Math.round(tall / 2), below = Math.round(H * 0.1);
+    c.lineCap = "round"; c.fillStyle = c.strokeStyle = glow;
+    // the scale line, with its halo
+    c.save();
+    c.globalAlpha = 0.9; lit(); c.lineWidth = 2;
+    const g = c.createLinearGradient(0, 0, W, 0);
+    g.addColorStop(0, "rgba(0,0,0,0)"); g.addColorStop(0.18, glow); g.addColorStop(0.82, glow); g.addColorStop(1, "rgba(0,0,0,0)");
+    c.strokeStyle = g; c.beginPath(); c.moveTo(0, yb + 0.5); c.lineTo(W, yb + 0.5); c.stroke();
+    c.restore();
+    c.lineWidth = 1.5;
+    for (let f = Math.ceil(lo / minorSpan) * minorSpan; f <= hi; f += minorSpan) {            // the fine ticks
       if (Math.round(f / minorSpan) % 5 === 0) continue;
-      const x = Math.round(xOf(f)) + 0.5; c.moveTo(x, H - short); c.lineTo(x, H);
+      const x = Math.round(xOf(f)) + 0.5;
+      c.globalAlpha = light(x) * 0.8; c.beginPath(); c.moveTo(x, yb - short); c.lineTo(x, yb); c.moveTo(x, yb + 3); c.lineTo(x, yb + 3 + below); c.stroke();
     }
-    c.stroke();
-    c.strokeStyle = mark; c.fillStyle = dim; c.font = "11px ui-monospace, Consolas, monospace"; c.textBaseline = "alphabetic"; c.textAlign = "center";
-    c.beginPath();
-    for (let f = Math.ceil(lo / span) * span; f <= hi; f += span) {
-      const x = Math.round(xOf(f)) + 0.5; c.moveTo(x, H - tall); c.lineTo(x, H);
+    lit(); c.lineWidth = 2.5;
+    c.font = `700 ${fs}px "Segoe UI", system-ui, sans-serif`; c.textBaseline = "alphabetic"; c.textAlign = "center";
+    for (let f = Math.ceil(lo / span) * span; f <= hi; f += span) {                          // the numbered ticks
+      const x = Math.round(xOf(f)) + 0.5;
+      c.globalAlpha = light(x);
+      c.beginPath(); c.moveTo(x, yb - tall); c.lineTo(x, yb + 3 + below); c.stroke();
+      c.fillText(labelText(Math.round(f), span), xOf(f), yb - tall - 4);
     }
-    c.stroke();
-    for (let f = Math.ceil(lo / span) * span; f <= hi; f += span) c.fillText(labelText(Math.round(f), span), xOf(f), H - tall - 5);
+    c.globalAlpha = 1; c.shadowBlur = 0; c.shadowOffsetY = 0;
   }
 
   function emit(dx) {                              // dx > 0 means the scale moved right (frequency goes down)
@@ -104,6 +124,17 @@ export function createTuningStrip(host, ctx) {
     if (k) { e.preventDefault(); ctx.tune(k * stepHz()); }
   };
   coarseBtn.onclick = () => { ctx.ui.coarse = !ctx.ui.coarse; ctx.setStep(ctx.ui.step); };
+  // the look of the scale (paper = an old meter face, then a lit old white, green, amber): double-click the scale to try the next one; remembered in this browser
+  const LOOKS = ["paper", "white", "green", "amber"];
+  const look = (v) => { root.dataset.dial = v; draw(); };
+  root.dataset.dial = "paper";
+  try { const v = localStorage.getItem("rr.dial"); if (LOOKS.includes(v)) root.dataset.dial = v; } catch { /* storage blocked */ }
+  root.ondblclick = (e) => {
+    if (e.target === coarseBtn) return;
+    const v = LOOKS[(LOOKS.indexOf(root.dataset.dial) + 1) % LOOKS.length];
+    look(v);
+    try { localStorage.setItem("rr.dial", v); } catch { /* storage blocked */ }
+  };
 
   return {
     update() {

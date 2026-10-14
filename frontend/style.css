@@ -147,11 +147,15 @@ button.icon { width: 34px; padding: 0; } button.icon.wide { width: auto; padding
 .chip.dg[hidden] { display: none; }
 
 /* ---------- sliding tuning strip (phones) ---------- */
-.strip { display: block; position: relative; height: 64px; margin: 8px 0 0; border-radius: 8px; border: 1px solid var(--line2); background: linear-gradient(180deg, #080d19, #0e1730); overflow: hidden; touch-action: pan-y; cursor: ew-resize; user-select: none; -webkit-user-select: none; }
+.strip { --dial-glow: #f1e4c3; --dial-lamp: 255, 226, 170; --dial-halo: 8; --dial-fade: .28; display: block; position: relative; height: 92px; margin: 8px 0 0; border-radius: 10px; border: 1px solid #243049; overflow: hidden;
+  background: radial-gradient(ellipse 60% 120% at 50% 62%, rgba(var(--dial-lamp), .24), rgba(var(--dial-lamp), .07) 55%, transparent 80%), linear-gradient(180deg, #03060c, #0a1220 55%, #050912);
+  box-shadow: inset 0 3px 8px rgba(0,0,0,.9), inset 0 -2px 5px rgba(0,0,0,.7), inset 0 0 0 1px rgba(255,255,255,.03), 0 1px 0 rgba(255,255,255,.06); touch-action: pan-y; cursor: ew-resize; user-select: none; -webkit-user-select: none; }
 .strip-ruler { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
-.strip-needle { position: absolute; left: 50%; top: 0; bottom: 0; width: 3px; margin-left: -1px; background: var(--yellow); box-shadow: 0 0 10px rgba(251,191,36,.8); }
-.strip-info { position: absolute; left: 8px; top: 3px; font-size: .72rem; color: var(--dim); pointer-events: none; }
-.strip-coarse { position: absolute; right: 6px; top: 6px; min-height: 28px; padding: 0 10px; font-size: .8rem; }
+.strip::after { content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit;               /* the glass: a soft reflection on top and dark edges either side */
+  background: linear-gradient(180deg, rgba(255,255,255,.13), rgba(255,255,255,.03) 34%, transparent 36%), linear-gradient(90deg, rgba(0,0,0,.7), transparent 14%, transparent 86%, rgba(0,0,0,.7)); }
+.strip-needle { position: absolute; left: 50%; top: 0; bottom: 0; width: 2px; margin-left: -1px; z-index: 1; background: linear-gradient(180deg, #ff6b6b, #ef2b2b 30%, #ef2b2b 70%, #ff6b6b); box-shadow: 0 0 8px rgba(255,60,60,.85), 0 0 2px #fff4; }
+.strip-info { position: absolute; left: 10px; top: 4px; z-index: 1; font-size: .72rem; color: rgba(var(--dial-lamp), .75); pointer-events: none; }
+.strip-coarse { position: absolute; right: 6px; top: 6px; z-index: 2; min-height: 28px; padding: 0 10px; font-size: .8rem; }
 
 /* ---------- meters ---------- */
 .seg .seglbl { display: flex; justify-content: space-between; font-size: .68rem; letter-spacing: .1em; text-transform: uppercase; color: var(--dim); margin-bottom: 2px; }
@@ -333,7 +337,7 @@ code { background: var(--panel2); padding: 1px 6px; border-radius: 6px; }
   .vfopanel .seg.big canvas { height: 34px; }
   .seg .seglbl { font-size: .62rem; }
   /* thinner tuning scale; the step text is shown in the Tuning step block anyway */
-  .strip { height: 38px; margin-top: 6px; }
+  .strip { height: 56px; margin-top: 6px; }
   .strip-info { display: none; }
   .strip-coarse { min-height: 20px; top: 2px; padding: 0 8px; font-size: .7rem; }
   /* same arrangement as large screens: A + signal + small TX meters, B as an attached tab; buttons smaller */
@@ -389,7 +393,7 @@ html[data-tablet] [data-pane=ptt] { position: sticky; bottom: 62px; z-index: 4; 
 html[data-tablet] [data-pane=ptt] .ptt { min-height: 74px; }
 html[data-tablet] .toast { bottom: 84px; }
 /* VFO area as on large screens ([VFO tools | Tuning step], Band select + Set frequency, Mode), but compact: smaller buttons, thin tuning scale */
-html[data-tablet] .strip { height: 38px; margin-top: 6px; }
+html[data-tablet] .strip { height: 56px; margin-top: 6px; }
 html[data-tablet] .strip-info { display: none; }
 html[data-tablet] .strip-coarse { min-height: 20px; top: 2px; padding: 0 8px; font-size: .7rem; }
 html[data-tablet] .block { padding: 5px 9px 7px; margin-top: 6px; }
@@ -821,3 +825,15 @@ html[data-tablet] .app[data-tab=freedv] [data-pane=vfo], html[data-tablet] .app[
 .eqsave input { flex: 1 1 auto; min-width: 0; }
 .setrow { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 7px 0; border-top: 1px solid var(--line); }
 .dynrow.gate input[type=number] { padding-left: 5px; padding-right: 2px; font-size: .88rem; }
+
+/* looks of the tuning scale, chosen per browser (localStorage rr.dial, double-click the scale): paper (default, an old meter face with a lamp behind it), white / green / amber (lit scales) */
+.strip[data-dial=green] { --dial-glow: #4ade80; --dial-lamp: 74, 222, 128; }
+.strip[data-dial=amber] { --dial-glow: #ffb54a; --dial-lamp: 255, 170, 60; }
+.strip[data-dial=paper] { --dial-glow: #2a1e13; --dial-halo: 0; --dial-fade: .62; border: 2px solid #3a2810;
+  background: radial-gradient(ellipse 58% 150% at 50% 62%, rgba(255,251,230,.92), rgba(255,244,205,.28) 62%, transparent 88%), linear-gradient(180deg, #d4bf88, #eadaab 42%, #cdb57c);
+  box-shadow: inset 0 3px 9px rgba(70,45,10,.6), inset 0 -2px 6px rgba(70,45,10,.4), inset 0 0 0 1px rgba(255,255,255,.28), 0 0 0 1px rgba(236,205,140,.75), 0 2px 6px rgba(0,0,0,.6); }
+.strip[data-dial=paper]::after { background: linear-gradient(180deg, rgba(255,255,255,.34), rgba(255,255,255,.07) 34%, transparent 36%), linear-gradient(90deg, rgba(80,50,10,.6), transparent 16%, transparent 84%, rgba(80,50,10,.6)); }
+.strip[data-dial=paper] .strip-needle { width: 2px; background: linear-gradient(180deg, #e2403a, #c81f1f 30%, #c81f1f 70%, #e2403a); box-shadow: 3px 1px 3px rgba(60,30,10,.5), 0 0 2px rgba(255,120,100,.5); }
+.strip[data-dial=paper] .strip-info { color: rgba(60,40,20,.8); }
+.strip[data-dial=paper] .strip-coarse { background: rgba(60,40,20,.16); color: #3a2a18; border: 1px solid rgba(60,40,20,.45); }
+.strip[data-dial=paper] .strip-coarse.on { background: #3a2a18; color: #f1e4c3; }
