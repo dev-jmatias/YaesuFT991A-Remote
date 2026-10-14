@@ -158,3 +158,25 @@ def test_the_v1_transmit_signal_stays_in_its_band_when_the_library_has_the_filte
     outside = S[(f < 700) | (f >= 2300)].sum() / S.sum()
     assert outside < 0.03, f"{100 * outside:.1f} % of the transmit power is outside the band"
     assert S[f >= 3000].sum() / S.sum() < 0.005                           # and almost nothing above 3 kHz
+
+
+
+@pytest.mark.parametrize("mode", ["RADE", "RADE2"])
+def test_an_over_ends_with_one_end_of_over_frame_when_the_library_has_it(mode):
+    """The reference transmitter (rade_tx_wav) sends an end-of-over frame after the last speech block. Libraries built from 1.1.32 on have it; it is added once, in whole 20 ms frames."""
+    from radio_remote.audio import rade
+    if not rade.eoo_available():
+        pytest.skip("this RADE library is older: no end-of-over frame")
+    tx = freedv.TxChain(mode, level=1.0)
+    assert tx.flush() == []                                           # nothing was sent: no end-of-over frame for an over that never started
+    mic = speechlike(100, seed=5)
+    got = []
+    for i in range(100):
+        got += tx.process(mic[i * FRAME_SAMPLES:(i + 1) * FRAME_SAMPLES].tobytes())
+    eoo_len = len(tx.fd.eoo())
+    assert eoo_len > 0
+    last = tx.flush()
+    assert last and all(len(f) == len(got[0]) for f in last)
+    assert tx.flush() == []                                           # and only once
+    expected_min = eoo_len * (RATE // tx.fd.modem_rate) // FRAME_SAMPLES
+    assert len(last) >= expected_min                                  # the frame itself is in there (plus the speech still inside the modem)

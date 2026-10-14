@@ -107,6 +107,9 @@ def _load():
             lib.rg_rx_max_out.restype, lib.rg_rx_max_out.argtypes = ctypes.c_int, [ctypes.c_void_p, ctypes.c_int]
             lib.rg_tx.restype, lib.rg_tx.argtypes = ctypes.c_int, [ctypes.c_void_p, P16, ctypes.c_int, P16, ctypes.c_int]
             lib.rg_tx_max_out.restype, lib.rg_tx_max_out.argtypes = ctypes.c_int, [ctypes.c_void_p, ctypes.c_int]
+            if hasattr(lib, "rg_tx_eoo"):                                  # libraries built from 1.1.32 on can send the end-of-over frame
+                lib.rg_tx_eoo_max.restype, lib.rg_tx_eoo_max.argtypes = ctypes.c_int, [ctypes.c_void_p]
+                lib.rg_tx_eoo.restype, lib.rg_tx_eoo.argtypes = ctypes.c_int, [ctypes.c_void_p, P16, ctypes.c_int]
         except (OSError, AttributeError) as e:
             _ERR = f"the RADE library could not be loaded ({e}); {INSTALL_HINT}"
             return None
@@ -123,6 +126,12 @@ def tx_bpf_available() -> bool:
     """True when the installed library has the V1 transmit band-pass filter switched on (libraries built from 1.1.30 on); an older one sends the V1 signal with unfiltered skirts."""
     lib = _load()
     return bool(lib is not None and hasattr(lib, "rg_tx_bpf"))
+
+
+def eoo_available() -> bool:
+    """True when the installed library can send the end-of-over frame (libraries built from 1.1.32 on)."""
+    lib = _load()
+    return bool(lib is not None and hasattr(lib, "rg_tx_eoo"))
 
 
 def v2_available() -> tuple[bool, str]:
@@ -199,6 +208,14 @@ class RadeCore:
     def pending(self) -> int:
         """Speech samples inside the modem that have not yet been sent (a modem frame is only produced when a whole block of speech has arrived)."""
         return self._fed % self._block
+
+    def eoo(self) -> np.ndarray:
+        """The end-of-over frame (8 kHz modem samples), to be sent once after the last modem frame. Empty with a library that has none."""
+        if not hasattr(self.lib, "rg_tx_eoo"):
+            return np.empty(0, dtype="<i2")
+        out = np.empty(max(0, self.lib.rg_tx_eoo_max(self.g)), dtype="<i2")
+        n = self.lib.rg_tx_eoo(self.g, out.ctypes.data_as(ctypes.POINTER(ctypes.c_int16)), len(out))
+        return out[:n]
 
     def tx(self, speech: np.ndarray) -> np.ndarray:
         """16 kHz speech (any length) -> 8 kHz modem samples (a modem frame comes out for every 120 ms of speech, the rest waits)."""

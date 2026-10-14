@@ -191,3 +191,22 @@ RG_EXPORT int rg_tx(rg *g, const int16_t *in, int n_in, int16_t *out, int max_ou
     }
     return written;
 }
+
+/* End of over: the upstream transmitter (rade_tx_wav) sends one end-of-over frame after the last speech block; a receiver uses it to tell that the transmission has ended
+ * (V1 can carry text bits in it; none are set here, so it carries zeros). Present from 1.1.32 on: an older library sends none. */
+RG_EXPORT int rg_tx_eoo_max(rg *g) { return rade_n_tx_eoo_out(g->r); }
+
+RG_EXPORT int rg_tx_eoo(rg *g, int16_t *out, int max_out) {
+    int n = rade_n_tx_eoo_out(g->r), written = 0;
+    RADE_COMP *buf = n > 0 ? malloc((size_t)n * sizeof(RADE_COMP)) : NULL;
+    if (!buf) return 0;
+    int got = rade_tx_eoo(g->r, buf);
+    for (int i = 0; i < got && written < max_out; i++) {
+        float v = buf[i].real * RADE_INT16_SCALE;
+        if (v > 32767.0f) v = 32767.0f;
+        if (v < -32767.0f) v = -32767.0f;
+        out[written++] = (int16_t)floor(0.5 + (double)v);
+    }
+    free(buf);
+    return written;
+}

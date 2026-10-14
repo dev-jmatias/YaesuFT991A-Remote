@@ -176,6 +176,8 @@ class TxChain:
         self.level = level                           # linear gain applied to the modem tones
         self._speech = np.empty(0, dtype="<i2")
         self._rest = b""
+        self._sent = False                           # a modem frame has gone out in this over
+        self._eoo_sent = False                       # and the end-of-over frame has been added
 
     def process(self, pcm: bytes) -> list[bytes]:
         """One 20 ms mic frame in; zero or more 20 ms modem frames out (the modem works in blocks of 40-160 ms)."""
@@ -184,6 +186,7 @@ class TxChain:
         while len(self._speech) >= self.fd.n_speech:
             block, self._speech = self._speech[:self.fd.n_speech], self._speech[self.fd.n_speech:]
             tones = self.fd.tx(block)
+            self._sent = self._sent or len(tones) > 0
             self._rest += _to_i16(self.up.process(tones.astype(np.float64)) * self.level).tobytes()
         while len(self._rest) >= FRAME_BYTES:
             out.append(self._rest[:FRAME_BYTES])
@@ -204,6 +207,12 @@ class TxChain:
             while len(self._speech) >= n:
                 block, self._speech = self._speech[:n], self._speech[n:]
                 self._rest += _to_i16(self.up.process(self.fd.tx(block).astype(np.float64)) * self.level).tobytes()
+        if self._sent and not self._eoo_sent and hasattr(self.fd, "eoo"):       # the reference transmitter ends every over with an end-of-over frame
+            self._eoo_sent = True
+            eoo = self.fd.eoo()
+            if len(eoo):
+                self._rest += _to_i16(self.up.process(eoo.astype(np.float64)) * self.level).tobytes()
+                self._rest += bytes((-len(self._rest)) % FRAME_BYTES)           # complete the last 20 ms frame so that none of it is lost
         out = []
         while len(self._rest) >= FRAME_BYTES:
             out.append(self._rest[:FRAME_BYTES])

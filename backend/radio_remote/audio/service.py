@@ -35,7 +35,7 @@ TX_QUEUE_FREEDV = 24             # frames (480 ms) while FreeDV is on: its modem
 TX_PREFILL_FRAMES = 10           # FreeDV: frames (200 ms) of modem tones that must be waiting before they start going to the radio (and again after a gap). The modem hands over
                                  # its tones in bursts (RADE: 120 ms at a time) that arrive with the network's jitter; without this cushion a burst that is a few ms late made the
                                  # sender write 20 ms of silence into the middle of the signal, and RADE cannot follow a signal with holes in it
-TX_DRAIN_MAX_S = 0.7             # PTT release: the most the page waits for the queued tones to reach the radio (a cushion of 0.2 s plus the last modem frame normally needs about 0.4 s)
+TX_DRAIN_MAX_S = 1.2             # PTT release: the most the page waits for the queued tones to reach the radio (a cushion of 0.2 s plus the last modem frame normally needs about 0.4 s)
 TX_TAIL_S = 0.15                 # and a little more: aplay holds about 100 ms that has been handed over but not yet played
 TEST_TONE_HZ = 1500.0           # FreeDV level test: a steady tone in the middle of the modem's audio band
 TEST_TONE_PEAK = 19000.0        # its peak at a transmit level of 0 dB: what the modem's own peaks reach (the ALC reacts to the peaks)
@@ -163,6 +163,7 @@ class AudioService:
         self.tx_underruns = 0                            # FreeDV transmit: holes written into the tones because the queue ran dry in mid-over (all overs)
         self._over_underruns = 0                         # the same, for the over in progress
         self._over_frames = 0
+        self._over_dropped = 0                           # tone frames of this over thrown away because the queue was full (the sender stalled, or the PTT-release drain ran out of time)
         self.rx_ms_avg = 0.0                             # FreeDV receive: time one 20 ms frame takes to process (average / worst), and how many frames took longer than 20 ms
         self.rx_ms_max = 0.0
         self.rx_work_avg = self.rx_work_max = 0.0                # the same, but only the time INSIDE the decoder (the total above also counts waiting for the worker thread and for the event loop)
@@ -620,25 +621,30 @@ class AudioService:
         self._tx_ending = True
         self._tx_primed = True                                   # fewer frames than the cushion (a short over, or a refill in progress) must still go out
         try:
+            pending: collections.deque[bytes] = collections.deque()      # the flushed frames wait here and join the queue as it empties: appending them to a full queue would evict the oldest tones
             try:
-                for tone in ch.flush():
-                    self._tx_q.append(tone)
+                pending.extend(ch.flush())
             except Exception:
                 log.exception("FreeDV could not flush the last modem frame")
             loop = asyncio.get_running_loop()
             end = loop.time() + TX_DRAIN_MAX_S
-            while self._tx_q and loop.time() < end:
+            while (self._tx_q or pending) and loop.time() < end:
+                while pending and len(self._tx_q) < self._tx_q.maxlen:
+                    self._tx_q.append(pending.popleft())
                 await asyncio.sleep(0.02)
-            if not self._tx_q:
+            if pending:                                                    # out of time: these frames are lost, and the log says so
+                self.tx_dropped += len(pending)
+                self._over_dropped += len(pending)
+            elif not self._tx_q:
                 await asyncio.sleep(TX_TAIL_S)
         finally:
             self._tx_ending = False
 
     def _over_finished(self) -> None:
         """A FreeDV transmission ended: say in the log whether the tones went out without holes (the thing to look at when others cannot decode us)."""
-        if self._over_underruns:
-            log.warning("FreeDV transmit: the tones had %d hole(s) in %d frames (%.1f s); the audio reaching the server was too uneven (network/Wi-Fi?) or the PC too slow (slowest step %.0f ms)",
-                        self._over_underruns, self._over_frames, self._over_frames * FRAME_SAMPLES / RATE, self._tx_proc_ms_max)
+        if self._over_underruns or self._over_dropped:
+            log.warning("FreeDV transmit: the tones had %d hole(s) and %d frame(s) thrown away in %d frames (%.1f s); the audio reaching the server was too uneven (network/Wi-Fi?) or the PC too slow (slowest step %.0f ms)",
+                        self._over_underruns, self._over_dropped, self._over_frames, self._over_frames * FRAME_SAMPLES / RATE, self._tx_proc_ms_max)
         else:
             log.info("FreeDV transmit: %d frames, no holes (slowest step %.0f ms)", self._over_frames, self._tx_proc_ms_max)
 
@@ -675,7 +681,7 @@ class AudioService:
                 self._play_active = self._play_req is not None
                 self._play_data, self._play_req, self._play_pos, self._play_done = self._play_req, None, 0, False
                 self._play_up = recmod.Interpolator() if self._play_active else None
-                self._over_underruns = self._over_frames = 0
+                self._over_underruns = self._over_frames = self._over_dropped = 0
                 self._tx_proc_ms_max = 0.0
                 self._level("freedv_tx_underruns", 0)
                 if self._fd_tx is not None:              # a fresh modem for every transmission: nothing left over from the last one
@@ -704,6 +710,7 @@ class AudioService:
                     for tone in tones:
                         if len(self._tx_q) == self._tx_q.maxlen:
                             self.tx_dropped += 1
+                            self._over_dropped += 1
                             if self.tx_dropped == 1 or self.tx_dropped % 100 == 0:
                                 log.warning("FreeDV transmit: the tone queue overflowed, %d frame(s) dropped so far (the sending side stalled)", self.tx_dropped)
                         self._tx_q.append(tone)

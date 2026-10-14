@@ -569,3 +569,35 @@ async def test_freedv_opens_up_a_narrow_radio_filter_once_and_only_when_it_is_ne
     hub.auto_width = lambda: False
     hub._schedule_widen()
     assert hub._widen_task is None or hub._widen_task.done()                    # switched off in the settings
+
+
+async def test_a_drain_with_a_full_queue_keeps_every_frame_in_order(svc, monkeypatch):
+    """REVIEW-FOUND (Codex): the flushed frames were appended to the bounded queue, so with the queue already full the oldest tones were evicted unnoticed."""
+    monkeypatch.setattr(FakeTx, "flush", lambda self: [TONES] * 6)
+    svc.set_freedv(True, "RADE")
+    peer = types.SimpleNamespace(conn_id="c1")
+    mic = b"\x10\x00" * (FRAME_BYTES // 2)
+    await svc._ensure_tx_sink()
+    svc.gate["open"] = True
+    for _ in range(service.TX_QUEUE_FREEDV):                                          # the queue is full when PTT is released
+        svc._mic_frame(peer, mic)
+    await svc.drain_freedv_tx()
+    assert not svc._tx_q
+    assert svc.sink.frames.count(TONES) == service.TX_QUEUE_FREEDV + 6                # nothing evicted, nothing lost
+    assert svc.tx_dropped == 0 and svc._over_dropped == 0
+    await svc._stop_tx_sink()
+
+
+async def test_frames_thrown_away_in_an_over_are_in_its_summary(svc, caplog):
+    """REVIEW-FOUND (Codex): an over that lost frames to a full queue was still reported as 'no holes'."""
+    import logging
+    svc.set_freedv(True, "RADE")
+    peer = types.SimpleNamespace(conn_id="c1")
+    mic = b"\x10\x00" * (FRAME_BYTES // 2)
+    svc.gate["open"] = True
+    for _ in range(service.TX_QUEUE_FREEDV + 5):                                      # no sink running: nothing consumes the queue
+        svc._mic_frame(peer, mic)
+    with caplog.at_level(logging.INFO, logger="radio_remote.audio"):
+        svc._over_finished()
+    msgs = [r.getMessage() for r in caplog.records]
+    assert any("5 frame(s) thrown away" in m for m in msgs) and not any("no holes" in m for m in msgs)

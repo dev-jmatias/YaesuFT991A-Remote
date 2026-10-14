@@ -42,6 +42,10 @@ and goes back by itself if the new version does not start. Settings and accounts
 | `radio-remote-rade-linux-aarch64.tar.xz` | the optional RADE library (FreeDV neural modes V1 and V2) for a Raspberry Pi, installed with `install_rade.sh` (the PC build is `…-x86_64.tar.xz`) |
 | `SHA256SUMS` | checksums of all of the above |
 
+### What is new in 1.1.32
+
+- **FreeDV transmit: end-of-over frame, and two queue fixes found in a code review. After updating, press Reinstall RADE (FreeDV tab, administrators) on every station that transmits.** Every over now ends with the end-of-over frame that the reference RADE transmitter sends (V1 and V2), so a receiver can tell that the transmission has ended; it needs the new RADE library, an older one sends none and works as before. The PTT-release drain no longer evicts queued tones when the queue is full (the flushed frames wait and join as it empties), and an over that lost frames to a full queue is no longer reported as "no holes": the log line counts them.
+
 ### What is new in 1.1.31
 
 - **FreeDV now always uses USB (LSB below 10 MHz), like every other station.** The "use the radio's DATA-USB / DATA-LSB mode" option is gone from the FreeDV tab: a DATA mode starts with a 500 Hz filter and may put the signal away from where other stations expect it. Received in plain LSB, RADE V1 held sync for a whole recording on the Pi. The manual (`docs/freedv.md`) now recommends USB/LSB with a settings table.
