@@ -42,6 +42,11 @@ and goes back by itself if the new version does not start. Settings and accounts
 | `radio-remote-rade-linux-aarch64.tar.xz` | the optional RADE library (FreeDV neural modes V1 and V2) for a Raspberry Pi, installed with `install_rade.sh` (the PC build is `…-x86_64.tar.xz`) |
 | `SHA256SUMS` | checksums of all of the above |
 
+### What is new in 1.1.34
+
+- **PTT button for a Bluetooth headset, speaker-mic or keyboard.** On the **Audio** tab press **Bind PTT**, then press the button on your device; it is remembered in this browser. A key such as Space works as hold to talk; a media button (play/pause, next track...) works as press to start, press again to stop. It works with Listen on or off (the page plays an inaudible tone so the browser passes the media buttons to it). With a Bluetooth headset use another microphone as the input: when the headset's own microphone is in use the headset switches to call mode and its buttons are hidden from the browser. The screen lock, the PTT permission and the transmit time limit apply as for the on-screen button. Tested with a Beats Studio Pro on Windows Chrome (double press of the "b" button).
+- **The tuning scale uses the app colours by default** (dark navy, blue-grey scale, yellow needle), same size and style as 1.1.33. Double-click the scale to cycle through the other looks (paper, white, green, amber).
+
 ### What is new in 1.1.33
 
 - **New tuning scale.** A taller scale (92 px on large screens, 56 px on phones and tablets) in the style of an old meter face: cream paper with a lamp behind it, dark printed numbers (larger than before), a red needle with a shadow, a recessed frame with a contrasting border. It is still a straight horizontal scale. **Double-click it** to change the look: paper (default), old white, green or amber; each browser remembers its choice.
