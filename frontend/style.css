@@ -843,3 +843,6 @@ html[data-tablet] .app[data-tab=freedv] [data-pane=vfo], html[data-tablet] .app[
   background: radial-gradient(ellipse 60% 120% at 50% 62%, rgba(var(--dial-lamp), .2), rgba(var(--dial-lamp), .05) 55%, transparent 80%), linear-gradient(180deg, #080d19, #0e1730); }
 .strip[data-dial=theme] .strip-needle { background: linear-gradient(180deg, #fde68a, var(--yellow) 30%, var(--yellow) 70%, #fde68a); box-shadow: 0 0 10px rgba(251,191,36,.8); }
 .strip[data-dial=theme] .strip-info { color: var(--dim); }
+
+/* the PTT button note and its last-press line are two lines (inline styles are blocked by the page's security policy) */
+#a-bnote { white-space: pre-line; }

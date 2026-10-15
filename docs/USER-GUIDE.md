@@ -135,9 +135,10 @@ Rules that always apply:
   event per press, so it works as **press to start, press again to stop**; some headsets only send one kind of press (Beats: a **double
   press** is "next track"), so press the button the way you will use it while learning. It works with Listen on or off: the page plays a
   silent sound so the browser keeps the media buttons for it, and after reopening the page the first tap or key press re-arms it.
-  **Bluetooth headsets:** it worked with the headset as both speaker and microphone (tested with a Beats Studio Pro on Windows Chrome). If it
-  does not, try the computer's own microphone as the input, as some headsets switch to a phone-call mode when their microphone is used.
-  After an update the page can take a moment, or one extra reload, to use the new version. If nothing is received within 15 seconds the page says so; check that the headset is the connected device and close other media players. The screen lock,
+  **Bluetooth headsets:** use the computer's own microphone (or any microphone that is not the headset's) as the **Microphone / input**
+  and the headset only as the speaker. When the headset's own microphone is in use, Windows switches the headset to its phone-call mode, the
+  button becomes a call button and the browser never receives it (tested with a Beats Studio Pro on Windows Chrome: the double press of the
+  "b" button works with another microphone and not with the headset's). After an update the page can take a moment, or one extra reload, to use the new version. If nothing is received within 15 seconds the page says so; check that the headset is the connected device and close other media players. The screen lock,
   the PTT permission and the transmit time limit apply to it as to the screen button.
 * **Too quiet?** Raise the radio's USB output level menu (FT-991A: menu 107 SSB OUT LEVEL, 073 DATA, 046 AM, 075 FM, 054 CW, 099 RTTY) rather
   than boosting in software; see [audio](04-audio.md).

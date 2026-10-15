@@ -48,7 +48,7 @@ export function createAudioPanel({ conn, info: initialInfo, model = "Radio" }) {
         <div class="arow"><span class="alabel">Microphone / input</span><select id="a-in" aria-label="Microphone device"></select></div>
         <div class="arow"><span class="alabel">Connection</span><select id="a-trans" aria-label="Audio connection type"><option value="auto">Automatic</option><option value="webrtc">WebRTC (UDP)</option><option value="websocket">WebSocket (TCP)</option></select></div>
         <div class="arow"><span class="alabel"></span><span class="dim aval wide" id="a-devnote"></span></div>
-        <div class="arow"><span class="alabel">PTT button</span><button type="button" id="a-blearn" title="Press this, then press the button on your Bluetooth headset or PTT (or a key). It is remembered in this browser.">Bind PTT</button><select id="a-bmode" hidden aria-label="How the external button works"><option value="hold">Hold to talk</option><option value="toggle">Press to start / press again to stop</option></select><button type="button" id="a-bclear" hidden>Clear</button><span class="dim aval wide" id="a-bnote" style="white-space:pre-line"></span></div>
+        <div class="arow"><span class="alabel">PTT button</span><button type="button" id="a-blearn" title="Press this, then press the button on your Bluetooth headset or PTT (or a key). It is remembered in this browser.">Bind PTT</button><select id="a-bmode" hidden aria-label="How the external button works"><option value="hold">Hold to talk</option><option value="toggle">Press to start / press again to stop</option></select><button type="button" id="a-bclear" hidden>Clear</button><span class="dim aval wide" id="a-bnote"></span></div>
         <div class="arow"><span class="alabel">Radio meters (raw)</span><div class="rawm" id="a-raw" title="Raw 0-255 values from the radio, for calibrating the ALC / COMP / S-meter scales"></div></div>
         <div class="arow"><span class="alabel">To radio</span><span class="dim aval wide" id="a-txf" title="Counts 20 ms audio frames the server has handed to the radio's USB sound card. It only rises while you hold PTT.">0 frames</span></div>
       </div>      <div class="row dim audio-opts">
@@ -111,7 +111,7 @@ export function createAudioPanel({ conn, info: initialInfo, model = "Radio" }) {
 
   function status(t) { A.state = t; $("a-status").textContent = t; notify(); }
 
-  // A silent looping track. Browsers (Chrome on Windows especially) send a headset's play/pause button only to a page they consider a media player,
+  // A near-silent looping track (a 20 Hz tone at about -55 dBFS: inaudible, yet above the level under which a browser counts a page as silent). Browsers (Chrome on Windows especially) send a headset's play/pause button only to a page they consider a media player,
   // and live WebRTC audio does not count, so while media buttons matter this near-silent real file keeps the page "playing" and the media session active.
   let keeper = null;
   function keeperOn(on) {
@@ -235,7 +235,7 @@ export function createAudioPanel({ conn, info: initialInfo, model = "Radio" }) {
     }
     learnTimer = setTimeout(() => {
       learnStop();
-      learnMsg = "Nothing received. The browser did not get the button. Check the headset is the connected Bluetooth device, close other players (Spotify, YouTube), reload the page and try again.";
+      learnMsg = "Nothing received. The browser did not get the button. If the headset's own microphone is the Microphone / input, choose another microphone: the headset's call mode hides its buttons. Also check the headset is connected, close other players (Spotify, YouTube), reload the page and try again.";
       paintBind();
     }, 15000);
   }
