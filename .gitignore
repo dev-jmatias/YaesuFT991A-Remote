@@ -9,3 +9,4 @@ docs-html/
 image/stage-radio-remote/00-radio-remote/files/radio-remote-src/
 .claude/
 config/none.toml*
+*.egg-info/

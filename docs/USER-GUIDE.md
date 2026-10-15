@@ -54,7 +54,7 @@ from the Pi itself (no internet needed).
 * **VFO-B** is the attached row under VFO-A: its mode, band and frequency. In split operation the transmit VFO gets the red TX badge.
   A purple **MEM 005** badge means the radio is in memory mode.
 * **Tuning scale.** Swipe or drag sideways (a quick flick keeps gliding). The numbers on the scale follow the tuning step; **x10**
-  makes every move ten times larger. Double-click the scale to change its look (old paper, white, green, amber); the browser remembers it.
+  makes every move ten times larger. Double-click the scale to change its look (the app colours, old paper, white, green, amber); the browser remembers it.
 * **Tuning step** (-, list, +), **Tune** (see 5): the antenna tuner, and **Memories** (see 4), side by side on one centred row.
 * **VFO tools:** *A -> B*, *B -> A*, *A <-> B* (swap), *Split* (receive on A, transmit on B), *Quick split* and **Set B** (type a frequency in MHz).
   The rows wrap and are centred, so they fit a small screen.

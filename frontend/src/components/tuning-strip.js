@@ -124,10 +124,10 @@ export function createTuningStrip(host, ctx) {
     if (k) { e.preventDefault(); ctx.tune(k * stepHz()); }
   };
   coarseBtn.onclick = () => { ctx.ui.coarse = !ctx.ui.coarse; ctx.setStep(ctx.ui.step); };
-  // the look of the scale (paper = an old meter face, then a lit old white, green, amber): double-click the scale to try the next one; remembered in this browser
-  const LOOKS = ["paper", "white", "green", "amber"];
+  // the look of the scale (theme = the app colours, then paper = an old meter face, then a lit old white, green, amber): double-click the scale to try the next one; remembered in this browser
+  const LOOKS = ["theme", "paper", "white", "green", "amber"];
   const look = (v) => { root.dataset.dial = v; draw(); };
-  root.dataset.dial = "paper";
+  root.dataset.dial = "theme";
   try { const v = localStorage.getItem("rr.dial"); if (LOOKS.includes(v)) root.dataset.dial = v; } catch { /* storage blocked */ }
   root.ondblclick = (e) => {
     if (e.target === coarseBtn) return;

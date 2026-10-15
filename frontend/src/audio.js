@@ -48,6 +48,8 @@ export function createAudioPanel({ conn, info: initialInfo, model = "Radio" }) {
         <div class="arow"><span class="alabel">Microphone / input</span><select id="a-in" aria-label="Microphone device"></select></div>
         <div class="arow"><span class="alabel">Connection</span><select id="a-trans" aria-label="Audio connection type"><option value="auto">Automatic</option><option value="webrtc">WebRTC (UDP)</option><option value="websocket">WebSocket (TCP)</option></select></div>
         <div class="arow"><span class="alabel"></span><span class="dim aval wide" id="a-devnote"></span></div>
+        <div class="arow"><span class="alabel">Button test</span><button type="button" id="a-btest" aria-pressed="false" title="Shows which key or media-button events this browser receives, for example from a Bluetooth PTT button">Test PTT button</button><span class="dim aval wide" id="a-btestn"></span></div>
+        <div class="arow" id="a-btestrow" hidden><span class="alabel"></span><pre class="dim aval wide" id="a-btestlog" style="margin:0;white-space:pre-wrap"></pre></div>
         <div class="arow"><span class="alabel">Radio meters (raw)</span><div class="rawm" id="a-raw" title="Raw 0-255 values from the radio, for calibrating the ALC / COMP / S-meter scales"></div></div>
         <div class="arow"><span class="alabel">To radio</span><span class="dim aval wide" id="a-txf" title="Counts 20 ms audio frames the server has handed to the radio's USB sound card. It only rises while you hold PTT.">0 frames</span></div>
       </div>      <div class="row dim audio-opts">
@@ -125,6 +127,39 @@ export function createAudioPanel({ conn, info: initialInfo, model = "Radio" }) {
       }
     } catch { /* optional */ }
   }
+
+  // ---- button test: shows every key and media-session event the browser gets (e.g. from a Bluetooth PTT button), nothing is acted on.
+  // Bluetooth buttons usually arrive as media keys (play/pause...), which browsers only deliver while the page is playing audio.
+  const BT_ACTIONS = ["play", "pause", "stop", "nexttrack", "previoustrack", "seekforward", "seekbackward", "seekto", "hangup", "togglemicrophone", "togglecamera"];
+  let btOn = false, btLines = [];
+  const btT0 = () => performance.now();
+  let btStart = btT0();
+  function btLog(t) {
+    btLines.push(`${((btT0() - btStart) / 1000).toFixed(2)}s  ${t}`);
+    btLines = btLines.slice(-10);
+    $("a-btestlog").textContent = btLines.join("\n");
+  }
+  const btKey = (e) => btLog(`${e.type === "keydown" ? "KEY DOWN" : "KEY UP  "}  key="${e.key}"  code=${e.code}${e.repeat ? "  (repeat)" : ""}`);
+  function btSetOn(on) {
+    btOn = on;
+    $("a-btest").setAttribute("aria-pressed", String(on));
+    $("a-btest").classList.toggle("on", on);
+    $("a-btest").textContent = on ? "Stop test" : "Test PTT button";
+    $("a-btestrow").hidden = !on;
+    $("a-btestn").textContent = on ? (A.listening ? "Press the button now." : "Switch Listen on (speaker icon) first, or media buttons are not delivered.") : "";
+    if (on) {
+      btLines = []; btStart = btT0(); $("a-btestlog").textContent = "(waiting for a button press)";
+      window.addEventListener("keydown", btKey, true); window.addEventListener("keyup", btKey, true);
+      if ("mediaSession" in navigator) {
+        for (const a of BT_ACTIONS) { try { navigator.mediaSession.setActionHandler(a, (d) => btLog(`MEDIA     action=${a}${d && d.seekOffset ? " offset=" + d.seekOffset : ""}`)); } catch { /* not supported by this browser */ } }
+      }
+    } else {
+      window.removeEventListener("keydown", btKey, true); window.removeEventListener("keyup", btKey, true);
+      if ("mediaSession" in navigator) for (const a of BT_ACTIONS) { try { navigator.mediaSession.setActionHandler(a, null); } catch { /* ignore */ } }
+      if (live()) mediaSession(true);                              // give the normal pause/stop handlers back
+    }
+  }
+  $("a-btest").onclick = () => btSetOn(!btOn);
 
   async function getMic() {
     const base = { echoCancellation: $("a-ec").checked, noiseSuppression: $("a-ns").checked, autoGainControl: $("a-agc").checked, channelCount: 1 };

@@ -837,3 +837,9 @@ html[data-tablet] .app[data-tab=freedv] [data-pane=vfo], html[data-tablet] .app[
 .strip[data-dial=paper] .strip-info { color: rgba(60,40,20,.8); }
 .strip[data-dial=paper] .strip-coarse { background: rgba(60,40,20,.16); color: #3a2a18; border: 1px solid rgba(60,40,20,.45); }
 .strip[data-dial=paper] .strip-coarse.on { background: #3a2a18; color: #f1e4c3; }
+
+/* "theme" look (the default): the app's own dark navy panel, blue-grey scale and the yellow needle, same size and glass as the other looks */
+.strip[data-dial=theme] { --dial-glow: #a9b7d3; --dial-lamp: 110, 140, 205; --dial-halo: 3; --dial-fade: .4; border-color: var(--line2);
+  background: radial-gradient(ellipse 60% 120% at 50% 62%, rgba(var(--dial-lamp), .2), rgba(var(--dial-lamp), .05) 55%, transparent 80%), linear-gradient(180deg, #080d19, #0e1730); }
+.strip[data-dial=theme] .strip-needle { background: linear-gradient(180deg, #fde68a, var(--yellow) 30%, var(--yellow) 70%, #fde68a); box-shadow: 0 0 10px rgba(251,191,36,.8); }
+.strip[data-dial=theme] .strip-info { color: var(--dim); }
