@@ -130,14 +130,14 @@ Rules that always apply:
 * **Audio tab:** *Volume*; the **RX audio**, **TX audio** and **Your mic** meters; **Speaker / output** and **Microphone / input**: pick a
   Bluetooth headset, car hands-free kit or any other device (remembered per browser; Safari/iPhone cannot choose the output, use the
   system sound settings there); **To radio** counts audio frames delivered to the radio while you transmit.
-* **External PTT button** (Bluetooth headset or speaker-mic, or a key): press **Learn button**, then press the button on your device; it is
+* **PTT button** (Bluetooth headset or speaker-mic, or a key): press **Bind PTT**, then press the button on your device; it is
   remembered in this browser. A key such as Space works as **hold to talk**. A media button (play/pause, next track and similar) sends one
   event per press, so it works as **press to start, press again to stop**; some headsets only send one kind of press (Beats: a **double
   press** is "next track"), so press the button the way you will use it while learning. It works with Listen on or off: the page plays a
   silent sound so the browser keeps the media buttons for it, and after reopening the page the first tap or key press re-arms it.
   **Bluetooth headsets:** it worked with the headset as both speaker and microphone (tested with a Beats Studio Pro on Windows Chrome). If it
   does not, try the computer's own microphone as the input, as some headsets switch to a phone-call mode when their microphone is used.
-  After an update the page can take a moment, or one extra reload, to use the new version. **Bind PTT** (the row below) shows what your device sends, if learning does not pick it up. The screen lock,
+  After an update the page can take a moment, or one extra reload, to use the new version. If nothing is received within 15 seconds the page says so; check that the headset is the connected device and close other media players. The screen lock,
   the PTT permission and the transmit time limit apply to it as to the screen button.
 * **Too quiet?** Raise the radio's USB output level menu (FT-991A: menu 107 SSB OUT LEVEL, 073 DATA, 046 AM, 075 FM, 054 CW, 099 RTTY) rather
   than boosting in software; see [audio](04-audio.md).

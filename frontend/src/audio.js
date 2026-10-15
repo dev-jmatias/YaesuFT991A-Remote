@@ -48,9 +48,7 @@ export function createAudioPanel({ conn, info: initialInfo, model = "Radio" }) {
         <div class="arow"><span class="alabel">Microphone / input</span><select id="a-in" aria-label="Microphone device"></select></div>
         <div class="arow"><span class="alabel">Connection</span><select id="a-trans" aria-label="Audio connection type"><option value="auto">Automatic</option><option value="webrtc">WebRTC (UDP)</option><option value="websocket">WebSocket (TCP)</option></select></div>
         <div class="arow"><span class="alabel"></span><span class="dim aval wide" id="a-devnote"></span></div>
-        <div class="arow"><span class="alabel">External PTT button</span><button type="button" id="a-blearn" title="Press this, then press the button on your Bluetooth PTT (or a key). It is remembered in this browser.">Learn button</button><select id="a-bmode" hidden aria-label="How the external button works"><option value="hold">Hold to talk</option><option value="toggle">Press to start / press again to stop</option></select><button type="button" id="a-bclear" hidden>Clear</button><span class="dim aval wide" id="a-bnote" style="white-space:pre-line"></span></div>
-        <div class="arow"><span class="alabel">Bind PTT</span><button type="button" id="a-btest" aria-pressed="false" title="Shows which key or media-button events this browser receives, for example from a Bluetooth PTT button">Bind PTT</button><span class="dim aval wide" id="a-btestn"></span></div>
-        <div class="arow" id="a-btestrow" hidden><span class="alabel"></span><pre class="dim aval wide" id="a-btestlog" style="margin:0;white-space:pre-wrap"></pre></div>
+        <div class="arow"><span class="alabel">PTT button</span><button type="button" id="a-blearn" title="Press this, then press the button on your Bluetooth headset or PTT (or a key). It is remembered in this browser.">Bind PTT</button><select id="a-bmode" hidden aria-label="How the external button works"><option value="hold">Hold to talk</option><option value="toggle">Press to start / press again to stop</option></select><button type="button" id="a-bclear" hidden>Clear</button><span class="dim aval wide" id="a-bnote" style="white-space:pre-line"></span></div>
         <div class="arow"><span class="alabel">Radio meters (raw)</span><div class="rawm" id="a-raw" title="Raw 0-255 values from the radio, for calibrating the ALC / COMP / S-meter scales"></div></div>
         <div class="arow"><span class="alabel">To radio</span><span class="dim aval wide" id="a-txf" title="Counts 20 ms audio frames the server has handed to the radio's USB sound card. It only rises while you hold PTT.">0 frames</span></div>
       </div>      <div class="row dim audio-opts">
@@ -143,58 +141,26 @@ export function createAudioPanel({ conn, info: initialInfo, model = "Radio" }) {
     } catch { /* optional */ }
   }
 
-  // ---- button test: shows every key and media-session event the browser gets (e.g. from a Bluetooth PTT button), nothing is acted on.
-  // Bluetooth buttons usually arrive as media keys (play/pause...), which browsers only deliver while the page is playing audio.
+  // media-session actions a headset or speaker-mic button can arrive as (browsers only deliver them to a page that counts as a media player)
   const BT_ACTIONS = ["play", "pause", "stop", "nexttrack", "previoustrack", "seekforward", "seekbackward", "seekto", "hangup", "togglemicrophone", "togglecamera"];
-  let btOn = false, btLines = [];
-  const btT0 = () => performance.now();
-  let btStart = btT0();
-  function btLog(t) {
-    btLines.push(`${((btT0() - btStart) / 1000).toFixed(2)}s  ${t}`);
-    btLines = btLines.slice(-10);
-    $("a-btestlog").textContent = btLines.join("\n");
-  }
-  const btKey = (e) => btLog(`${e.type === "keydown" ? "KEY DOWN" : "KEY UP  "}  key="${e.key}"  code=${e.code}${e.repeat ? "  (repeat)" : ""}`);
-  function btSetOn(on) {
-    if (on && learning) learnStop();
-    btOn = on;
-    $("a-btest").setAttribute("aria-pressed", String(on));
-    $("a-btest").classList.toggle("on", on);
-    $("a-btest").textContent = on ? "Stop" : "Bind PTT";
-    $("a-btestrow").hidden = !on;
-    $("a-btestn").textContent = on ? "Press the button now (Listen can be on or off)." : "";
-    if (on) {
-      mediaSession(true);
-      btLines = []; btStart = btT0(); $("a-btestlog").textContent = "(waiting for a button press)";
-      window.addEventListener("keydown", btKey, true); window.addEventListener("keyup", btKey, true);
-      if ("mediaSession" in navigator) {
-        for (const a of BT_ACTIONS) { try { navigator.mediaSession.setActionHandler(a, (d) => btLog(`MEDIA     action=${a}${d && d.seekOffset ? " offset=" + d.seekOffset : ""}`)); } catch { /* not supported by this browser */ } }
-      }
-    } else {
-      window.removeEventListener("keydown", btKey, true); window.removeEventListener("keyup", btKey, true);
-      if ("mediaSession" in navigator) for (const a of BT_ACTIONS) { try { navigator.mediaSession.setActionHandler(a, null); } catch { /* ignore */ } }
-      refreshMedia();     // give the normal pause/stop handlers (and a learned button) back
-    }
-  }
-  $("a-btest").onclick = () => btSetOn(!btOn);
 
-  // ---- external PTT button (Bluetooth speaker-mic, headset or a key). Devices differ, so it is LEARNED: press "Learn button", then the button.
+  // ---- external PTT button (Bluetooth speaker-mic, headset or a key). Devices differ, so it is LEARNED: press "Bind PTT", then the button.
   // A key gives down and up = hold to talk. A media button (play/pause, next...) arrives as ONE event per press = press to start, press again to stop.
   // Stored per browser; the PTT component supplies the actions (setExtPtt) and still enforces lock, permission, heartbeat and time limit.
   let ext = null, learning = false, learnTimer = 0, bind = pref.get("pttBtn", null);
   const PAIR = { play: ["play", "pause"], pause: ["play", "pause"] };      // a headset sends "pause" while we play and "play" while paused: one button
   const typing = (e) => /^(INPUT|SELECT|TEXTAREA)$/.test(e.target?.tagName || "") || e.target?.isContentEditable;
   const modeOf = (b) => b.mode || (b.t === "media" || /^(Media|Audio|Launch|Browser)/.test(b.key || "") ? "toggle" : "hold");
-  const bindText = (b) => !b ? "Not set. Learn it, then hold the button to talk."
+  const bindText = (b) => !b ? "Not set. Press Bind PTT, then press the button on your device."
     : `${b.t === "key" ? `Key "${b.key}"${b.code ? " (" + b.code + ")" : ""}` : `Media button "${b.action}"`}: ${modeOf(b) === "hold" ? "hold to talk" : "press to start, press again to stop"}`;
-  let lastFire = "";
+  let lastFire = "", learnMsg = "";
   function fired(what, res) {
     lastFire = `${new Date().toLocaleTimeString()}  ${what} -> ${res || "no PTT component (page still loading?)"}`;
     paintBind();
   }
   function paintBind() {
-    $("a-bnote").textContent = learning ? "Press the button on your device now (15 s)..." : bindText(bind) + (lastFire ? "\nLast press: " + lastFire : "");
-    $("a-blearn").textContent = learning ? "Cancel" : bind ? "Learn again" : "Learn button";
+    $("a-bnote").textContent = learning ? "Press the button on your device now (15 s)..." : learnMsg ? learnMsg : bindText(bind) + (lastFire ? "\nLast press: " + lastFire : "");
+    $("a-blearn").textContent = learning ? "Cancel" : bind ? "Bind again" : "Bind PTT";
     $("a-bclear").hidden = !bind || learning;
     $("a-bmode").hidden = !bind || learning || bind.t !== "key";               // a media button only ever sends one event per press
     if (bind) $("a-bmode").value = modeOf(bind);
@@ -204,7 +170,7 @@ export function createAudioPanel({ conn, info: initialInfo, model = "Radio" }) {
   const KEY2ACTION = { MediaTrackNext: ["nexttrack"], MediaTrackPrevious: ["previoustrack"], MediaPlayPause: ["play", "pause"], MediaPlay: ["play", "pause"], MediaPause: ["play", "pause"], MediaStop: ["stop"] };
   const actionsOf = (b) => !b ? [] : b.t === "media" ? (PAIR[b.action] || [b.action]) : modeOf(b) === "toggle" ? (KEY2ACTION[b.key] || []) : [];
   function applyBindingMedia() {
-    if (!bind || !("mediaSession" in navigator) || btOn || learning) return;
+    if (!bind || !("mediaSession" in navigator) || learning) return;
     for (const a of actionsOf(bind)) {
       try {
         navigator.mediaSession.setActionHandler(a, () => {
@@ -227,10 +193,10 @@ export function createAudioPanel({ conn, info: initialInfo, model = "Radio" }) {
     } else { mediaSession(false); applyBindingMedia(); }
   }
   // browsers only start sound after a tap or key: when the page is opened with a media button already learned, arm it on the first one
-  const armOnGesture = () => { document.removeEventListener("pointerdown", armOnGesture, true); document.removeEventListener("keydown", armOnGesture, true); if (!learning && !btOn) refreshMedia(); };
+  const armOnGesture = () => { document.removeEventListener("pointerdown", armOnGesture, true); document.removeEventListener("keydown", armOnGesture, true); if (!learning) refreshMedia(); };
   if (actionsOf(bind).length) { document.addEventListener("pointerdown", armOnGesture, true); document.addEventListener("keydown", armOnGesture, true); }
   const bindKey = (e) => {
-    if (!bind || bind.t !== "key" || btOn || learning || !sameKey(e, bind) || typing(e) || !ext) return;
+    if (!bind || bind.t !== "key" || learning || !sameKey(e, bind) || typing(e) || !ext) return;
     e.preventDefault();
     if (modeOf(bind) === "toggle") {                                         // one press = one action; key repeat and the key-up are ignored
       if (e.type !== "keydown" || e.repeat) return;
@@ -242,6 +208,7 @@ export function createAudioPanel({ conn, info: initialInfo, model = "Radio" }) {
   };
   window.addEventListener("keydown", bindKey, true); window.addEventListener("keyup", bindKey, true);
   function setBind(b) {
+    learnMsg = "";
     bind = b; pref.set("pttBtn", b);
     if ("mediaSession" in navigator) for (const a of BT_ACTIONS) { try { navigator.mediaSession.setActionHandler(a, null); } catch { /* ignore */ } }
     refreshMedia();
@@ -261,13 +228,16 @@ export function createAudioPanel({ conn, info: initialInfo, model = "Radio" }) {
     learnStop(); setBind(b);
   }
   function learnStart() {
-    if (btOn) btSetOn(false);
-    learning = true; paintBind(); mediaSession(true);                       // the page must count as a media player or the browser keeps the button
+    learnMsg = ""; learning = true; paintBind(); mediaSession(true);                       // the page must count as a media player or the browser keeps the button
     window.addEventListener("keydown", learnKey, true);
     if ("mediaSession" in navigator) {
       for (const a of BT_ACTIONS) { try { navigator.mediaSession.setActionHandler(a, () => { const b = { t: "media", action: a }; learnStop(); setBind(b); }); } catch { /* not supported */ } }
     }
-    learnTimer = setTimeout(learnStop, 15000);
+    learnTimer = setTimeout(() => {
+      learnStop();
+      learnMsg = "Nothing received. The browser did not get the button. Check the headset is the connected Bluetooth device, close other players (Spotify, YouTube), reload the page and try again.";
+      paintBind();
+    }, 15000);
   }
   $("a-blearn").onclick = () => (learning ? learnStop() : learnStart());
   $("a-bclear").onclick = () => setBind(null);
