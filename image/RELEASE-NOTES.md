@@ -42,6 +42,10 @@ and goes back by itself if the new version does not start. Settings and accounts
 | `radio-remote-rade-linux-aarch64.tar.xz` | the optional RADE library (FreeDV neural modes V1 and V2) for a Raspberry Pi, installed with `install_rade.sh` (the PC build is `…-x86_64.tar.xz`) |
 | `SHA256SUMS` | checksums of all of the above |
 
+### What is new in 1.1.35
+
+- **FreeDV (RADE) transmit fix.** The transmit chain handed the modem's output to a resampler even in the 10 ms blocks where the modem returned nothing (11 blocks out of 12 for RADE V1), and the resampler turned each of those empty calls into 2 stray samples. That added about 22 samples per 120 ms modem frame: repeated small time slips in the transmitted waveform, a likely cause of splatter and of receivers losing sync. Checked offline against the unmodified upstream RADE receiver on a perfect channel: the speech decoded from our transmit signal matched the original with similarity 0.39 before and 0.88 after (the upstream transmitter's own signal: 0.89), with 112 of 117 modem symbols valid instead of 104. The receive side decodes the same as the upstream receiver. Not yet tested on air.
+
 ### What is new in 1.1.34
 
 - **PTT button for a Bluetooth headset, speaker-mic or keyboard.** On the **Audio** tab press **Bind PTT**, then press the button on your device; it is remembered in this browser. A key such as Space works as hold to talk; a media button (play/pause, next track...) works as press to start, press again to stop. It works with Listen on or off (the page plays an inaudible tone so the browser passes the media buttons to it). With a Bluetooth headset use another microphone as the input: when the headset's own microphone is in use the headset switches to call mode and its buttons are hidden from the browser. The screen lock, the PTT permission and the transmit time limit apply as for the on-screen button. Tested with a Beats Studio Pro on Windows Chrome (double press of the "b" button).

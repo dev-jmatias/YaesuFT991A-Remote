@@ -68,6 +68,8 @@ class Decimator:
         self.hist = np.zeros(len(self.h) - 1)
 
     def process(self, x: np.ndarray) -> np.ndarray:
+        if not len(x):
+            return np.empty(0)
         buf = np.concatenate([self.hist, x.astype(np.float64)])
         self.hist = buf[-(len(self.h) - 1):]
         return np.convolve(buf, self.h, "valid")[self.f - 1::self.f]
@@ -81,6 +83,8 @@ class Interpolator:
         self.hist = np.zeros(len(self.h) - 1)
 
     def process(self, x: np.ndarray) -> np.ndarray:
+        if not len(x):                               # the modem returns nothing for most 10 ms blocks of a transmission: with no input the history alone is shorter than the filter
+            return np.empty(0)                       # and numpy's convolve would swap its arguments and return 2 stray samples (a time slip in the transmitted waveform)
         up = np.zeros(len(x) * self.f)
         up[::self.f] = x
         buf = np.concatenate([self.hist, up])

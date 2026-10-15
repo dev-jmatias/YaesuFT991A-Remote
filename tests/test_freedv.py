@@ -601,3 +601,28 @@ async def test_frames_thrown_away_in_an_over_are_in_its_summary(svc, caplog):
         svc._over_finished()
     msgs = [r.getMessage() for r in caplog.records]
     assert any("5 frame(s) thrown away" in m for m in msgs) and not any("no holes" in m for m in msgs)
+
+
+def test_resamplers_return_nothing_for_nothing_and_chunking_never_changes_the_signal():
+    """The modem returns no tones for most 10 ms blocks of a transmission. numpy's convolve swaps its arguments when the buffer is shorter than the filter, so an empty call
+    used to return 2 stray samples (a time slip in the transmitted waveform, 22 per 120 ms modem frame): feeding the same signal in any chunks, empty ones included, must give
+    exactly the signal made in one go."""
+    import numpy as np
+
+    from radio_remote.audio.freedv import Decimator, Interpolator
+
+    x = np.random.default_rng(0).normal(0, 3000, 160 * 24)
+    assert len(Interpolator(6, 3600.0).process(np.empty(0))) == 0
+    assert len(Decimator(6, 3600.0).process(np.empty(0))) == 0
+    whole = Interpolator(6, 3600.0).process(x)
+    chunked, it = [], Interpolator(6, 3600.0)
+    for i in range(0, len(x), 160 * 12):                               # one modem frame of tones every 12 blocks, nothing in between
+        chunked.append(it.process(x[i:i + 160 * 12]))
+        chunked += [it.process(np.empty(0)) for _ in range(11)]
+    got = np.concatenate(chunked)
+    assert len(got) == len(whole) and np.allclose(got, whole)
+    d_whole = Decimator(6, 3600.0).process(np.random.default_rng(1).normal(0, 3000, 960 * 6))
+    dd = Decimator(6, 3600.0)
+    xx = np.random.default_rng(1).normal(0, 3000, 960 * 6)
+    d_chunked = np.concatenate([p for i in range(0, len(xx), 960) for p in (dd.process(xx[i:i + 960]), dd.process(np.empty(0)))])
+    assert len(d_chunked) == len(d_whole) and np.allclose(d_chunked, d_whole)
