@@ -45,6 +45,15 @@ export function createPtt(host, ctx) {
     clearInterval(hb); hb = null;
     send("ptt", { on: false });
   };
+  // ask the server to key and start the heartbeat; the caller has already set `held`
+  const begin = async () => {
+    try {
+      await sock.send("ptt", ctx.ui.levelTest ? { on: true, test: true } : { on: true });          // test: the FreeDV level test tone instead of the voice
+      if (!held) { send("ptt", { on: false }); return; }      // released while the request was in flight
+      ctx.audio()?.setPtt(true);
+      hb = setInterval(() => sock.ping("ptt_hb"), 250);
+    } catch (x) { held = false; latched = false; btn.classList.remove("latched"); showCue(false); err(x.message); }
+  };
   btn.onpointerdown = async (e) => {
     e.preventDefault();
     if (latched) { release(); return; }                      // a tap on the latched button ends the transmission
@@ -52,12 +61,7 @@ export function createPtt(host, ctx) {
     held = true; startY = e.clientY;
     showCue(true, "▲ slide up to lock transmit");
     try { btn.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
-    try {
-      await sock.send("ptt", ctx.ui.levelTest ? { on: true, test: true } : { on: true });          // test: the FreeDV level test tone instead of the voice
-      if (!held) { send("ptt", { on: false }); return; }      // released while the request was in flight
-      ctx.audio()?.setPtt(true);
-      hb = setInterval(() => sock.ping("ptt_hb"), 250);
-    } catch (x) { held = false; latched = false; showCue(false); err(x.message); }
+    await begin();
   };
   btn.onpointermove = (e) => {
     if (!held || latched) return;
@@ -85,6 +89,26 @@ export function createPtt(host, ctx) {
       hb = setInterval(() => sock.ping("ptt_hb"), 250);
     } catch (x) { held = false; latched = false; sendingClip = false; btn.classList.remove("latched"); showCue(false); err(x.message); }
   }
+  // An external button (a Bluetooth PTT button, a key) learned on the Audio tab: down/up = hold to talk, toggle = press to start, press again to stop.
+  // The same rules apply as for the screen button (lock, permission, heartbeat, time limit).
+  // each action returns a short text saying what happened (the Audio tab shows it under "External PTT button")
+  const ext = {
+    down() {
+      if (btn.disabled) return `ignored: the PTT button is disabled (${blocked ? "PTT not permitted for this account or disabled in the config" : "screen lock is on"})`;
+      if (held) return "ignored: already transmitting";
+      held = true; showCue(true, "External button held"); begin(); return "transmit requested (hold)";
+    },
+    up() { if (held && !latched) { release(); return "released"; } return "up ignored (not holding)"; },
+    toggle() {
+      if (held) { release(); return "stopped"; }
+      if (btn.disabled) return `ignored: the PTT button is disabled (${blocked ? "PTT not permitted for this account or disabled in the config" : "screen lock is on"})`;
+      held = true; latched = true; sawTx = false; btn.classList.add("latched");
+      showCue(true, "Locked on - press the button again to stop");
+      begin(); return "transmit requested (latched)";
+    },
+  };
+  ctx.audio()?.setExtPtt(ext);
+  signal.addEventListener("abort", () => ctx.audio()?.setExtPtt(null), { once: true });
   ctx.pttApi = { sendClip, stop: release, get sending() { return sendingClip; } };
 
   return {
