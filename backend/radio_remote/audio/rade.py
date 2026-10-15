@@ -110,6 +110,9 @@ def _load():
             if hasattr(lib, "rg_tx_eoo"):                                  # libraries built from 1.1.32 on can send the end-of-over frame
                 lib.rg_tx_eoo_max.restype, lib.rg_tx_eoo_max.argtypes = ctypes.c_int, [ctypes.c_void_p]
                 lib.rg_tx_eoo.restype, lib.rg_tx_eoo.argtypes = ctypes.c_int, [ctypes.c_void_p, P16, ctypes.c_int]
+            if hasattr(lib, "rg_set_callsign"):                            # libraries built from 1.1.36 on carry the callsign in the V1 end-of-over frame
+                lib.rg_set_callsign.restype, lib.rg_set_callsign.argtypes = ctypes.c_int, [ctypes.c_void_p, ctypes.c_char_p]
+                lib.rg_rx_callsign.restype, lib.rg_rx_callsign.argtypes = ctypes.c_int, [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_int]
         except (OSError, AttributeError) as e:
             _ERR = f"the RADE library could not be loaded ({e}); {INSTALL_HINT}"
             return None
@@ -132,6 +135,12 @@ def eoo_available() -> bool:
     """True when the installed library can send the end-of-over frame (libraries built from 1.1.32 on)."""
     lib = _load()
     return bool(lib is not None and hasattr(lib, "rg_tx_eoo"))
+
+
+def text_available() -> bool:
+    """True when the installed library can send and read the callsign in the RADE V1 end-of-over frame (libraries built from 1.1.36 on)."""
+    lib = _load()
+    return bool(lib is not None and hasattr(lib, "rg_set_callsign"))
 
 
 def v2_available() -> tuple[bool, str]:
@@ -216,6 +225,20 @@ class RadeCore:
         out = np.empty(max(0, self.lib.rg_tx_eoo_max(self.g)), dtype="<i2")
         n = self.lib.rg_tx_eoo(self.g, out.ctypes.data_as(ctypes.POINTER(ctypes.c_int16)), len(out))
         return out[:n]
+
+    def set_callsign(self, callsign: str) -> bool:
+        """The callsign the end-of-over frame of this transmission will carry (RADE V1; empty = none). False when this library or mode has no text channel."""
+        if not hasattr(self.lib, "rg_set_callsign"):
+            return False
+        return bool(self.lib.rg_set_callsign(self.g, callsign.encode("ascii", "ignore")[:16]))
+
+    def take_callsign(self) -> str:
+        """The callsign decoded from the last end-of-over frame received, once (empty when there is no new one)."""
+        if not hasattr(self.lib, "rg_rx_callsign"):
+            return ""
+        buf = ctypes.create_string_buffer(16)
+        n = self.lib.rg_rx_callsign(self.g, buf, len(buf))
+        return buf.value.decode("ascii", "ignore") if n > 0 else ""
 
     def tx(self, speech: np.ndarray) -> np.ndarray:
         """16 kHz speech (any length) -> 8 kHz modem samples (a modem frame comes out for every 120 ms of speech, the rest waits)."""

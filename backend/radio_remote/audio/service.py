@@ -171,7 +171,8 @@ class AudioService:
         self._tx_proc_ms_max = 0.0
         self._levels = {"audio_rx_level": 0, "audio_tx_level": 0, "audio_tx_frames": 0, "audio_tx_error": "",
                         "freedv_on": False, "freedv_mode": "", "freedv_sync": 0, "freedv_snr": 0.0,
-                        "freedv_spec": [], "freedv_offset": 0, "freedv_hint": None, "freedv_afc": "", "freedv_level": -120, "freedv_clip": False}
+                        "freedv_spec": [], "freedv_offset": 0, "freedv_hint": None, "freedv_afc": "", "freedv_level": -120, "freedv_clip": False,
+                        "freedv_heard": "", "freedv_heard_at": 0}
         # FreeDV (see freedv.py): decode the radio's modem tones to speech for the listeners, encode the operator's speech to modem tones
         self.freedv_ok, self.freedv_reason = freedv.available()
         self._fd_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="freedv-rx")     # one worker: frames are decoded strictly in order
@@ -181,6 +182,7 @@ class AudioService:
         self.on_freedv_tx = None
         self._fd_tx_reported = False
         self._rx_hold = 0                                # frames still to skip after a transmission before the FreeDV receiver restarts
+        self.freedv_callsign = ""                       # sent in the end-of-over frame of every RADE V1 transmission (config: [freedv] callsign, else the reporter's)
         self.freedv_mode = "RADE"                       # the app sets these from [freedv] in the config
         self.freedv_tx_gain = db_to_gain(-6.0)
         self._last_emit = 0.0
@@ -239,7 +241,7 @@ class AudioService:
         # "show": the page shows the FreeDV tab also while the RADE library is missing but can be installed, because the Install RADE button lives there
         return {"available": self.freedv_ok, "show": bool(self.freedv_ok or rade.installable()), "reason": self.freedv_reason, "on": self._fd_rx is not None, "mode": self.freedv_mode,
                 "modes": [m for m in freedv.ALL_MODES if not st.get(m)], "unavailable": {m: w for m, w in st.items() if w},
-                "all_modes": list(freedv.ALL_MODES)}
+                "all_modes": list(freedv.ALL_MODES), "text": bool(rade.text_available()), "callsign": self.freedv_callsign}
 
     def freedv_dial_moved(self, old_hz: int, new_hz: int, mode: str | None) -> None:
         """The radio's dial moved while FreeDV is on: every audio frequency moved with it, so the software shift is adjusted by the same amount and the lock is kept."""
@@ -352,12 +354,14 @@ class AudioService:
         amp = TEST_TONE_PEAK * self.freedv_tx_gain
         return np.clip(np.rint(amp * np.sin(2 * np.pi * TEST_TONE_HZ * n / RATE)), -32768, 32767).astype("<i2").tobytes()
 
-    def set_freedv_params(self, mode: str, tx_level_db: float) -> None:
-        """Defaults from the config. A running session picks up the new transmit level at once; a mode change applies the next time it is switched on."""
+    def set_freedv_params(self, mode: str, tx_level_db: float, callsign: str = "") -> None:
+        """Defaults from the config. A running session picks up the new transmit level and callsign at once; a mode change applies the next time it is switched on."""
         self.freedv_mode = mode if mode in freedv.ALL_MODES else self.freedv_mode
         self.freedv_tx_gain = db_to_gain(tx_level_db)
+        self.freedv_callsign = callsign
         if self._fd_tx:
             self._fd_tx.level = self.freedv_tx_gain
+            self._fd_tx.set_callsign(callsign)
 
     def set_freedv(self, on: bool, mode: str | None = None) -> None:
         """Switch FreeDV on or off. On: the radio's audio is decoded to speech for every listener and the operator's microphone is encoded
@@ -376,7 +380,7 @@ class AudioService:
         if on:
             self.freedv_mode = mode if mode in freedv.ALL_MODES else self.freedv_mode
             self._fd_rx = freedv.RxChain(self.freedv_mode)
-            self._fd_tx = freedv.TxChain(self.freedv_mode, self.freedv_tx_gain)
+            self._fd_tx = freedv.TxChain(self.freedv_mode, self.freedv_tx_gain, self.freedv_callsign)
             self._tx_q = collections.deque(self._tx_q, maxlen=TX_QUEUE_FREEDV)      # the modem delivers its tones in bursts of up to 160 ms
         else:
             self._tx_q = collections.deque(self._tx_q, maxlen=TX_QUEUE_MAX)
@@ -385,7 +389,8 @@ class AudioService:
         self.rx_ms_avg = self.rx_ms_max = self.rx_work_avg = self.rx_work_max = 0.0
         self.rx_slow = 0
         self._levels.update(freedv_on=on, freedv_mode=self.freedv_mode if on else "", freedv_sync=0, freedv_snr=0.0, freedv_spec=[], freedv_offset=0,
-                            freedv_hint=None, freedv_afc="", freedv_level=-120, freedv_clip=False)
+                            freedv_hint=None, freedv_afc="", freedv_level=-120, freedv_clip=False, freedv_heard="", freedv_heard_at=0)
+        self._heard_seq = 0
         self._last_emit = 0.0
         self._level("freedv_on", on)
         log.info("FreeDV %s%s", "on, mode " + self.freedv_mode if on else "off", "")
@@ -520,6 +525,10 @@ class AudioService:
                             ch = self._fd_rx
                             rec_diag = (int(ch.sync), float(ch.snr), float(ch.afc.offset) if hasattr(ch, "afc") else 0.0, ms)
                             self._levels.update(freedv_sync=ch.sync, freedv_snr=round(ch.snr, 1))
+                            if getattr(ch, "heard_seq", 0) != self._heard_seq:                      # the end-of-over frame of an over carried a callsign (RADE V1)
+                                self._heard_seq = ch.heard_seq
+                                self._levels.update(freedv_heard=ch.heard, freedv_heard_at=int(time.time()))
+                                log.info("FreeDV: heard %s", ch.heard)
                             if hasattr(ch, "afc"):                                   # the tuning aid (freedv_tune.py): spectrum, level, where the signal is, what was corrected
                                 self._levels.update(freedv_offset=int(round(ch.afc.offset)), freedv_afc=ch.tune_state())
                                 if ch.spec_fresh:
@@ -686,7 +695,7 @@ class AudioService:
                 self._level("freedv_tx_underruns", 0)
                 if self._fd_tx is not None:              # a fresh modem for every transmission: nothing left over from the last one
                     self._fd_tx.close()
-                    self._fd_tx = freedv.TxChain(self.freedv_mode, self.freedv_tx_gain)
+                    self._fd_tx = freedv.TxChain(self.freedv_mode, self.freedv_tx_gain, self.freedv_callsign)
             if self._fd_tx is not None and self._test_active:
                 if self._test_n < TEST_TONE_MAX_S * RATE:           # level test: a steady tone at the modem level, one frame for every microphone frame
                     tone = self._test_tone_frame()

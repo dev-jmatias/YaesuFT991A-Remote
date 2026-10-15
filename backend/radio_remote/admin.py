@@ -29,7 +29,7 @@ EDITABLE = {
     "logging": {"level"},
     "updates": {"check"},
     "rigctl": {"enabled", "port", "allow", "set"},
-    "freedv": {"mode", "tx_level_db", "channels", "data_mode", "auto_width"},
+    "freedv": {"mode", "tx_level_db", "channels", "data_mode", "auto_width", "callsign"},
     "reporter": {"enabled", "announce", "watch", "callsign", "grid_square", "message"},
 }
 LOCKED = ["safety.allow_ptt", "server.host", "server.port", "server.allowed_origins", "storage.data_dir", "updates.repo"]
@@ -275,8 +275,8 @@ async def put_config(request):
         app[K_REPORTER].apply()
         if "message" in body["reporter"]:
             app[K_REPORTER].set_message()
-    if "freedv" in body and app[K_AUDIO]:
-        app[K_AUDIO].set_freedv_params(new["freedv"]["mode"], new["freedv"]["tx_level_db"])
+    if ("freedv" in body or "reporter" in body) and app[K_AUDIO]:
+        app[K_AUDIO].set_freedv_params(new["freedv"]["mode"], new["freedv"]["tx_level_db"], config.freedv_callsign(new))
     if any(k in ("rx_gain_db", "tx_gain_db") for k in body.get("audio", {})) and app[K_AUDIO]:
         app[K_AUDIO].set_gains(new["audio"]["rx_gain_db"], new["audio"]["tx_gain_db"])     # takes effect immediately
     app[K_AUTH].audit("config_changed", admin.username, client_ip(request), ", ".join(changed) or "no change")

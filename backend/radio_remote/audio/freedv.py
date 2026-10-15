@@ -108,6 +108,7 @@ class RxChain:
         self.up = Interpolator(RATE // self.fd.speech_rate, 0.45 * self.fd.speech_rate)       # decoded speech -> 48 kHz
         self.shifter, self.afc, self.spec = FreqShifter(self.fd.modem_rate), Afc(mode), Spectrum(mode)     # software tuning (freedv_tune.py)
         self.spec_fresh = False
+        self.heard, self.heard_seq = "", 0           # the callsign read from the end-of-over frame of the last over (RADE V1), and a counter that changes whenever one is read
         self.fifo: deque[bytes] = deque()
         self._rest = b""
         self._lk = threading.Lock()                  # process() runs in a worker thread (the decoder takes 60-100 ms on a small PC and must not stall the web server); close() and
@@ -136,6 +137,10 @@ class RxChain:
         good = self.fd.sync == 1 and self.fd.snr >= PARAMS[self.mode]["min_snr"]
         self.shifter.shift = self.afc.update(good, FRAME_SAMPLES / RATE)          # nothing locked: step the shift until the modem locks, then hold it
         speech = self.fd.rx(_to_i16(self.shifter.process(self.dec.process(x))))
+        if hasattr(self.fd, "take_callsign"):
+            call = self.fd.take_callsign()
+            if call:
+                self.heard, self.heard_seq = call, self.heard_seq + 1
         if len(speech):
             self._rest += _to_i16(self.up.process(speech.astype(np.float64))).tobytes()
             while len(self._rest) >= FRAME_BYTES:
@@ -173,8 +178,9 @@ class RxChain:
 class TxChain:
     """Microphone speech (48 kHz frames) -> modem tone frames (48 kHz) for the radio."""
 
-    def __init__(self, mode: str, level: float = 0.5):
+    def __init__(self, mode: str, level: float = 0.5, callsign: str = ""):
         self.fd = open_core(mode)
+        self.set_callsign(callsign)
         self.dec = Decimator(RATE // self.fd.speech_rate, 0.45 * self.fd.speech_rate)         # microphone -> the speech rate
         self.up = Interpolator(RATE // self.fd.modem_rate, 0.45 * self.fd.modem_rate)         # modem output -> 48 kHz
         self.level = level                           # linear gain applied to the modem tones
@@ -182,6 +188,11 @@ class TxChain:
         self._rest = b""
         self._sent = False                           # a modem frame has gone out in this over
         self._eoo_sent = False                       # and the end-of-over frame has been added
+
+    def set_callsign(self, callsign: str) -> None:
+        """The callsign the end-of-over frame carries (RADE V1; other stations' FreeDV programs show it). Ignored by a mode or library without a text channel."""
+        if hasattr(self.fd, "set_callsign"):
+            self.fd.set_callsign(callsign)
 
     def process(self, pcm: bytes) -> list[bytes]:
         """One 20 ms mic frame in; zero or more 20 ms modem frames out (the modem works in blocks of 40-160 ms)."""

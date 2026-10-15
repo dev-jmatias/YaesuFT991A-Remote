@@ -24,7 +24,7 @@ from .lease import ControlLease, LeaseError
 from .radio import controls
 from .radio.base import METER_FIELDS, RadioDriver, RadioError
 from .radio.registry import create_driver
-from .config import FREEDV_MODES
+from .config import FREEDV_MODES, freedv_callsign
 from .ratelimit import TokenBucket
 from .freedv_reporter import FreeDVReporter
 from .rigctl import RigctlServer
@@ -1020,7 +1020,7 @@ def create_app(cfg: dict, driver: RadioDriver | None = None, auth: AuthStore | N
     audio.recorder = Recorder(Path(cfg["storage"]["data_dir"]) / "recordings", on_change=app[K_HUB].push)    # the last five clips of received audio
     audio.on_playback_done = app[K_HUB]._playback_done
     app[K_HUB].extra.update(rec=audio.recorder.state(), recordings=audio.recorder.list())
-    audio.set_freedv_params(cfg["freedv"]["mode"], cfg["freedv"]["tx_level_db"])
+    audio.set_freedv_params(cfg["freedv"]["mode"], cfg["freedv"]["tx_level_db"], freedv_callsign(cfg))
     app[K_HUB].ui = {"steps": cfg["ui"]["tuning_steps_hz"],
                      "meter": {"alc_full": cfg["ui"]["meter_alc_full"], "comp_full": cfg["ui"]["meter_comp_full"],
                                "swr_warn": cfg["ui"]["swr_warn"], "swr_raw_at_3": cfg["ui"]["swr_raw_at_3"]}}

@@ -29,10 +29,10 @@ sed -i 's|int bpf_en = 0;  /\* BPF disabled by default \*/|int bpf_en = 1;  /* B
 grep -q 'int bpf_en = 1;' "$WORK/rade_c/src/rade_api.c" || { echo "could not enable the V1 transmit band-pass filter in rade_api.c" >&2; exit 1; }
 
 echo "==> Adding the Radio Remote glue to the library"
-cp "$HERE/native/rade/rade_glue.c" "$WORK/rade_c/src/rade_glue.c"
-# put the glue into the same shared library as rade_api.c (it needs the Opus FARGAN/LPCNet code that library already contains)
-sed -i 's/^    rade_api\.c$/    rade_api.c\n    rade_glue.c/' "$WORK/rade_c/src/CMakeLists.txt"
-grep -q 'rade_glue.c' "$WORK/rade_c/src/CMakeLists.txt" || { echo "could not patch src/CMakeLists.txt" >&2; exit 1; }
+cp "$HERE/native/rade/rade_glue.c" "$HERE/native/rade/rade_text.c" "$HERE/native/rade/rade_text.h" "$HERE/native/rade/HRA_56_56.h" "$WORK/rade_c/src/"
+# put the glue (and the callsign text channel it uses, BSD-2 from the FreeDV program's author) into the same shared library as rade_api.c (it needs the Opus FARGAN/LPCNet code that library already contains)
+sed -i 's/^    rade_api\.c$/    rade_api.c\n    rade_glue.c\n    rade_text.c/' "$WORK/rade_c/src/CMakeLists.txt"
+grep -q 'rade_glue.c' "$WORK/rade_c/src/CMakeLists.txt" && grep -q 'rade_text.c' "$WORK/rade_c/src/CMakeLists.txt" || { echo "could not patch src/CMakeLists.txt" >&2; exit 1; }
 
 echo "==> Building (downloads Opus and the model weights)"
 mkdir -p "$WORK/rade_c/build"
@@ -47,8 +47,10 @@ cat > "$OUT/RADE-INFO.txt" <<EOF
 RADE V1 + V2 library for Radio Remote
 rade_c: $RADE_C_URL @ $RADE_C_REF
 built: $(date -u +%Y-%m-%dT%H:%M:%SZ) on $(uname -m)
-glue ABI version: 1
+glue ABI version: 1 (text channel: callsign in the V1 end-of-over frame)
 EOF
+# the licence of the text channel travels inside RADE-INFO.txt: the package keeps its four known files, so a station that has not updated yet can still install it
+{ echo; echo "----- callsign text channel (licence) -----"; cat "$HERE/native/rade/LICENSE-rade_text"; } >> "$OUT/RADE-INFO.txt"
 
 ARCH="$(uname -m)"
 TAR="$OUT/radio-remote-rade-linux-$ARCH.tar.xz"

@@ -54,7 +54,7 @@ DEFAULTS: dict[str, dict[str, Any]] = {
     # FreeDV digital voice (RADE V1 = "RADE", RADE V2 = "RADE2"; both from the optional RADE library) done on the Pi: see audio/freedv.py and docs/freedv.md.
     # mode = the one used when the FreeDV button is pressed; tx_level_db = level of the modem tones sent to the radio (keep the ALC barely moving); channels = the preset
     # list shown on the FreeDV tab, each "name|frequency in Hz|mode". Frequencies below 10 MHz use LSB, above use USB (the FreeDV convention).
-    "freedv": {"mode": "RADE", "tx_level_db": -3.0, "data_mode": False, "auto_width": True, "channels": [
+    "freedv": {"mode": "RADE", "tx_level_db": -3.0, "data_mode": False, "auto_width": True, "callsign": "", "channels": [
         "160m|1997000|RADE", "80m|3625000|RADE", "80m (2)|3643000|RADE", "40m|7177000|RADE", "40m (2)|7197000|RADE",
         "20m|14236000|RADE", "20m (2)|14240000|RADE", "17m|18118000|RADE", "15m|21313000|RADE", "12m|24933000|RADE",
         "10m|28330000|RADE", "10m (2)|28720000|RADE"]},
@@ -150,6 +150,8 @@ def validate(cfg: dict) -> dict:
         raise ConfigError("freedv.auto_width must be true or false")
     if not -40 <= fd["tx_level_db"] <= 3:
         raise ConfigError("freedv.tx_level_db must be -40..3")
+    if not isinstance(fd.get("callsign", ""), str) or not re.fullmatch(r"[A-Za-z0-9/]{0,8}", fd.get("callsign", "")):
+        raise ConfigError("freedv.callsign: at most 8 letters, digits or /")
     if len(fd["channels"]) > 40 or not all(isinstance(c, str) and re.fullmatch(r"[^|\n\r]{1,40}\|\d{5,9}\|(RADE|RADE2)", c) for c in fd["channels"]):
         raise ConfigError("freedv.channels: up to 40 entries, each like \"20m|14236000|RADE\"")
     r = cfg["rigctl"]
@@ -207,3 +209,9 @@ def save(cfg: dict, path: str | os.PathLike) -> None:
         os.chmod(p, 0o600)
     except OSError:
         pass
+
+
+def freedv_callsign(cfg: dict) -> str:
+    """The callsign sent at the end of every FreeDV (RADE V1) transmission: [freedv] callsign, else the FreeDV Reporter callsign, at most 8 characters (the text channel's limit)."""
+    c = (cfg.get("freedv", {}).get("callsign") or cfg.get("reporter", {}).get("callsign") or "").upper()
+    return re.sub(r"[^A-Z0-9/]", "", c)[:8]

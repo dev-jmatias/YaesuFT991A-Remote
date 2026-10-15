@@ -23,6 +23,7 @@
 #include "lpcnet.h"
 #include "rade_api.h"
 #include "rade_dsp.h"
+#include "rade_text.h"
 
 #define RG_ABI_VERSION 1
 #define RG_EXPORT __attribute__((visibility("default")))
@@ -38,6 +39,9 @@ typedef struct rg {
     RADE_COMP *rx_buf;
     float *feat_buf;
     float *eoo_buf;
+    int n_eoo;                                     /* rade_n_eoo_bits(): floats in an end-of-over frame (180 for V1, 0 for V2) */
+    char rx_call[16];                              /* the last callsign decoded from an end-of-over frame */
+    int rx_call_new;
     int16_t *q;                                    /* modem samples waiting for a whole OFDM symbol */
     int q_n, q_cap;
     float cont_buf[5 * NB_TOTAL_FEATURES];
@@ -75,6 +79,7 @@ RG_EXPORT rg *rg_open_mode(int v2) {
     g->frames_per_mf = g->n_feat_in / RADE_NB_TOTAL_FEATURES;
     g->n_tx_out = rade_n_tx_out(g->r);
     int n_eoo = rade_n_eoo_bits(g->r);
+    g->n_eoo = n_eoo;
     g->q_cap = g->nin_max * 8;
     g->rx_buf = malloc((size_t)g->nin_max * sizeof(RADE_COMP));
     g->feat_buf = malloc((size_t)g->n_feat_out * sizeof(float));
@@ -125,6 +130,10 @@ RG_EXPORT int rg_rx(rg *g, const int16_t *in, int n_in, int16_t *out, int max_ou
         g->q_n -= nin;
         int has_eoo = 0;
         int n_out = rade_rx(g->r, g->feat_buf, &has_eoo, g->eoo_buf, g->rx_buf);
+        if (has_eoo && g->eoo_buf && g->n_eoo >= 112) {                /* end of an over: V1 carries the sender's callsign in it */
+            char call[16];
+            if (rr_text_decode(g->eoo_buf, g->n_eoo, call)) { memcpy(g->rx_call, call, sizeof(call)); g->rx_call_new = 1; }
+        }
         g->sync = rade_sync(g->r) != 0;
         if (g->sync) g->snr = rade_snrdB_3k_est(g->r);
         if (n_out <= 0) continue;
@@ -209,4 +218,26 @@ RG_EXPORT int rg_tx_eoo(rg *g, int16_t *out, int max_out) {
     }
     free(buf);
     return written;
+}
+
+/* Callsign in the end-of-over frame (RADE V1 only; text channel of the FreeDV program, see rade_text.c). Present from 1.1.36 on.
+ * rg_set_callsign: the callsign the next end-of-over frame will carry (empty clears it); returns 1 when set, 0 when this mode has no text channel.
+ * rg_rx_callsign: the callsign decoded from the last received end-of-over frame, once; returns its length, 0 when there is no new one. */
+RG_EXPORT int rg_set_callsign(rg *g, const char *callsign) {
+    int n = g->n_eoo;
+    if (n < 112) return 0;
+    float *bits = calloc((size_t)n, sizeof(float));
+    if (!bits) return 0;
+    if (callsign && callsign[0]) rr_text_encode(callsign, bits, n);
+    rade_tx_set_eoo_bits(g->r, bits);                                  /* copied by the library */
+    free(bits);
+    return 1;
+}
+
+RG_EXPORT int rg_rx_callsign(rg *g, char *out, int max_out) {
+    if (!g->rx_call_new || max_out < 2) return 0;
+    g->rx_call_new = 0;
+    strncpy(out, g->rx_call, (size_t)max_out - 1);
+    out[max_out - 1] = 0;
+    return (int)strlen(out);
 }

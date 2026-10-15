@@ -127,6 +127,17 @@ Then choose **RADE** in the mode list of the FreeDV tab (or in a channel). Until
   Audio > RX gain**. For transmit use the same **modem level** slider as the other modes and keep the ALC barely moving.
 * The speech it plays is the neural vocoder's voice (clean, but not your exact voice). A few hundred milliseconds of delay is normal.
 
+### Your callsign in the transmission (RADE V1)
+
+At the end of every RADE V1 transmission the Pi sends your callsign inside the signal (in the end-of-over frame), the way the FreeDV program does, so other stations' programs can show who was calling.
+
+* **Set it** (administrators): *FreeDV tab > FreeDV Reporter settings > Callsign sent with every transmission*. Up to 8 letters, digits or `/`. Left empty, the **Callsign** of the Reporter settings is used
+  (its first 8 characters). The configuration key is `[freedv] callsign`.
+* **Needs the RADE library of 1.1.36 or later.** An older one sends no callsign; the RADE line on the FreeDV tab then says so, and *Reinstall RADE* fixes it.
+* **What you see:** when a received over ends with a callsign, **Last heard: CALLSIGN (time)** appears under the FreeDV status line. It is read from the end-of-over frame only, so it appears after the over, and
+  not at all if the signal was too weak for the error correction to recover it (the speech may still have been readable).
+* RADE V2 has no such text channel here: it sends and shows nothing.
+
 ### RADE V2
 
 Choose **RADE V2** in the mode list. It is a newer version of the same idea with a narrower signal (about 1.1 to 1.9 kHz), its own level control on receive, and it follows a mistuned
@@ -170,8 +181,7 @@ Radio Remote can join it. **It is off by default.**
   and your message. **Your callsign and grid square are public on that site.** Nothing else is sent: no audio, no accounts, no settings.
 * **Who is on the air:** the FreeDV tab lists the stations the site reports, those within 5 kHz of your frequency first (shaded), stations that are transmitting marked **TX**. **Tune** moves your
   radio to that station (sideband, frequency and FreeDV mode) and switches FreeDV on. Stations in a mode this program cannot decode (for example the old 700D) have no Tune button.
-* **Limits:** your callsign is not sent inside the FreeDV signal itself (other stations see you in the web list, not in their decoder), so say it by voice when you transmit as usual.
-  Reports of the stations *you* hear (their callsign and SNR) are not sent yet. The site's protocol was taken from open-source clients, not from official documentation, so if the site changes,
+* **Limits:** with RADE V1 your callsign is also sent inside the signal (see *Your callsign in the transmission* above); say it by voice as usual anyway. Reports of the stations *you* hear (their callsign and SNR) are not sent yet. The site's protocol was taken from open-source clients, not from official documentation, so if the site changes,
   the link simply shows "cannot reach FreeDV Reporter" and everything else keeps working.
 * The settings are in the configuration under `[reporter]` (`enabled`, `announce`, `watch`, `callsign`, `grid_square`, `message`).
 

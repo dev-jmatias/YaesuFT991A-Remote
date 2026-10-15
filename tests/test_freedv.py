@@ -42,9 +42,12 @@ class FakeRx:
 class FakeTx:
     made = []
 
-    def __init__(self, mode, level=0.5):
-        self.mode, self.level, self.fed = mode, level, []
+    def __init__(self, mode, level=0.5, callsign=""):
+        self.mode, self.level, self.callsign, self.fed = mode, level, callsign, []
         FakeTx.made.append(self)
+
+    def set_callsign(self, callsign):
+        self.callsign = callsign
 
     def process(self, pcm):
         self.fed.append(pcm)
@@ -626,3 +629,60 @@ def test_resamplers_return_nothing_for_nothing_and_chunking_never_changes_the_si
     xx = np.random.default_rng(1).normal(0, 3000, 960 * 6)
     d_chunked = np.concatenate([p for i in range(0, len(xx), 960) for p in (dd.process(xx[i:i + 960]), dd.process(np.empty(0)))])
     assert len(d_chunked) == len(d_whole) and np.allclose(d_chunked, d_whole)
+
+
+def test_the_freedv_callsign_setting_is_validated_and_falls_back_to_the_reporter_callsign():
+    cfg = config.load(None)
+    assert cfg["freedv"]["callsign"] == "" and config.freedv_callsign(cfg) == ""
+    cfg["reporter"]["callsign"] = "ct2iok/mm/p"                                       # the reporter callsign may be longer than the text channel's 8 characters
+    assert config.freedv_callsign(cfg) == "CT2IOK/M"
+    cfg["freedv"]["callsign"] = "m0dht"
+    assert config.freedv_callsign(cfg) == "M0DHT"
+    config.validate(cfg)
+    for bad in ("TOOLONGCALL", "CT2 IOK", "CT2-IOK", "\u00e9a1"):
+        c = copy.deepcopy(cfg)
+        c["freedv"]["callsign"] = bad
+        with pytest.raises(config.ConfigError):
+            config.validate(c)
+
+
+async def test_the_callsign_reaches_the_transmit_chain_now_and_in_every_new_one(svc):
+    svc.set_freedv_params("RADE", -3.0, "CT2IOK")
+    svc.set_freedv(True, "RADE")
+    assert FakeTx.made[-1].callsign == "CT2IOK" and svc.freedv_state()["callsign"] == "CT2IOK"
+    svc.set_freedv_params("RADE", -3.0, "M0DHT")                                      # changed while FreeDV is on: the running chain follows
+    assert FakeTx.made[-1].callsign == "M0DHT"
+
+
+def test_a_received_callsign_is_kept_by_the_receive_chain_and_a_chain_without_text_is_fine():
+    class Core:
+        speech_rate, modem_rate, n_speech = 16000, 8000, 160
+        sync, snr = 0, 0.0
+
+        def __init__(self):
+            self.calls = ["", "", "G4ABC", "", "CT2IOK"]
+
+        def rx(self, modem):
+            import numpy as np
+            return np.empty(0, dtype="<i2")
+
+        def take_callsign(self):
+            return self.calls.pop(0) if self.calls else ""
+
+        def close(self):
+            pass
+
+    rx = freedv.RxChain.__new__(freedv.RxChain)
+    rx.mode, rx.fd = "RADE", Core()
+    rx.dec, rx.up = freedv.Decimator(6, 3600.0), freedv.Interpolator(6, 3600.0)
+    from radio_remote.audio.freedv_tune import Afc, FreqShifter, Spectrum
+    rx.shifter, rx.afc, rx.spec = FreqShifter(8000), Afc("RADE"), Spectrum("RADE")
+    rx.spec_fresh, rx.heard, rx.heard_seq = False, "", 0
+    rx.fifo, rx._rest = freedv.deque(), b""
+    for _ in range(5):
+        rx._process(bytes(FRAME_BYTES))
+    assert rx.heard == "CT2IOK" and rx.heard_seq == 2                                  # two overs were read, the last one wins
+
+    tx = freedv.TxChain.__new__(freedv.TxChain)                                       # a modem without a text channel (an older library, or V2)
+    tx.fd = type("Old", (), {})()
+    tx.set_callsign("CT2IOK")                                                         # does nothing, does not fail
