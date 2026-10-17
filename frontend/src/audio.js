@@ -736,6 +736,7 @@ export function createAudioPanel({ conn, info: initialInfo, model = "Radio" }) {
     get availableMic() { return !!info.available && micOk(); },
     get state() { return A.state; },
     toggleListen: api_toggleListen,
+    duck(f) { el.volume = f == null ? $("a-vol").value / 100 : $("a-vol").value / 100 * f; },      // quieter for a while, without touching the saved volume (null = back)
     toggleMic() { A.mic = !A.mic; sync(true); },
     // the page that owns the radio link registers here; it is told whenever the mic is armed or disarmed, however that happened
     // (button, logout, server refusal), so the radio's input menu follows: armed = REAR (USB audio), disarmed = MIC

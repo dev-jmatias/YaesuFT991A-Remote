@@ -318,6 +318,10 @@ export function renderRadio(root, { onLogout, onAuthLost }) {
     // Phone tab bar
     const nav = view.querySelector(".tabs");
     const setTab = (k) => {
+      if (k !== ui.tab) {                                  // entering / leaving FreeDV or FT8/FT4 retunes the radio: the old screen puts things back before the new one takes over
+        const hook = { freedv: "freedvActive", ftx: "ftxActive" }, from = ui.tab;
+        ui.hooks = (ui.hooks || Promise.resolve()).then(async () => { await ctx[hook[from]]?.(false); await ctx[hook[k]]?.(true); });
+      }
       ui.tab = k; view.dataset.tab = k;
       nav.querySelectorAll("button").forEach((x) => x.classList.toggle("active", x.dataset.t === k));
       const go = $("ftxgo"); go.textContent = k === "ftx" ? "Back to radio" : "FT8/FT4"; go.classList.toggle("active", k === "ftx");

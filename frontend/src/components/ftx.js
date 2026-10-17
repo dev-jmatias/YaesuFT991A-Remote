@@ -83,6 +83,7 @@ export function createFtx(host, ctx) {
         <label>Grid square <input id="fs-grid" maxlength="6" size="7" placeholder="IN51"></label>
         <label title="Level of the tones sent to the radio. Keep the radio's ALC at zero: more is not better.">TX level, dB <input id="fs-lvl" type="number" min="-40" max="0" step="1"></label>
         <label title="The same message is repeated this many times unanswered, then transmitting stops by itself.">Repeats <input id="fs-rep" type="number" min="1" max="30" step="1" size="3"></label>
+        <label title="What this device plays while this screen is open (other devices are not affected). The decoder works on the Pi's own audio, so it needs no sound.">Sound here <select id="fs-snd"><option value="off">Off</option><option value="low">Low</option></select></label>
         <button type="button" id="fs-save" class="active">Apply</button></div>
       <p class="dim" id="fs-note"></p>
       <div id="fs-up" hidden>
@@ -404,12 +405,59 @@ export function createFtx(host, ctx) {
     try { await send("ftx", { on, mode: mode || info.mode }); } catch (e) { toast(e.message); }
   }
   $("fx-onoff").onclick = () => setOn(!info.on);
-  for (const b of root.querySelectorAll("[data-fm]")) b.onclick = async () => { info.mode = b.dataset.fm; if (info.on) await setOn(true, info.mode); else paintTop(); };
-  $("fx-band").onchange = async (e) => {
-    const hz = +e.target.value; if (!hz) return;
+  const bandOf = (mode, hz) => (info.bands[mode] || []).find((b) => Math.abs(b.hz - (hz || 0)) < 3000);
+  async function tune(hz) {
     try { await send("set_mode", { mode: dataMode() }); } catch { /* a radio without a data mode: the frequency still moves */ }
     await send("set_frequency", { hz });
+    pref.set("ftxHz" + info.mode, hz);
+  }
+  for (const b of root.querySelectorAll("[data-fm]")) b.onclick = async () => {
+    const from = info.mode, to = b.dataset.fm;
+    if (from === to) return;
+    const was = bandOf(from, S.state.frequency);
+    info.mode = to;
+    try {
+      const now = was && (info.bands[to] || []).find((x) => x.name === was.name);      // the same band, at the other mode's frequency
+      if (now) await tune(now.hz);
+      if (info.on) await setOn(true, to); else paintTop();
+    } catch (e) { toast(e.message); }
+  };
+  $("fx-band").onchange = async (e) => {
+    const hz = +e.target.value; if (!hz) return;
+    await tune(hz);
     if (!info.on) await setOn(true, info.mode);
+  };
+  // Entering this screen puts the radio in the data mode on the last FT8/FT4 frequency and switches decoding on; leaving it switches decoding off and puts back the mode and frequency the radio had.
+  let away = null;
+  let heard = false, here = false;
+  const sound = () => {                                    // this device's sound while on this screen: off (Listen switched off) or low (a fraction of the volume); back as it was afterwards
+    const au = ctx.audio?.(); if (!au) return;
+    const low = $("fs-snd").value === "low";
+    if (here && low) { if (heard && !au.hear) { heard = false; au.toggleListen(); } au.duck(0.12); }
+    else if (here) { au.duck(null); if (au.hear) { heard = true; au.toggleListen(); } }
+    else { au.duck(null); if (heard) { heard = false; if (!au.hear) au.toggleListen(); } }
+  };
+  $("fs-snd").value = pref.get("ftxSound", "off");
+  $("fs-snd").onchange = () => { pref.set("ftxSound", $("fs-snd").value); sound(); };
+  ctx.ftxActive = async (active) => {
+    here = active; sound();
+    if (!info.available || !can()) return;
+    try {
+      if (active) {
+        away = { mode: S.state.mode, hz: S.state.frequency };
+        const list = info.bands[info.mode] || [];
+        const hz = pref.get("ftxHz" + info.mode, 0) || bandOf(info.mode, S.state.frequency)?.hz || list.find((b) => b.name === "20m")?.hz || list[0]?.hz;
+        if (hz) await tune(hz);
+        await setOn(true, info.mode);
+      } else {
+        if (info.on) await setOn(false, info.mode);
+        if (away) {
+          const a = away; away = null;
+          if (a.mode) await send("set_mode", { mode: a.mode });
+          if (a.hz) await send("set_frequency", { hz: a.hz });
+        }
+      }
+    } catch (e) { toast(e.message); }
   };
   $("fx-enable").onclick = () => { txEnabled = !txEnabled; if (!txEnabled) send("ftx_halt"); paintTop(); };
   $("fx-halt").onclick = () => { txEnabled = false; if (qso) qso = { ...qso, stage: "" }; send("ftx_halt"); paintTop(); };
@@ -545,6 +593,6 @@ export function createFtx(host, ctx) {
   }
   load();
   const timer = setInterval(() => { if (root.isConnected) tickSlot(); else clearInterval(timer); }, 250);
-  signal?.addEventListener("abort", () => { clearInterval(timer); if (ctx.ftxEvent === onEvent) ctx.ftxEvent = null; });
+  signal?.addEventListener("abort", () => { clearInterval(timer); if (ctx.ftxEvent === onEvent) ctx.ftxEvent = null; ctx.ftxActive = null; });
   return { update: paintTop };
 }

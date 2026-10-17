@@ -318,6 +318,7 @@ export function createFreeDV(host, ctx) {
 
   function update() {
     const s = S.state, onNow = on(), locked = s.freedv_sync === 1;
+    if (onNow) used = true;
     const b = $("fdv-onoff");
     b.textContent = onNow ? "Switch FreeDV off" : "Switch FreeDV on";
     b.classList.toggle("active", onNow);
@@ -338,6 +339,22 @@ export function createFreeDV(host, ctx) {
     for (const c of $("fdv-ch").querySelectorAll(".fdv-c")) c.classList.toggle("active", onNow && Math.abs(hz() - +c.dataset.hz) < 500 && s.freedv_mode === c.dataset.mode);
     paintTune();
   }
+
+  // Entering this screen remembers the radio's mode and frequency; leaving it, if FreeDV was used meanwhile, switches FreeDV off and puts them back.
+  let away = null, used = false;
+  const canTune = () => S.user.role !== "viewer" && S.lease.holder?.conn === S.conn;
+  ctx.freedvActive = async (active) => {
+    if (active) { away = { mode: S.state.mode, hz: S.state.frequency }; used = on(); return; }
+    const a = away; away = null;
+    if (!(used || on()) || !canTune()) return;
+    used = false;
+    try {
+      if (on()) await send("freedv", { on: false });
+      if (a?.mode) await send("set_mode", { mode: a.mode });
+      if (a?.hz) await send("set_frequency", { hz: a.hz });
+    } catch (e) { toast(e.message); }
+  };
+  signal?.addEventListener("abort", () => { ctx.freedvActive = null; });
 
   load();
   loadReporter();
