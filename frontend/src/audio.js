@@ -48,7 +48,7 @@ export function createAudioPanel({ conn, info: initialInfo, model = "Radio" }) {
         <div class="arow"><span class="alabel">Microphone / input</span><select id="a-in" aria-label="Microphone device"></select></div>
         <div class="arow"><span class="alabel">Connection</span><select id="a-trans" aria-label="Audio connection type"><option value="auto">Automatic</option><option value="webrtc">WebRTC (UDP)</option><option value="websocket">WebSocket (TCP)</option></select></div>
         <div class="arow"><span class="alabel"></span><span class="dim aval wide" id="a-devnote"></span></div>
-        <div class="arow"><span class="alabel">PTT button</span><button type="button" id="a-blearn" title="Press this, then press the button on your Bluetooth headset or PTT (or a key). It is remembered in this browser.">Bind PTT</button><select id="a-bmode" hidden aria-label="How the external button works"><option value="hold">Hold to talk</option><option value="toggle">Press to start / press again to stop</option></select><button type="button" id="a-bclear" hidden>Clear</button><span class="dim aval wide" id="a-bnote"></span></div>
+        <div class="arow"><span class="alabel">PTT button</span><button type="button" id="a-blearn" title="Press this, then press the button on your Bluetooth headset or PTT (or a key). It is remembered in this browser.">Bind PTT</button><button type="button" id="a-bserial" hidden title="Only while binding. For a Bluetooth speaker-mic or PTT button that sends its button over a serial (Serial Port Profile) connection: pair it with this computer first, then pick its port. Chrome or Edge only.">Add Bluetooth serial device</button><select id="a-bmode" hidden aria-label="How the external button works"><option value="hold">Hold to talk</option><option value="toggle">Press to start / press again to stop</option></select><button type="button" id="a-bclear" hidden>Clear</button><span class="dim aval wide" id="a-bnote"></span></div>
         <div class="arow"><span class="alabel">Radio meters (raw)</span><div class="rawm" id="a-raw" title="Raw 0-255 values from the radio, for calibrating the ALC / COMP / S-meter scales"></div></div>
         <div class="arow"><span class="alabel">To radio</span><span class="dim aval wide" id="a-txf" title="Counts 20 ms audio frames the server has handed to the radio's USB sound card. It only rises while you hold PTT.">0 frames</span></div>
       </div>      <div class="row dim audio-opts">
@@ -147,22 +147,29 @@ export function createAudioPanel({ conn, info: initialInfo, model = "Radio" }) {
   // ---- external PTT button (Bluetooth speaker-mic, headset or a key). Devices differ, so it is LEARNED: press "Bind PTT", then the button.
   // A key gives down and up = hold to talk. A media button (play/pause, next...) arrives as ONE event per press = press to start, press again to stop.
   // Stored per browser; the PTT component supplies the actions (setExtPtt) and still enforces lock, permission, heartbeat and time limit.
-  let ext = null, learning = false, learnTimer = 0, bind = pref.get("pttBtn", null);
+  let ext = null, learning = false, learnTimer = 0, learnAbort = null, bind = pref.get("pttBtn", null);
   const PAIR = { play: ["play", "pause"], pause: ["play", "pause"] };      // a headset sends "pause" while we play and "play" while paused: one button
   const typing = (e) => /^(INPUT|SELECT|TEXTAREA)$/.test(e.target?.tagName || "") || e.target?.isContentEditable;
   const modeOf = (b) => b.mode || (b.t === "media" || /^(Media|Audio|Launch|Browser)/.test(b.key || "") ? "toggle" : "hold");
+  const what = (b) => b.t === "key" ? `Key "${b.key}"${b.code ? " (" + b.code + ")" : b.kc ? " (key code " + b.kc + ")" : ""}`
+    : b.t === "pad" ? `Game controller button ${b.index}${b.id ? " (" + b.id.slice(0, 40) + ")" : ""}`
+    : b.t === "bridge" ? "Helper button" + (bridgeUp ? " (connected: " + bridgeDevice + ")" : bridgeWs ? " (helper running, but no device connected: switch the device on)" : " (helper not running: start it on this " + (/Android/.test(navigator.userAgent) ? "phone" : "Mac") + ")")
+    : b.t === "serial" ? "Bluetooth serial button" + (serPorts.size ? " (connected)" : serialOk ? " (not connected: switch the device on, it reconnects by itself)" : " (this browser cannot read serial ports)")
+    : `Media button "${b.action}"`;
   const bindText = (b) => !b ? "Not set. Press Bind PTT, then press the button on your device."
-    : `${b.t === "key" ? `Key "${b.key}"${b.code ? " (" + b.code + ")" : ""}` : `Media button "${b.action}"`}: ${modeOf(b) === "hold" ? "hold to talk" : "press to start, press again to stop"}`;
-  let lastFire = "", learnMsg = "";
+    : `${what(b)}: ${modeOf(b) === "hold" ? "hold to talk" : "press to start, press again to stop"}`;
+  let lastFire = "", learnMsg = "", serialDiag = "", seen = [];                              // seen: what the browser received while binding (shown live, to find out what a device sends)
+  const seenAdd = (t) => { if (seen[seen.length - 1] !== t) seen.push(t); seen = seen.slice(-4); paintBind(); };
   function fired(what, res) {
     lastFire = `${new Date().toLocaleTimeString()}  ${what} -> ${res || "no PTT component (page still loading?)"}`;
     paintBind();
   }
   function paintBind() {
-    $("a-bnote").textContent = learning ? "Press the button on your device now (15 s)..." : learnMsg ? learnMsg : bindText(bind) + (lastFire ? "\nLast press: " + lastFire : "");
+    $("a-bnote").textContent = learning ? "Press the button on your device now (" + (serialDiag ? "30" : "15") + " s)..." + (serialDiag ? "\n" + serialDiag : "") + (seen.length ? "\nReceived: " + seen.join("; ") : "") : learnMsg ? learnMsg : bindText(bind) + (lastFire ? "\nLast press: " + lastFire : "");
     $("a-blearn").textContent = learning ? "Cancel" : bind ? "Bind again" : "Bind PTT";
     $("a-bclear").hidden = !bind || learning;
-    $("a-bmode").hidden = !bind || learning || bind.t !== "key";               // a media button only ever sends one event per press
+    $("a-bserial").hidden = !(learning && serialOk && !bridgeOk && !serialDiag);          // only while binding, and not on a Mac (there the helper does it)
+    $("a-bmode").hidden = !bind || learning || bind.t === "media";             // a media button only ever sends one event per press
     if (bind) $("a-bmode").value = modeOf(bind);
   }
   // A media KEY (Next, Previous, Play/Pause, Stop) reaches the page as a key press only while the browser has no media session; with Listen on
@@ -181,7 +188,10 @@ export function createAudioPanel({ conn, info: initialInfo, model = "Radio" }) {
     }
   }
   let lastToggle = 0;
-  const sameKey = (e, b) => (b.code && b.code !== "Unidentified" && b.code !== "0" ? e.code === b.code : e.key === b.key);   // media keys often have no usable code
+  // Identify a key by its code, else its name, else (Android hardware keys often arrive as "Unidentified") its numeric key code.
+  const goodCode = (c) => !!c && c !== "Unidentified" && c !== "0";
+  const goodName = (k) => !!k && k !== "Unidentified" && k !== "Process";
+  const sameKey = (e, b) => goodCode(b.code) ? e.code === b.code : goodName(b.key) ? e.key === b.key : !!b.kc && e.keyCode === b.kc;
   // back to the normal state: listening = full media session (and the silent keeper), otherwise only the learned button's handler
   // A learned media button must keep working with Listen off too, so then only the silent keeper + "playing" state stay on (no pause/stop = Listen toggles).
   function refreshMedia() {
@@ -195,6 +205,210 @@ export function createAudioPanel({ conn, info: initialInfo, model = "Radio" }) {
   // browsers only start sound after a tap or key: when the page is opened with a media button already learned, arm it on the first one
   const armOnGesture = () => { document.removeEventListener("pointerdown", armOnGesture, true); document.removeEventListener("keydown", armOnGesture, true); if (!learning) refreshMedia(); };
   if (actionsOf(bind).length) { document.addEventListener("pointerdown", armOnGesture, true); document.addEventListener("keydown", armOnGesture, true); }
+  // Game controllers: some Bluetooth buttons show up as a gamepad. Polled (the Gamepad API has no button events); a gamepad gives real press and release.
+  let padTimer = 0, padDown = false, padKeyed = false;      // padDown: the button is physically down; padKeyed: we sent a transmit request for it
+  const pads = () => { try { return Array.from(navigator.getGamepads?.() || []).filter(Boolean); } catch { return []; } };
+  function padTick() {
+    if (learning) {
+      for (const g of pads()) for (let i = 0; i < g.buttons.length; i++) if (g.buttons[i].pressed) { const b = { t: "pad", index: i, id: g.id }; learnStop(); setBind(b); padDown = true; return; }      // still held: it must be released before it can transmit
+      return;
+    }
+    if (!bind || bind.t !== "pad" || !ext) return;
+    const now = pads().some((g) => (!bind.id || g.id === bind.id) && g.buttons[bind.index]?.pressed);
+    if (now === padDown) return;
+    padDown = now;
+    if (modeOf(bind) === "toggle") { if (now) fired("controller button " + bind.index, ext.toggle()); return; }
+    if (now) { padKeyed = true; fired("controller button " + bind.index + " down", ext.down()); }
+    else if (padKeyed) { padKeyed = false; fired("controller button " + bind.index + " up", ext.up()); }
+  }
+  function padSync() {
+    const need = learning || (bind && bind.t === "pad");
+    if (need && !padTimer) padTimer = setInterval(padTick, 40);
+    else if (!need && padTimer) { clearInterval(padTimer); padTimer = 0; padDown = false; if (padKeyed) { padKeyed = false; ext?.up(); } }
+  }
+  window.addEventListener("gamepadconnected", (e) => { if (learning) seenAdd("game controller connected: " + e.gamepad.id.slice(0, 40) + " (press one of its buttons)"); });
+  window.addEventListener("gamepaddisconnected", () => { padDown = false; if (padKeyed) { padKeyed = false; ext?.up(); } });
+  // Bluetooth serial buttons. Many speaker-mics (the kind sold for Zello and similar apps) are NOT keyboards: the PTT button is sent as text over the Bluetooth
+  // Serial Port Profile (RFCOMM). The B01 type sends "+PTT=P" when pressed and "+PTT=R" when released, which gives true hold to talk. Chrome and Edge (117 or later) can
+  // read such a port with the Web Serial API once the device is paired with this computer and the user has picked its port once; the page then reopens it by itself.
+  const serialOk = typeof navigator !== "undefined" && "serial" in navigator && window.isSecureContext;
+  const SERIAL_PROTOS = { "ptt-at": { down: "+PTT=P", up: "+PTT=R" } };
+  const showBytes = (t) => t.replace(/[^\x20-\x7e]/g, (c) => "\\x" + c.charCodeAt(0).toString(16).padStart(2, "0"));
+  const serPorts = new Map();                                             // open port -> handle
+  let serKeyed = false;
+  const withTimeout = (promise, ms, what) => Promise.race([promise, new Promise((_, rej) => setTimeout(() => rej(new Error(what + " did not answer within " + Math.round(ms / 1000) + " s")), ms))]);
+  function serialOpen(port, onToken, onRaw, onClosed) {
+    const opening = port.open({ baudRate: 9600 });
+    return withTimeout(opening, 25000, "the port").catch((e) => { opening.then(() => port.close()).catch(() => {}); throw e; }).then(async () => {
+      try { const r = port.setSignals({ dataTerminalReady: true, requestToSend: true }); if (r && r.catch) r.catch(() => {}); } catch { /* not supported by this port */ }          // like a terminal program: some devices send nothing until DTR is up
+      const reader = port.readable.getReader(), dec = new TextDecoder("latin1");
+      let alive = true, buf = "";
+      const loop = (async () => {
+        try {
+          while (alive) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            if (!value || !value.length) continue;
+            const text = dec.decode(value, { stream: true });
+            onRaw?.(text);
+            buf += text;
+            for (;;) {                                                    // the stream has no separators and tokens can arrive split or glued together
+              let best = -1, tok = null;
+              for (const [proto, t] of Object.entries(SERIAL_PROTOS)) for (const kind of ["down", "up"]) {
+                const i = buf.indexOf(t[kind]);
+                if (i >= 0 && (best < 0 || i < best)) { best = i; tok = { proto, kind, len: t[kind].length }; }
+              }
+              if (!tok) break;
+              buf = buf.slice(best + tok.len);
+              onToken(tok);
+            }
+            if (buf.length > 16) buf = buf.slice(-8);
+          }
+        } catch { /* the device went away */ }
+        try { reader.releaseLock(); } catch { /* already released */ }
+        onClosed?.();
+      })();
+      return { stop: async () => { alive = false; try { await reader.cancel(); } catch { /* closed */ } await loop; try { await port.close(); } catch { /* closed */ } } };
+    });
+  }
+  function serialFire(tok) {
+    if (!bind || (bind.t !== "serial" && bind.t !== "bridge") || !ext) return;
+    const via = bind.t === "bridge" ? "helper button" : "serial button";
+    if (modeOf(bind) === "toggle") {
+      if (tok.kind !== "down") return;
+      const now = performance.now(); if (now - lastToggle < 400) return; lastToggle = now;
+      fired(via, ext.toggle());
+      return;
+    }
+    if (tok.kind === "down") { if (serKeyed) return; serKeyed = true; fired(via + " down", ext.down()); }
+    else if (serKeyed) { serKeyed = false; fired(via + " up", ext.up()); }
+  }
+  function serialReleased() { if (serKeyed) { serKeyed = false; ext?.up(); } }          // the device went away while the button was down: never leave the radio keyed
+  async function serialSync() {
+    if (!serialOk) return;
+    if (!bind || bind.t !== "serial") {
+      for (const h of Array.from(serPorts.values())) await h.stop();
+      serPorts.clear(); serialReleased(); paintBind();
+      return;
+    }
+    if (learning) return;
+    let ports = [];
+    try { ports = await navigator.serial.getPorts(); } catch { return; }
+    for (const port of ports) {
+      if (serPorts.has(port)) continue;
+      try {
+        serPorts.set(port, null);                                             // claim it so a second sync does not open it twice
+        const h = await serialOpen(port, serialFire, null, () => { serPorts.delete(port); serialReleased(); paintBind(); });
+        serPorts.set(port, h); paintBind();
+      } catch { serPorts.delete(port); }                                      // not connected right now: the next sync tries again
+    }
+  }
+  if (serialOk) {
+    navigator.serial.addEventListener("connect", () => serialSync());
+    navigator.serial.addEventListener("disconnect", () => { serialReleased(); setTimeout(serialSync, 500); });
+    setInterval(() => { if (bind && bind.t === "serial" && !learning && !serPorts.size) serialSync(); }, 5000);
+  }
+  // Local helper (tools/ptt-bridge-mac, tools/ptt-bridge-android): a small program that reads the Bluetooth serial button natively and passes it on over a local WebSocket, because
+  // Chrome on a Mac cannot open such a port. One way only: it sends {"t":"hello","connected":bool,"device":name} and {"t":"ptt","down":bool}.
+  const BRIDGE_URL = "ws://127.0.0.1:17991";
+  const bridgeOk = typeof WebSocket !== "undefined" && (/Android/.test(navigator.userAgent) || /Macintosh/.test(navigator.userAgent) && !(navigator.maxTouchPoints > 1));          // Mac and Android have a helper
+  let bridgeWs = null, bridgeUp = false, bridgeDevice = "", bridgeLearn = null;
+  function bridgeOpen() {
+    if (bridgeWs) return;
+    let ws;
+    try { ws = new WebSocket(BRIDGE_URL); } catch { return; }
+    bridgeWs = ws;
+    ws.onmessage = (e) => {
+      let m; try { m = JSON.parse(e.data); } catch { return; }
+      if (m.t === "hello") { bridgeUp = !!m.connected; bridgeDevice = m.device || ""; if (!bridgeUp) serialReleased(); if (learning && bridgeUp) seenAdd("helper sees " + bridgeDevice); else paintBind(); }
+      else if (m.t === "ptt") {
+        if (bridgeLearn) { if (m.down) bridgeLearn(); }
+        else serialFire({ proto: "bridge", kind: m.down ? "down" : "up" });
+      }
+    };
+    ws.onclose = () => { if (bridgeWs === ws) { bridgeWs = null; bridgeUp = false; bridgeDevice = ""; serialReleased(); paintBind(); } };
+    ws.onerror = () => {};
+  }
+  function bridgeSync() {
+    if (!bridgeOk) return;
+    if (learning && bridgeLearn || bind && bind.t === "bridge") bridgeOpen();
+    else if (bridgeWs) { const w = bridgeWs; bridgeWs = null; bridgeUp = false; bridgeDevice = ""; serialReleased(); try { w.close(); } catch { /* closed */ } }
+  }
+  if (bridgeOk) setInterval(() => { if (bind && bind.t === "bridge" && !bridgeWs) bridgeOpen(); }, 3000);          // the helper may be started after the page
+  // while binding, "Bind PTT" listens to everything at once: keys, media buttons, controllers, the Mac helper and serial ports this browser may already open
+  let learnPorts = [];
+  function bridgeLearnOn() {
+    if (!bridgeOk) return;
+    bridgeLearn = () => { learnStop(); setBind({ t: "bridge" }); };
+    bridgeOpen();
+  }
+  async function serialLearnOn() {
+    if (!serialOk || bridgeOk) return;
+    let ports = [];
+    try { ports = await navigator.serial.getPorts(); } catch { return; }
+    for (const port of ports) {
+      if (serPorts.has(port)) continue;
+      const mine = { port, h: null, stopped: false };
+      learnPorts.push(mine);
+      serialOpen(port, (tok) => { if (learning && tok.kind === "down") { learnStop(); setBind({ t: "serial", proto: tok.proto }); } }, null, () => {})
+        .then((h) => { mine.h = h; if (mine.stopped || !learning) { mine.stopped = true; h.stop(); } }).catch(() => {});
+    }
+  }
+  function learnPortsOff() {
+    for (const m of learnPorts) { m.stopped = true; m.h?.stop(); }
+    learnPorts = [];
+  }
+  async function serialLearn() {
+    let port;
+    try { port = await navigator.serial.requestPort({ allowedBluetoothServiceClassIds: ["00001101-0000-1000-8000-00805f9b34fb"] }); }
+    catch (e) {
+      if (e && e.name !== "NotFoundError") { learnMsg = "The serial port chooser could not be opened: " + (e.message || e.name); paintBind(); }
+      return;                                                                 // NotFoundError = the person closed the chooser
+    }
+    if (learning) learnStop();                                                // leave the general listening: this one watches the chosen port
+    for (const h of Array.from(serPorts.values())) await h?.stop();           // a port that is already open for the old binding must be free
+    serPorts.clear();
+    learnMsg = ""; seen = []; serialDiag = "Opening the port..."; learning = true; paintBind();
+    let h = null, done = false, bytes = 0, tick = 0, opened = false, busy = false, info = "?";
+    const t0 = Date.now();
+    const finish = async (b, msg) => {
+      if (done) return;
+      done = true;
+      learnAbort = null; clearTimeout(learnTimer); clearInterval(tick);
+      if (b && h) serPorts.set(port, h);                                     // keep THIS connection: some devices accept only one serial connection per power-on, so closing and reopening could silence them
+      else { try { await h?.stop(); } catch { /* closed */ } }
+      const had = seen.slice();
+      const diag = serialDiag; serialDiag = "";
+      learnStop(); seen = had;
+      if (b) setBind(b); else { learnMsg = msg + (diag ? "\n" + diag : ""); paintBind(); }
+    };
+    learnAbort = () => { if (!done) { done = true; clearInterval(tick); clearTimeout(learnTimer); serialDiag = ""; h?.stop(); } };
+    const report = async () => {
+      if (done || busy) return;
+      if (!opened) { serialDiag = `Opening the port... ${Math.round((Date.now() - t0) / 1000)} s (a Bluetooth port can take several seconds)`; paintBind(); return; }
+      busy = true;
+      let sig = "";
+      try { const g = await withTimeout(port.getSignals(), 800, "getSignals"); sig = ` DCD=${+g.dataCarrierDetect} DSR=${+g.dataSetReady} CTS=${+g.clearToSend}`; } catch { sig = " (signals not available on this kind of port)"; }
+      busy = false;
+      if (!done) { serialDiag = `Port open ${info}: ${bytes} byte(s) received so far,${sig}`; paintBind(); }
+    };
+    tick = setInterval(report, 1000); report();
+    try {
+      h = await serialOpen(port, (tok) => { if (done) serialFire(tok); else if (tok.kind === "down") finish({ t: "serial", proto: tok.proto }); },
+        (text) => { if (done) return; bytes += text.length; seenAdd("serial data " + showBytes(text).slice(0, 60)); },
+        () => { serPorts.delete(port); serialReleased(); paintBind(); });
+    } catch (e) {
+      finish(null, "That port could not be opened: " + (e.message || e.name) + ". Is the device switched on and paired with this computer? Another program may also have it open.");
+      return;
+    }
+    if (done) { try { await h.stop(); } catch { /* closed */ } return; }          // cancelled while it was opening
+    opened = true;
+    try { info = JSON.stringify(port.getInfo()); } catch { info = "?"; }
+    report();
+    learnTimer = setTimeout(() => finish(null, seen.length
+      ? "Received on the serial port, but not a PTT message this page knows: " + seen.join("; ") + ". Send that line to the developer and it can often be added."
+      : "Nothing received on that serial port in 30 seconds. Check that the device is switched on and paired with this computer, then press its PTT button. If the list showed two entries for the device, try the other one."), 30000);
+  }
   const bindKey = (e) => {
     if (!bind || bind.t !== "key" || learning || !sameKey(e, bind) || typing(e) || !ext) return;
     e.preventDefault();
@@ -212,37 +426,50 @@ export function createAudioPanel({ conn, info: initialInfo, model = "Radio" }) {
     bind = b; pref.set("pttBtn", b);
     if ("mediaSession" in navigator) for (const a of BT_ACTIONS) { try { navigator.mediaSession.setActionHandler(a, null); } catch { /* ignore */ } }
     refreshMedia();
+    padSync();
+    serialSync();
+    bridgeSync();
     paintBind();
   }
   function learnStop() {
     learning = false; clearTimeout(learnTimer);
+    const abort = learnAbort; learnAbort = null; abort?.();
+    bridgeLearn = null; learnPortsOff(); bridgeSync();
     window.removeEventListener("keydown", learnKey, true);
     if ("mediaSession" in navigator) for (const a of BT_ACTIONS) { try { navigator.mediaSession.setActionHandler(a, null); } catch { /* ignore */ } }
     refreshMedia();
+    padSync();
     paintBind();
   }
   function learnKey(e) {
     if (["Shift", "Control", "Alt", "Meta"].includes(e.key)) return;
     e.preventDefault(); e.stopPropagation();
-    const b = { t: "key", key: e.key === " " ? "Space" : e.key, code: e.code };
+    const b = { t: "key", key: e.key === " " ? "Space" : e.key, code: e.code, kc: e.keyCode || 0 };
+    if (!goodCode(b.code) && !goodName(b.key) && (!b.kc || b.kc === 229)) {      // 229 = text composition of an on-screen keyboard
+      seenAdd(`a key press the browser cannot tell apart (key "${e.key}", code "${e.code}", key code ${e.keyCode})`);
+      return;
+    }
     learnStop(); setBind(b);
   }
   function learnStart() {
-    learnMsg = ""; learning = true; paintBind(); mediaSession(true);                       // the page must count as a media player or the browser keeps the button
+    learnMsg = ""; seen = []; learning = true; paintBind(); mediaSession(true); padSync();                       // the page must count as a media player or the browser keeps the button
     window.addEventListener("keydown", learnKey, true);
+    bridgeLearnOn(); serialLearnOn();
     if ("mediaSession" in navigator) {
       for (const a of BT_ACTIONS) { try { navigator.mediaSession.setActionHandler(a, () => { const b = { t: "media", action: a }; learnStop(); setBind(b); }); } catch { /* not supported */ } }
     }
     learnTimer = setTimeout(() => {
-      learnStop();
-      learnMsg = "Nothing received. The browser did not get the button. If the headset's own microphone is the Microphone / input, choose another microphone: the headset's call mode hides its buttons. Also check the headset is connected, close other players (Spotify, YouTube), reload the page and try again.";
+      const had = seen.slice(); learnStop(); seen = had;
+      learnMsg = seen.length ? "Received, but it cannot be used as a PTT button: " + seen.join("; ") + ". See the guide, \"Devices that do not work\"."
+        : "Nothing received. The browser did not get the button. If the headset's own microphone is the Microphone / input, choose another microphone: the headset's call mode hides its buttons. Many Bluetooth speaker-mics and POC radios send a private signal that no web page can read (see the guide, \"Devices that do not work\"). Also check the device is connected, close other players (Spotify, YouTube), reload the page and try again." + (bridgeOk && !bridgeUp ? " On a Mac or an Android phone, a Bluetooth serial PTT button needs the Radio Remote PTT helper running (see the guide)." : serialOk && !bridgeOk ? " For a Bluetooth serial PTT button press Bind PTT again and use Add Bluetooth serial device." : "");
       paintBind();
     }, 15000);
   }
   $("a-blearn").onclick = () => (learning ? learnStop() : learnStart());
   $("a-bclear").onclick = () => setBind(null);
+  $("a-bserial").onclick = () => serialLearn();
   $("a-bmode").onchange = () => { if (bind) { bind.mode = $("a-bmode").value; setBind(bind); } };
-  paintBind(); applyBindingMedia();
+  paintBind(); applyBindingMedia(); padSync(); serialSync(); bridgeSync();
 
   async function getMic() {
     const base = { echoCancellation: $("a-ec").checked, noiseSuppression: $("a-ns").checked, autoGainControl: $("a-agc").checked, channelCount: 1 };

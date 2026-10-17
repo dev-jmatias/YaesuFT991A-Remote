@@ -140,6 +140,21 @@ Rules that always apply:
   button becomes a call button and the browser never receives it (tested with a Beats Studio Pro on Windows Chrome: the double press of the
   "b" button works with another microphone and not with the headset's). After an update the page can take a moment, or one extra reload, to use the new version. If nothing is received within 15 seconds the page says so; check that the headset is the connected device and close other media players. The screen lock,
   the PTT permission and the transmit time limit apply to it as to the screen button.
+* **What Bind PTT can pick up, and devices that do not work.** A web page only receives what the browser passes on: ordinary keys (also
+  Android hardware keys that have only a number), headset media buttons (play/pause, next track...), **game-controller buttons** and, in Chrome or
+  Edge on a computer, **Bluetooth serial buttons** (see the next point). While you bind, the line **Received:** shows what arrived, even if it
+  cannot be used.
+* **Bluetooth speaker-mics and PTT buttons that are not keyboards.** Many of them (the kind sold for Zello and similar apps) show up on the
+  computer as a Bluetooth headset for the audio, and send the PTT button over a separate **serial** connection: the B01 type sends the text
+  `+PTT=P` when the button goes down and `+PTT=R` when it goes up. Pair the device with the computer first, then on the Audio tab press
+  **Bind PTT**, then **Add Bluetooth serial device** (it appears while binding), pick the device's port in Chrome's list (named after the device, for example *B01PTT-F5D0*) and press its PTT button
+  within 30 seconds. Once the port has been picked, a plain **Bind PTT** hears it too. The button then gives true **hold to talk**, the page reopens the port by itself when it is loaded or the device is switched
+  on again, and a device that disappears while the button is down releases the radio. Needs Chrome or Edge 117 or later (not Safari or Firefox) on
+  Windows or Linux, and only one program can have the port open. **On a Mac Chrome cannot open such a port**: use the small helper in `tools/ptt-bridge-mac` instead (see its README: pair the device, build and run `ptt-bridge`, then press **Bind PTT** on the Audio tab and the device's button: the page looks for the helper by itself). It listens on this Mac only and the page reconnects to it by itself. If the port is read but the messages are not `+PTT=P` / `+PTT=R`, the page shows what
+  it received: send that line to the developer and it can often be added.
+* **Android PoC radios and some Android speaker-mics** send the PTT as a private Android signal that no browser receives, so **Nothing received**
+  is the answer for them. Things to try: a setting of the device that makes its button act as a standard one (a headset or media button, or a keyboard
+  mode), or on Android an app that remaps a hardware button to a media button.
 * **Too quiet?** Raise the radio's USB output level menu (FT-991A: menu 107 SSB OUT LEVEL, 073 DATA, 046 AM, 075 FM, 054 CW, 099 RTTY) rather
   than boosting in software; see [audio](04-audio.md).
 * **Radio meters (raw)** shows the radio's raw 0-255 ALC, COMP, power, SWR and S values and the ALC/COMP peak of the last transmission,
