@@ -33,7 +33,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
  */
 public class BridgeService extends Service {
     static final int PORT = 17991;
-    static final String PREFS = "ptt", KEY_ADDR = "addr";
+    static final String PREFS = "ptt", KEY_ADDR = "addr", KEY_AUTO = "auto";
     static final UUID SPP = UUID.fromString("00001101-0000-1000-8000-00805f9b34fb");
     static volatile String status = "Not running";
     static volatile boolean running = false;

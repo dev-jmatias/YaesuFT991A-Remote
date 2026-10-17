@@ -44,8 +44,9 @@ public class MainActivity extends Activity {
         group = new RadioGroup(this);
         toggle = new Button(this);
         toggle.setOnClickListener(v -> {
-            if (BridgeService.running) stopService(new Intent(this, BridgeService.class));
-            else startBridge();
+            SharedPreferences sp = getSharedPreferences(BridgeService.PREFS, MODE_PRIVATE);
+            if (BridgeService.running) { sp.edit().putBoolean(BridgeService.KEY_AUTO, false).apply(); stopService(new Intent(this, BridgeService.class)); }
+            else { sp.edit().putBoolean(BridgeService.KEY_AUTO, true).apply(); startBridge(); }
             h.postDelayed(this::refresh, 300);
         });
         root.addView(t); root.addView(info); root.addView(statusView); root.addView(group); root.addView(toggle);

@@ -9,13 +9,17 @@
 //     {"t":"ptt","down":true}  /  {"t":"ptt","down":false}
 //
 // Build:  swiftc -O -o ptt-bridge ptt-bridge.swift
-// Run:    ./ptt-bridge            (--list shows the paired devices, --name TEXT only uses devices whose name contains TEXT,
+// Run:    ./ptt-bridge   (as Radio Remote PTT.app it lives in the menu bar; --cli forces the text mode)
+//          ./ptt-bridge            (--list shows the paired devices, --name TEXT only uses devices whose name contains TEXT,
 //                                  --port N changes the port, --simulate needs no Bluetooth: type p / r / x / c + Enter)
 import Foundation
 import IOBluetooth
 import Network
+import AppKit
+import ServiceManagement
 
 let hubVersion = 1
+let gui = Bundle.main.bundlePath.hasSuffix(".app") && !CommandLine.arguments.contains("--cli")          // started as the app: a menu bar item, no text
 var wsPort: UInt16 = 17991
 var nameFilter: String? = nil
 var simulate = false, listOnly = false
@@ -27,6 +31,7 @@ do {
         case "--port": if let v = a.first, let n = UInt16(v) { wsPort = n; a.removeFirst() }
         case "--name": if let v = a.first { nameFilter = v.lowercased(); a.removeFirst() }
         case "--simulate": simulate = true
+        case "--cli": break
         case "--list": listOnly = true
         default: print("Unknown option \(k). Options: --list, --name TEXT, --port N, --simulate"); exit(2)
         }
@@ -34,12 +39,13 @@ do {
 }
 
 func stamp() -> String { let f = DateFormatter(); f.dateFormat = "HH:mm:ss"; return f.string(from: Date()) }
-func log(_ s: String) { print(stamp(), s); fflush(stdout) }
+func log(_ s: String) { if !gui { print(stamp(), s); fflush(stdout) } }
 
 // ---- WebSocket side ----
 final class Hub {
     var conns: [ObjectIdentifier: NWConnection] = [:]
     var connected = false, device = "", down = false
+    var onChange: (() -> Void)?
     func json(_ o: [String: Any]) -> Data { (try? JSONSerialization.data(withJSONObject: o)) ?? Data() }
     func send(_ c: NWConnection, _ o: [String: Any]) {
         let meta = NWProtocolWebSocket.Metadata(opcode: .text)
@@ -52,12 +58,12 @@ final class Hub {
         let now = name != nil
         if !now && down { down = false; broadcast(["t": "ptt", "down": false]) }          // never leave the radio keyed when the device goes away
         connected = now; device = name ?? ""
-        broadcast(helloMsg)
+        broadcast(helloMsg); onChange?()
         log(now ? "device connected: \(device)" : "device gone")
     }
     func ptt(_ d: Bool) {
         if d == down { return }
-        down = d; broadcast(["t": "ptt", "down": d]); log(d ? "PTT down" : "PTT up")
+        down = d; broadcast(["t": "ptt", "down": d]); log(d ? "PTT down" : "PTT up"); onChange?()
     }
     func add(_ c: NWConnection) {
         let id = ObjectIdentifier(c)
@@ -87,7 +93,7 @@ func startServer() {
         let l = try NWListener(using: params)
         l.newConnectionHandler = { hub.add($0) }
         l.stateUpdateHandler = { st in
-            if case .failed(let e) = st { log("cannot listen on 127.0.0.1:\(wsPort): \(e). Is another copy running?"); exit(1) }
+            if case .failed(let e) = st { if gui { exit(0) }; log("cannot listen on 127.0.0.1:\(wsPort): \(e). Is another copy running?"); exit(1) }
             if case .ready = st { log("listening on ws://127.0.0.1:\(wsPort)") }
         }
         l.start(queue: .main)
@@ -235,5 +241,39 @@ if simulate {
     log("looking for a paired Bluetooth serial device (\(nameFilter.map { "name contains \"\($0)\"" } ?? "any paired device")). Ctrl+C stops.")
     scan()
     Timer.scheduledTimer(withTimeInterval: 4, repeats: true) { _ in scan() }
+}
+
+// ---- menu bar item (app mode) ----
+final class Bar: NSObject {
+    let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+    let state = NSMenuItem(title: "", action: nil, keyEquivalent: ""), login = NSMenuItem(title: "Start at login", action: nil, keyEquivalent: "")
+    override init() {
+        super.init()
+        let m = NSMenu()
+        state.isEnabled = false; m.addItem(state)
+        m.addItem(.separator())
+        login.target = self; login.action = #selector(toggleLogin); m.addItem(login)
+        let q = NSMenuItem(title: "Quit Radio Remote PTT", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"); m.addItem(q)
+        item.menu = m
+        refresh()
+        hub.onChange = { [weak self] in self?.refresh() }
+    }
+    func refresh() {
+        let sym = hub.down ? "mic.fill" : hub.connected ? "mic" : "mic.slash"
+        if let img = NSImage(systemSymbolName: sym, accessibilityDescription: "PTT") { img.isTemplate = true; item.button?.image = img; item.button?.title = "" }
+        else { item.button?.title = hub.down ? "TX" : hub.connected ? "PTT" : "PTT?" }
+        state.title = hub.down ? "Button pressed" : hub.connected ? "Connected: \(hub.device)" : "No device connected (pair it in Bluetooth settings, switch it on)"
+        login.state = SMAppService.mainApp.status == .enabled ? .on : .off
+    }
+    @objc func toggleLogin() {
+        do { if SMAppService.mainApp.status == .enabled { try SMAppService.mainApp.unregister() } else { try SMAppService.mainApp.register() } } catch { /* shown by the check mark staying as it was */ }
+        refresh()
+    }
+}
+if gui {
+    let app = NSApplication.shared
+    app.setActivationPolicy(.accessory)
+    let bar = Bar(); _ = bar
+    app.run()
 }
 RunLoop.main.run()

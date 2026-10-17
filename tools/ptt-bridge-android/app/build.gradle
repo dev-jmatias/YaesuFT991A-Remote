@@ -1,4 +1,8 @@
 plugins { id 'com.android.application' }
+def sign = new Properties()
+def signFile = new File(System.getProperty('user.home'), '.radio-remote-signing/ptt.properties')
+if (signFile.exists()) signFile.withInputStream { sign.load(it) }
+
 android {
     namespace 'org.radioremote.pttbridge'
     compileSdk 34
@@ -6,9 +10,14 @@ android {
         applicationId 'org.radioremote.pttbridge'
         minSdk 24
         targetSdk 34
-        versionCode 1
-        versionName '1.0'
+        versionCode 2
+        versionName '1.1.38'
     }
-    buildTypes { release { minifyEnabled false } }
+    signingConfigs {
+        if (signFile.exists()) release {
+            storeFile file(sign.storeFile); storePassword sign.storePassword; keyAlias sign.keyAlias; keyPassword sign.keyPassword
+        }
+    }
+    buildTypes { release { minifyEnabled false; if (signFile.exists()) signingConfig signingConfigs.release } }
     compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
 }
