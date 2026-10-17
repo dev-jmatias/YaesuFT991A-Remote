@@ -35,6 +35,7 @@ SECTIONS = [
         ("radio-connection", "Radio connection", "USB CAT and audio, the radio's own menu settings"),
         ("04-audio", "Remote audio", "Listening, microphone, levels, troubleshooting"),
         ("freedv", "FreeDV digital voice", "RADE V1 and V2 decoded and encoded on the Pi, preset channels"),
+        ("ft8", "FT8 and FT4", "Decode, call and work FT8/FT4 from the browser; ADIF log and upload to QRZ, eQSL and Club Log"),
         ("logbook", "Logbook link", "Let Log4OM and other logbooks follow and tune the radio (Hamlib rigctl)"),
         ("tailscale", "Remote access with Tailscale", "Reach the radio from anywhere without opening router ports"),
         ("06-security-remote", "Security and remote access", "Accounts, HTTPS, the safety design"),

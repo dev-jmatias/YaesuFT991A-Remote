@@ -1,0 +1,1 @@
+monitor.c: LOG_LEVEL set to LOG_ERROR (the library printed its block sizes on every call); nothing else changed.

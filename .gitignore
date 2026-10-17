@@ -1,4 +1,4 @@
-data/
+/data/
 .venv/
 __pycache__/
 config/radio-remote.toml
@@ -10,3 +10,4 @@ image/stage-radio-remote/00-radio-remote/files/radio-remote-src/
 .claude/
 config/none.toml*
 *.egg-info/
+backend/radio_remote/audio/native/

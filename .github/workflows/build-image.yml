@@ -29,6 +29,14 @@ jobs:
           path: rade-out/radio-remote-rade-linux-x86_64.tar.xz
           if-no-files-found: error
           retention-days: 3
+      - name: Build the FT8/FT4 library for x86_64 (Debian 12 container, with a decode self-test)
+        run: bash scripts/build_ftx_container.sh ftx-out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ftx-x86_64
+          path: ftx-out/libftx-rr.so
+          if-no-files-found: error
+          retention-days: 3
 
   image:
     needs: rade-x86
@@ -54,6 +62,18 @@ jobs:
         with:
           name: rade-x86_64
           path: rade-out
+
+      # FT8/FT4 (small, built in seconds): one library per architecture goes INTO the program (it is not an optional download like RADE)
+      - name: Build the FT8/FT4 libraries and put both into the program
+        run: |
+          bash scripts/build_ftx_container.sh ftx-out
+          mkdir -p backend/radio_remote/audio/native/linux-aarch64 backend/radio_remote/audio/native/linux-x86_64
+          cp ftx-out/libftx-rr.so backend/radio_remote/audio/native/linux-aarch64/
+      - uses: actions/download-artifact@v4
+        with:
+          name: ftx-x86_64
+          path: ftx-x86
+      - run: cp ftx-x86/libftx-rr.so backend/radio_remote/audio/native/linux-x86_64/
 
       - name: Run the tests
         env:

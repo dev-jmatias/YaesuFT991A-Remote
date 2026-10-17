@@ -846,3 +846,146 @@ html[data-tablet] .app[data-tab=freedv] [data-pane=vfo], html[data-tablet] .app[
 
 /* the PTT button note and its last-press line are two lines (inline styles are blocked by the page's security policy) */
 #a-bnote { white-space: pre-line; }
+
+
+/* ---------- FT8 / FT4 screen ---------- */
+html .app:not([data-tab=ftx]) [data-pane=ftx] { display: none !important; }
+html .app[data-tab=ftx] [data-pane]:not([data-pane=ftx]) { display: none !important; }
+html .app[data-tab=ftx] [data-pane=ftx] { display: block !important; grid-column: 1 / -1; grid-area: auto; }
+html .app[data-tab=ftx] .layout { grid-template-areas: none; grid-template-columns: minmax(0, 1fr); }
+.ftxgo { min-height: 26px; padding: 2px 12px; font-size: .8rem; }
+@media (max-width: 699px) { .ftxgo { display: none !important; } }
+html[data-tablet] .ftxgo { display: none !important; }
+.ftx { display: grid; gap: 8px; }
+.ftx-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.ftx-freq { display: flex; align-items: baseline; gap: 6px; padding: 1px 9px; background: #060a14; border: 1px solid var(--cyan); border-radius: 8px; }
+.ftx-freq b { font-size: 1.35rem; letter-spacing: .04em; font-variant-numeric: tabular-nums; color: var(--text); }
+.ftx-freq small { color: var(--cyan); font-weight: 600; font-size: .72rem; }
+.ftx-seg { display: inline-flex; gap: 4px; }
+.ftx-band { display: inline-flex; align-items: center; gap: 6px; color: var(--dim); }
+.ftx-clock { color: var(--yellow); font-size: .8rem; border: 1px solid #7a5410; background: #241a07; border-radius: 6px; padding: 2px 8px; }
+.ftx-notice { margin: 0; padding: 6px 10px; border: 1px solid #7a5410; background: #241a07; color: var(--yellow); border-radius: 6px; font-size: .85rem; }
+.ftx-slotrow { display: flex; align-items: center; gap: 10px; font-size: .8rem; color: var(--dim); }
+.ftx-slotrow #fx-slotname { min-width: 6.5em; letter-spacing: .08em; font-weight: 600; }
+.ftx-slotrow b { min-width: 2em; text-align: right; color: var(--text); font-variant-numeric: tabular-nums; }
+.ftx-bar { flex: 1; height: 8px; background: #0e1729; border: 1px solid var(--line2); border-radius: 4px; overflow: hidden; }
+.ftx-bar i { display: block; height: 100%; width: 0; background: var(--blue); }
+.ftx.ftx-tx .ftx-bar i { background: var(--red); }
+.ftx.ftx-tx .ftx-slotrow #fx-slotname { color: var(--red); }
+.ftx-main { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+@media (min-width: 700px) { .ftx-main { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.ftx-col { min-width: 0; display: grid; gap: 6px; align-content: start; }
+.ftx-col .blabel { display: flex; align-items: center; justify-content: space-between; }
+.ftx-cq { font-size: .7rem; text-transform: none; letter-spacing: 0; display: inline-flex; gap: 4px; align-items: center; }
+.ftx-cq input { width: auto; min-height: 0; }
+.ftx-list { height: clamp(230px, 42vh, 400px); overflow-y: auto; background: #060a14; border: 1px solid var(--line); border-radius: 6px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .8rem; }
+.ftx-sep { position: sticky; top: 0; background: #0b1428; color: var(--dim); font-size: .68rem; padding: 1px 8px; border-bottom: 1px solid var(--line); letter-spacing: .06em; }
+.ftx-row { display: flex; gap: 8px; padding: 1px 8px; white-space: nowrap; cursor: pointer; border-left: 3px solid transparent; }
+.ftx-row:hover { background: #0e1a33; }
+.ftx-row .s { width: 2.4em; text-align: right; color: var(--dim); }
+.ftx-row .d { width: 3em; color: var(--dim); }
+.ftx-row .f { width: 3.2em; color: var(--dim); }
+.ftx-row .t { overflow: hidden; text-overflow: ellipsis; }
+.ftx-row.cq .t { color: #86efac; }
+.ftx-row.me { background: rgba(251,146,60,.16); border-left-color: var(--orange); }
+.ftx-row.me .t { color: #fed7aa; font-weight: 700; }
+.ftx-row.tx { background: rgba(244,63,94,.14); border-left-color: var(--red); }
+.ftx-row.tx .s { color: var(--red); font-weight: 700; }
+.ftx-row.logged { background: rgba(52,211,153,.12); border-left-color: var(--green); cursor: default; }
+.ftx-ctl { gap: 6px 8px; align-items: center; }
+.ftx-ctl input { width: 9em; text-transform: uppercase; }
+.ftx-ctl label { display: inline-flex; align-items: center; gap: 4px; color: var(--dim); }
+.ftx-status { min-height: 1.2em; font-size: .8rem; }
+.ftx-msgs { display: grid; gap: 3px; }
+.ftx-msg { display: grid; grid-template-columns: 1.4em minmax(0, 1fr) auto; gap: 6px; align-items: center; }
+.ftx-msg .n { color: var(--dim); text-align: right; }
+.ftx-msg input { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; text-transform: uppercase; min-height: 28px; padding: 2px 8px; }
+.ftx-msg button { min-height: 28px; padding: 1px 10px; }
+.ftx-wfwrap { position: relative; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; cursor: crosshair; background: #000018; }
+.ftx-wfwrap canvas { display: block; width: 100%; height: 105px; }
+.ftx-wfwrap #fx-ov { position: absolute; inset: 0; pointer-events: none; }
+#fx-wf { image-rendering: pixelated; }
+.ftx-scale { display: flex; justify-content: space-between; font-size: .66rem; color: var(--dim); padding: 0 2px; margin-top: -4px; }
+.ftx-wfbar { gap: 6px 12px; align-items: center; }
+.ftx-wfbar input[type=text], .ftx-wfbar input[inputmode] { width: 5em; }
+.ftx-log { max-height: 280px; overflow-y: auto; }
+.ftx-lrow { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 3px 4px; border-bottom: 1px solid var(--line); font-size: .85rem; }
+.ftx-lrow b { min-width: 6em; }
+.ftx-lrow button { min-height: 24px; padding: 0 8px; margin-left: auto; }
+.ftx-lrow .chip { font-size: .7rem; padding: 0 6px; border: 1px solid var(--line2); border-radius: 999px; color: var(--dim); cursor: default; min-height: 0; }
+.ftx-lrow .chip.ok { color: var(--green); border-color: #1f5f4a; } .ftx-lrow .chip.bad { color: var(--red); border-color: #6b1a30; }
+a.btn { display: inline-flex; align-items: center; background: linear-gradient(180deg, #1a263d, #131d31); border: 1px solid var(--line2); border-radius: 6px; color: #dbe4f6; padding: 4px 12px; min-height: 34px; font-size: .88rem; text-decoration: none; }
+a.btn:hover { border-color: var(--cyan); }
+@media (max-width: 480px) {
+  .tabs { gap: 3px; }
+  .tabs button { padding: 4px 1px; font-size: clamp(.56rem, 2.95vw, .8rem); min-width: 0; white-space: nowrap; letter-spacing: -.01em; }       /* every label whole: the text shrinks with the screen */
+  .ftx button, .ftx select, .ftx a.btn { font-size: clamp(.66rem, 3.1vw, .82rem); }
+  .ftx button { padding-left: 8px; padding-right: 8px; }
+  .ftx button.led { padding-left: 12px; padding-right: 7px; }
+}
+
+/* FT8/FT4 layout refinements: compact top bar, equal lists, messages under both, waterfall, log + settings side by side */
+.ftx-top { gap: 6px 10px; }
+.ftx-top button, .ftx-top select { min-height: 28px; font-size: .8rem; padding-top: 1px; padding-bottom: 1px; }
+.ftx-top button.led { padding-left: 14px; padding-right: 9px; }
+.ftx-band { gap: 4px; font-size: .78rem; }
+.ftx-band select { width: 9.5em; padding: 1px 4px; }
+.ftx-under { display: grid; gap: 6px; }
+.ftx-msgs { grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 700px) { .ftx-msgs { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3px 14px; } }
+@media (min-width: 1100px) { .ftx-msgs { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.ftx-bottom { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; align-items: start; }
+@media (min-width: 700px) { .ftx-bottom { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.ftx-bottom > details { margin: 0; }
+.ftx-acc { gap: 6px 12px; align-items: end; margin: 4px 0; }
+.ftx-acc label { display: inline-flex; flex-direction: column; gap: 2px; font-size: .74rem; color: var(--dim); }
+.ftx-acc label.chk { flex-direction: row; align-items: center; gap: 5px; }
+.ftx-acc input:not([type=checkbox]) { width: 9.5em; min-height: 28px; padding: 1px 6px; }
+.ftx-acc.ftx-me input { width: 7em; }
+.ftx-acc.ftx-me input[type=number] { width: 4.5em; }
+@media (max-width: 480px) {
+  .ftx-acc label:not(.chk) { flex: 1 1 8.5em; } .ftx-acc input:not([type=checkbox]) { width: 100%; }
+  .ftx-freq b { font-size: 1.2rem; } .ftx-band select { width: 8.2em; }
+  .ftx-ctl input { width: 7em; } .ftx-wfbar { gap: 4px 8px; }
+}
+
+.ftx-status:empty { display: none; }
+.ftx-wfbar .chk { display: inline-flex; align-items: center; gap: 5px; }
+.ftx-wfbar .chk input, .ftx-acc .chk input { width: auto; min-height: 0; margin: 0; }
+.ftx-acc .dim { font-size: .74rem; align-self: center; }
+@media (max-width: 699px) { .ftx-list { height: clamp(170px, 27vh, 250px); } }
+.ftx-chks { display: inline-flex; gap: 12px; white-space: nowrap; }
+.ftx-hb { display: inline-flex; align-items: center; gap: 10px; }
+.ftx-clear { min-height: 22px; padding: 0 9px; font-size: .7rem; text-transform: none; letter-spacing: 0; }
+.ftx-row.sel { outline: 1px solid var(--cyan); outline-offset: -1px; }
+.ftx-wfwrap.hot { cursor: pointer; }
+.ftx-row .c { display: none; margin-left: auto; padding-left: 10px; color: var(--dim); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; font-size: .74rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1 1 0; text-align: right; }
+@media (min-width: 700px) { .ftx-row .c { display: inline; } .ftx-row .t { flex: 0 0 auto; overflow: visible; } }               /* the country of the sender, on tablets and large screens only */
+html[data-tablet] .ftx-row .c { display: inline; }
+/* All decodes: the decode itself (SNR, DT, frequency, message) is flush left in fixed columns; the country is flush right */
+.ftx-row { justify-content: flex-start; }
+.ftx-row .s { width: 2.6em; text-align: left; flex: 0 0 auto; }
+.ftx-row .d { width: 3.1em; text-align: left; flex: 0 0 auto; }
+.ftx-row .f { width: 3.4em; text-align: left; flex: 0 0 auto; }
+.ftx-row .t { text-align: left; }
+.ftx-row .c { text-align: right; }
+.ftx-timebox { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; }
+.ftx-timebox b { font-variant-numeric: tabular-nums; font-size: .95rem; letter-spacing: .03em; color: var(--text); }
+.ftx-chip { font-size: .7rem; padding: 1px 8px; border: 1px solid var(--line2); border-radius: 999px; color: var(--dim); white-space: nowrap; cursor: help; }
+.ftx-chip.ok { color: var(--green); border-color: #1f5f4a; } .ftx-chip.warn { color: var(--yellow); border-color: #7a5410; background: #241a07; } .ftx-chip.bad { color: #fecdd3; border-color: #6b1a30; background: #3a0f1d; }
+@media (max-width: 480px) { .ftx-timebox { margin-left: 0; width: 100%; } .ftx-timebox b { font-size: .85rem; } }
+
+/* the QSO messages: where the contact is */
+.ftx-msg { border-radius: 6px; padding: 1px 3px; border: 1px solid transparent; }
+.ftx-msg.done .n { color: var(--green); } .ftx-msg.done .n::after { content: "\2713"; margin-left: 1px; }
+.ftx-msg.done input { color: var(--dim); }
+.ftx-msg.cur { border-color: var(--orange); background: rgba(251,146,60,.14); }
+.ftx-msg.cur .n { color: var(--orange); font-weight: 700; }
+.ftx-msg.cur input { border-color: var(--orange); color: #fed7aa; font-weight: 700; }
+.ftx-msg.txing { border-color: var(--red); background: rgba(244,63,94,.2); animation: pulse 1s infinite; }
+.ftx-msg.txing .n, .ftx-msg.txing input { color: #fecdd3; }
+/* touch screens: a finger is bigger than a line of text, so the rows are taller and have a line between them */
+@media (pointer: coarse), (max-width: 699px) {
+  .ftx-row { padding-top: 6px; padding-bottom: 6px; border-bottom: 1px solid #0f1a30; }
+  .ftx-sep { padding-top: 3px; padding-bottom: 3px; }
+}

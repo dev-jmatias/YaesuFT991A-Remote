@@ -186,6 +186,8 @@ class AudioService:
         self.freedv_mode = "RADE"                       # the app sets these from [freedv] in the config
         self.freedv_tx_gain = db_to_gain(-6.0)
         self._last_emit = 0.0
+        self.ftx_feed: Callable[[bytes], None] | None = None     # FT8/FT4 receiver (ftx_engine.py): gets the radio's audio frames (never our own transmission)
+        self._hold_capture = False                       # keep the radio's audio coming in even when no browser listens (the FT8/FT4 tab decodes on the Pi)
         self.frames_in = self.frames_to_radio = 0
         self._relay = self._rx_track = None
 
@@ -488,6 +490,11 @@ class AudioService:
                     self._level("audio_rx_level", level_pct(pcm))                # the meter shows what the radio sends (the modem tones)
                     raw_pcm = pcm                                                # the radio's own audio, before FreeDV decodes it (the recorder keeps it for analysis)
                     rec_diag = None
+                    if self.ftx_feed is not None and not self._tx_gate_open:
+                        try:
+                            self.ftx_feed(raw_pcm)
+                        except Exception:
+                            log.exception("FT8/FT4 receive failed")
                     if self._fd_rx is not None and self._tx_gate_open:
                         pcm = bytes(FRAME_BYTES)                                 # transmitting: never decode (and replay) our own signal
                         self._rx_hold = RX_HOLD_FRAMES
@@ -854,9 +861,22 @@ class AudioService:
             self._tx_gate_open = False
         if peer.pc is not None:
             await peer.pc.close()
-        if not self.peers:
+        if not self.peers and not self._hold_capture:
             await self._stop_capture()
-        if not any(p.tx_task or (p.ws is not None and p.role in ("operator", "admin")) for p in self.peers.values()):
+        if not self._hold_capture and not any(p.tx_task or (p.ws is not None and p.role in ("operator", "admin")) for p in self.peers.values()):
+            await self._stop_tx_sink()
+
+    async def hold_capture(self, on: bool) -> None:
+        """The FT8/FT4 tab needs the radio's audio (and, to transmit, the sound card output) even when no browser is listening."""
+        self._hold_capture = on
+        if on:
+            if not self.available:
+                raise AudioUnavailable(self.reason)
+            await self._ensure_capture()
+            if self._sink_factory is not None:
+                await self._ensure_tx_sink()
+        elif not self.peers:
+            await self._stop_capture()
             await self._stop_tx_sink()
 
     async def close_conn(self, conn_id: str) -> None:

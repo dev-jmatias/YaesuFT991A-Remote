@@ -9,6 +9,7 @@ import { createEqButtons, createEqualizer } from "../components/equalizer.js";
 import { createRecBar } from "../components/recordings.js";
 import { createPtt } from "../components/ptt.js";
 import { createFreeDV } from "../components/freedv.js";
+import { createFtx } from "../components/ftx.js";
 import { createMemoryButtons } from "../components/memories.js";
 import { createTuner } from "../tuner.js";
 import { el, fmtStep } from "../util.js";
@@ -49,7 +50,7 @@ export function renderRadio(root, { onLogout, onAuthLost }) {
           <button id="logout" title="Sign out" aria-label="Sign out">${TI.out}<span class="tl">Sign out</span></button>
         </span>
       </header>
-      <div class="radiobar"><span class="rtab"><i class="dot" id="dot" role="img" aria-label="connecting"></i><span id="model"></span></span><div id="ctlbar" class="ctlbar"></div></div>
+      <div class="radiobar"><span class="rtab"><i class="dot" id="dot" role="img" aria-label="connecting"></i><span id="model"></span></span><button id="ftxgo" class="ftxgo" hidden title="The FT8 / FT4 screen">FT8/FT4</button><div id="ctlbar" class="ctlbar"></div></div>
       <div id="mock" class="mockbanner" hidden>SIMULATED RADIO - nothing is connected or transmitting.</div>
       <div id="exp" class="mockbanner" hidden></div>
       <div id="offline" class="offline" hidden><span>Radio offline - waiting for it to come back. Controls are paused.</span><button class="active" id="poweron" hidden title="Wake the radio from standby (PS1). It needs a few seconds to start.">Power on radio</button></div>
@@ -306,17 +307,30 @@ export function renderRadio(root, { onLogout, onAuthLost }) {
       parts.push(createFreeDV(pane("freedv", ""), ctx));
       tabs.splice(tabs.findIndex(([k]) => k === "audio") + 1, 0, ["freedv", "FreeDV"]);
     }
+    // FT8 / FT4 (the FT8/FT4 tab, see docs/ft8.md): its own screen. A tab on phones and tablets; on a wide screen the FT8/FT4 button in the bar above switches to it and back
+    const fxOk = !!S.audio?.ftx?.available;
+    if (fxOk) {
+      parts.push(createFtx(pane("ftx", ""), ctx));
+      tabs.splice(tabs.findIndex(([k]) => k === "freedv") + 1 || tabs.length, 0, ["ftx", "FT8/FT4"]);
+    }
     if (!tabs.some(([k]) => k === ui.tab)) ui.tab = "radio";
 
     // Phone tab bar
     const nav = view.querySelector(".tabs");
+    const setTab = (k) => {
+      ui.tab = k; view.dataset.tab = k;
+      nav.querySelectorAll("button").forEach((x) => x.classList.toggle("active", x.dataset.t === k));
+      const go = $("ftxgo"); go.textContent = k === "ftx" ? "Back to radio" : "FT8/FT4"; go.classList.toggle("active", k === "ftx");
+    };
     nav.replaceChildren(...tabs.map(([k, label]) => {
       const b = el(`<button data-t="${k}">${label}</button>`);
-      b.onclick = () => { ui.tab = k; view.dataset.tab = k; nav.querySelectorAll("button").forEach((x) => x.classList.toggle("active", x.dataset.t === k)); };
+      b.onclick = () => setTab(k);
       b.classList.toggle("active", k === ui.tab);
       return b;
     }));
-    view.dataset.tab = ui.tab;
+    $("ftxgo").hidden = !fxOk;
+    $("ftxgo").onclick = () => setTab(ui.tab === "ftx" ? "radio" : "ftx");
+    setTab(ui.tab);
 
     $("adm").hidden = S.user.role !== "admin";
     $("adm").onclick = () => openSheet(root, { user: S.user, tab: "users", sock });
@@ -378,6 +392,8 @@ export function renderRadio(root, { onLogout, onAuthLost }) {
       } else if (m.t === "safety") {
         S.safety = { ...S.safety, ...m.d };                  // the administrator switched transmitting on or off
         build();
+      } else if (m.t === "ftx") {
+        ctx.ftxEvent?.(m);
       } else if (m.t === "patch" || m.t === "meters") {
         Object.assign(S.state, m.d);
         repaint();

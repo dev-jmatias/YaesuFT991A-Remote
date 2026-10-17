@@ -13,7 +13,7 @@ from aiohttp import web
 
 from . import __version__, config, sysinfo
 from .common import (COOKIE, K_AUDIO, K_AUTH, K_CFG, K_CFGPATH, K_DRIVER, K_GUARD, K_HUB, K_RESTART, K_SESSION,
-                     K_REPORTER, K_RIGCTL, K_STARTED, K_UPDATES, client_ip, read_json, require_admin)
+                     K_REPORTER, K_FTX, K_RIGCTL, K_STARTED, K_UPDATES, client_ip, read_json, require_admin)
 from .logs import RING, scrub
 
 log = logging.getLogger("admin")
@@ -31,10 +31,14 @@ EDITABLE = {
     "rigctl": {"enabled", "port", "allow", "set"},
     "freedv": {"mode", "tx_level_db", "channels", "data_mode", "auto_width", "callsign"},
     "reporter": {"enabled", "announce", "watch", "callsign", "grid_square", "message"},
+    "ftx": {"mode", "callsign", "grid_square", "tx_freq_hz", "tx_level_db", "max_tx_repeats", "cq_only", "clock_check"},
+    "upload": {"qrz_key", "eqsl_user", "eqsl_password", "clublog_email", "clublog_password", "clublog_api", "auto_qrz", "auto_eqsl", "auto_clublog"},
 }
+SECRET_KEYS = {("upload", "qrz_key"), ("upload", "eqsl_password"), ("upload", "clublog_password"), ("upload", "clublog_api")}
+MASK = "********"
 LOCKED = ["safety.allow_ptt", "server.host", "server.port", "server.allowed_origins", "storage.data_dir", "updates.repo"]
 LIVE = {("logging", "level"), ("audio", "rx_gain_db"), ("audio", "tx_gain_db"), ("updates", "check"), ("rigctl", "enabled"), ("rigctl", "port"), ("rigctl", "allow"), ("rigctl", "set"), ("freedv", "mode"), ("freedv", "tx_level_db"), ("freedv", "auto_width"), ("freedv", "channels"), ("freedv", "data_mode"), ("reporter", "enabled"), ("reporter", "announce"), ("reporter", "watch"), ("reporter", "callsign"),
-        ("reporter", "grid_square"), ("reporter", "message")}
+        ("reporter", "grid_square"), ("reporter", "message")} | {("ftx", k) for k in EDITABLE["ftx"]} | {("upload", k) for k in EDITABLE["upload"]}
 
 
 async def _run(fn, *a):
@@ -188,7 +192,10 @@ async def get_config(request):
         except Exception:
             return []
 
-    cfg = app[K_CFG]
+    cfg = copy.deepcopy(app[K_CFG])
+    for sec, key in SECRET_KEYS:                                   # a saved key or password is never sent back to the page
+        if cfg.get(sec, {}).get(key):
+            cfg[sec][key] = MASK
     return web.json_response({
         "config": cfg, "editable": {k: sorted(v) for k, v in EDITABLE.items()}, "locked": LOCKED,
         "models": sorted(config.KNOWN_MODELS), "serial_ports": await _run(ports),
@@ -251,6 +258,9 @@ async def put_config(request):
     if path is None:
         raise web.HTTPConflict(text="no config file is in use; start with --config to enable editing")
     body = await read_json(request)
+    for sec, key in SECRET_KEYS:                                   # the page sends the mask back for a secret it did not change
+        if isinstance(body.get(sec), dict) and body[sec].get(key) == MASK:
+            del body[sec][key]
     for section, values in body.items():
         if not isinstance(values, dict) or section not in EDITABLE:
             raise web.HTTPBadRequest(text=f"section '{section}' is not editable here")
@@ -277,6 +287,8 @@ async def put_config(request):
             app[K_REPORTER].set_message()
     if ("freedv" in body or "reporter" in body) and app[K_AUDIO]:
         app[K_AUDIO].set_freedv_params(new["freedv"]["mode"], new["freedv"]["tx_level_db"], config.freedv_callsign(new))
+    if "ftx" in body and app.get(K_FTX):
+        app[K_FTX].apply_settings()
     if any(k in ("rx_gain_db", "tx_gain_db") for k in body.get("audio", {})) and app[K_AUDIO]:
         app[K_AUDIO].set_gains(new["audio"]["rx_gain_db"], new["audio"]["tx_gain_db"])     # takes effect immediately
     app[K_AUTH].audit("config_changed", admin.username, client_ip(request), ", ".join(changed) or "no change")
@@ -419,6 +431,13 @@ async def update_check_now(request):
     return web.json_response(state)
 
 
+def _without_secrets(cfg: dict) -> dict:
+    out = copy.deepcopy(cfg)
+    for sec, key in SECRET_KEYS:
+        out.get(sec, {}).pop(key, None)
+    return out
+
+
 async def backup_config(request):
     """Download the current settings as a TOML file (administrators only). It holds no passwords or keys."""
     admin = require_admin(request)
@@ -426,7 +445,7 @@ async def backup_config(request):
     stamp = time.strftime("%Y%m%d-%H%M%S")
     text = (f"# Radio Remote settings backup, {time.strftime('%Y-%m-%d %H:%M:%S')}, version {__version__}.\n"
             "# Restore it in Admin > Config > Settings backup. Only the settings the web page may change are restored:\n"
-            "# server.*, storage.* and safety.allow_ptt are never taken from a backup.\n\n" + config.dumps(app[K_CFG]))
+            "# server.*, storage.* and safety.allow_ptt are never taken from a backup, and the upload logins and keys are never in it.\n\n" + config.dumps(_without_secrets(app[K_CFG])))
     app[K_AUTH].audit("config_backup", admin.username, client_ip(request))
     return web.Response(text=text, content_type="text/plain", charset="utf-8",
                         headers={"Content-Disposition": f'attachment; filename="radio-remote-settings-{stamp}.toml"',

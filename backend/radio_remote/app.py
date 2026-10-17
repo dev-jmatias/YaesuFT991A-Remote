@@ -18,12 +18,13 @@ from aiohttp import WSMsgType, web
 from . import __version__, admin, logs, sdnotify, updates
 from .audio.service import AudioService, AudioUnavailable
 from .auth import AuthStore, Session
-from .common import (COOKIE, K_AUDIO, K_AUTH, K_CFG, K_CFGPATH, K_DRIVER, K_GUARD, K_HUB, K_REPORTER, K_RESTART, K_SESSION,
+from .common import (COOKIE, K_AUDIO, K_AUTH, K_CFG, K_CFGPATH, K_DRIVER, K_GUARD, K_HUB, K_FTX, K_QSOLOG, K_REPORTER, K_RESTART, K_SESSION,
                      K_RIGCTL, K_STARTED, K_UPDATES, CommandError, client_ip, is_https, read_json)
 from .lease import ControlLease, LeaseError
 from .radio import controls
 from .radio.base import METER_FIELDS, RadioDriver, RadioError
 from .radio.registry import create_driver
+from . import config
 from .config import FREEDV_MODES, freedv_callsign
 from .ratelimit import TokenBucket
 from .freedv_reporter import FreeDVReporter
@@ -44,7 +45,7 @@ MAX_WS_CLIENTS = 24
 CMD_RATE, CMD_BURST, MAX_STRIKES = 40.0, 80, 200
 LEASE_OPS = {"request_control", "respond_control", "release_control", "force_control"}
 MAX_EQ_PRESETS = 20
-SCAN_KEEPS = {"scan_range", "scan_range_stop", "set_level", "set_control", "freedv", "set_eq", "set_dyn", "eq_preset_save", "eq_preset_delete", "rec"}     # commands that leave a running range scan alone
+SCAN_KEEPS = {"scan_range", "scan_range_stop", "set_level", "set_control", "freedv", "ftx", "ftx_tx", "ftx_halt", "set_eq", "set_dyn", "eq_preset_save", "eq_preset_delete", "rec"}     # commands that leave a running range scan alone
 
 
 def _int(v, lo=None, hi=None) -> int:
@@ -76,6 +77,7 @@ class Hub:
         self.audio = None
         self.ui: dict = {}
         self.reporter = None                     # FreeDV Reporter (set by create_app)
+        self.ftx = None                          # the FT8/FT4 engine (set by create_app)
         self.scanner = RangeScanner(self)        # the start/stop frequency scan (scan.py)
         self.auto_width = lambda: True           # freedv.auto_width (set by create_app): widen a narrow radio filter when FreeDV is on
         self._widen_task: asyncio.Task | None = None
@@ -222,10 +224,15 @@ class Hub:
             "lease": self.lease.state(),
             "audio": {"available": a["available"], "reason": a["reason"],
                       "mic": session.role in ("operator", "admin"),
-                      "freedv": self.audio.freedv_state() if self.audio else {"available": False, "reason": "no audio service", "on": False}},
+                      "freedv": self.audio.freedv_state() if self.audio else {"available": False, "reason": "no audio service", "on": False},
+                      "ftx": {"available": self.ftx_ok(), "on": bool(self.ftx and self.ftx.on)}},
             "state": {**self.driver.state, **self.extra, "ptt_owner": self.guard.owner},
             "safety": {"ptt_permitted": self.guard.permitted, "tx_timeout_s": self.guard.max_tx_s},
         }
+
+    def ftx_ok(self) -> bool:
+        from .audio import ftx as _ftx
+        return bool(self.audio and self.audio.available and _ftx.available()[0])
 
     # ---------------------------------------------------------- commands
     async def handle(self, conn_id: str, session: Session, msg: dict):
@@ -416,6 +423,32 @@ class Hub:
             self.auth.audit("freedv_on" if on else "freedv_off", session.username, None, self.audio.freedv_mode if on else "")
             if on:
                 self._schedule_widen()
+        elif typ == "ftx":
+            on, mode = msg.get("on"), msg.get("mode")
+            if not isinstance(on, bool) or (mode is not None and mode not in ("FT8", "FT4")):
+                raise CommandError("ftx needs on (true/false) and optionally mode FT8 or FT4")
+            if not self.ftx or not self.audio:
+                raise CommandError("FT8/FT4 is not available")
+            try:
+                await self.ftx.set_on(on, mode)
+            except (ValueError, AudioUnavailable) as e:
+                raise CommandError(str(e)) from None
+            self.auth.audit("ftx_on" if on else "ftx_off", session.username, None, self.ftx.mode if on else "")
+        elif typ == "ftx_tx":
+            if not self.ftx:
+                raise CommandError("FT8/FT4 is not available")
+            text, f0, parity, reps = msg.get("text"), msg.get("freq"), msg.get("parity"), msg.get("repeats")
+            if not isinstance(text, str) or not 1 <= len(text) <= 40 or isinstance(f0, bool) or not isinstance(f0, (int, float)) or isinstance(parity, bool) or not isinstance(parity, int):
+                raise CommandError("ftx_tx needs text, freq (Hz) and parity (0 or 1)")
+            if reps is not None and (isinstance(reps, bool) or not isinstance(reps, int)):
+                raise CommandError("repeats must be a number")
+            try:
+                return self.ftx.set_tx(conn_id, text, float(f0), parity, reps)
+            except ValueError as e:
+                raise CommandError(str(e)) from None
+        elif typ == "ftx_halt":
+            if self.ftx:
+                await self.ftx.halt("halted by the operator")
         elif typ == "set_level":
             name = msg.get("name")
             rng = caps.level_range(name) if isinstance(name, str) else None
@@ -756,6 +789,8 @@ async def ws_handler(request):
                 await ws.send_str(json.dumps({"t": "ack", "id": mid, "ok": False, "error": "internal error"}))
     finally:
         hub.clients.pop(conn_id, None)
+        if hub.ftx:
+            hub.ftx.conn_gone(conn_id)
         await app[K_GUARD].release_owner(conn_id)   # never leave TX keyed by a dead connection
         if hub.scanner.owner == conn_id:
             await hub.scanner.stop("the operator left")
@@ -830,6 +865,106 @@ async def freedv_reporter_status(request):
     """FreeDV Reporter: the connection state and the stations it lists, those near our frequency first (any signed-in user)."""
     app = request.app
     return web.json_response(app[K_REPORTER].status(near_hz=app[K_DRIVER].state.get("frequency") or 0))
+
+
+async def ftx_info(request):
+    """FT8/FT4: the state, the settings, the standard frequencies and the recent decodes (any signed-in user)."""
+    app = request.app
+    st = app[K_FTX].state()
+    u = app[K_CFG]["upload"]
+    st["upload"] = {"qrz": bool(u["qrz_key"]), "eqsl": bool(u["eqsl_user"] and u["eqsl_password"]), "clublog": bool(u["clublog_email"] and u["clublog_password"]),
+                    "clublog_api": bool(u["clublog_api"]), "auto": {"qrz": u["auto_qrz"], "eqsl": u["auto_eqsl"], "clublog": u["auto_clublog"]}}
+    st["log_count"] = len(app[K_QSOLOG].items)
+    return web.json_response(st)
+
+
+def _operator(request):
+    if request[K_SESSION].role == "viewer":
+        raise web.HTTPForbidden(text="viewers cannot change the log")
+    return request[K_SESSION]
+
+
+async def ftx_log_list(request):
+    return web.json_response({"log": request.app[K_QSOLOG].recent(300), "total": len(request.app[K_QSOLOG].items)})
+
+
+async def ftx_log_adif(request):
+    ids = request.query.get("id")
+    body = request.app[K_QSOLOG].adif(__version__, ids.split(",") if ids else None)
+    return web.Response(text=body, content_type="text/plain", headers={"Content-Disposition": 'attachment; filename="radio-remote-ft8.adi"', "Cache-Control": "no-store"})
+
+
+async def ftx_log_add(request):
+    """Log a contact (the page sends it when a QSO completes, or the operator adds it by hand). Auto-upload follows when it is switched on."""
+    from . import qsolog
+    s = _operator(request)
+    app = request.app
+    b = await read_json(request)
+    conn = b.pop("conn", None)
+    if conn is not None:                                   # the page says which of the user's connections it is: only the one that has control of the radio keeps the log
+        c = app[K_HUB].clients.get(conn) if isinstance(conn, str) else None
+        if c is None or c.session.user_id != s.user_id or not app[K_HUB].lease.holds(conn):
+            raise web.HTTPForbidden(text="only the page that has control of the radio can log contacts")
+    b.setdefault("station_callsign", config.ftx_callsign(app[K_CFG]))
+    b.setdefault("my_gridsquare", config.ftx_grid(app[K_CFG]))
+    dup = app[K_QSOLOG].duplicate_of(b)
+    if dup is not None:                                    # the same contact reported twice: say so and keep the one in the log
+        log.info("FT8/FT4 log: %s (%s) is already logged, not adding it again", dup["call"], dup["band"])
+        return web.json_response({"q": dup, "duplicate": True}, status=200)
+    try:
+        q = app[K_QSOLOG].add(b)
+    except ValueError as e:
+        raise web.HTTPBadRequest(text=str(e)) from None
+    app[K_AUTH].audit("ftx_logged", s.username, client_ip(request), f"{q['call']} {q['mode']} {q['band']}")
+    app[K_HUB]._broadcast({"t": "ftx", "k": "logged", "q": q})
+    u = app[K_CFG]["upload"]
+    for svc in qsolog.SERVICES:
+        if u.get(f"auto_{svc}"):
+            asyncio.get_running_loop().create_task(_upload_one(app, svc, q))
+    return web.json_response({"q": q}, status=201)
+
+
+async def _upload_one(app, service: str, q: dict) -> tuple[bool, str]:
+    from . import uploaders
+    ok, msg = await uploaders.upload(service, app[K_CFG], q, config.ftx_callsign(app[K_CFG]))
+    app[K_QSOLOG].mark(q["id"], service, ok, msg)
+    app[K_HUB]._broadcast({"t": "ftx", "k": "uploaded", "id": q["id"], "service": service, "ok": ok, "message": msg})
+    log.info("upload %s %s: %s", service, q["call"], msg)
+    return ok, msg
+
+
+async def ftx_log_delete(request):
+    s = _operator(request)
+    if not request.app[K_QSOLOG].delete(request.match_info["id"]):
+        raise web.HTTPNotFound(text="no such contact")
+    request.app[K_AUTH].audit("ftx_log_delete", s.username, client_ip(request), request.match_info["id"])
+    return web.json_response({"ok": True})
+
+
+async def ftx_upload(request):
+    """Upload logged contacts (one id, or "all" not yet sent) to one service: qrz, eqsl or clublog."""
+    from . import qsolog
+    _operator(request)
+    app = request.app
+    b = await read_json(request)
+    svc, which = b.get("service"), b.get("id", "all")
+    if svc not in qsolog.SERVICES:
+        raise web.HTTPBadRequest(text="service must be qrz, eqsl or clublog")
+    if which == "all":
+        todo = app[K_QSOLOG].pending(svc)[:50]
+    else:
+        q = app[K_QSOLOG].get(which) if isinstance(which, str) else None
+        if q is None:
+            raise web.HTTPNotFound(text="no such contact")
+        todo = [q]
+    done, failed, last = 0, 0, ""
+    for q in todo:
+        ok, last = await _upload_one(app, svc, q)
+        done += ok
+        failed += not ok
+        if not ok and ("not set" in last or "needs an application" in last):
+            break                                               # credentials missing: no point trying the rest
+    return web.json_response({"sent": done, "failed": failed, "message": last or "nothing to upload", "left": len(app[K_QSOLOG].pending(svc))})
 
 
 async def audio_status(request):
@@ -1034,6 +1169,12 @@ def create_app(cfg: dict, driver: RadioDriver | None = None, auth: AuthStore | N
     audio.on_freedv_tx = reporter.set_transmitting
     app[K_HUB].reporter = reporter
 
+    from .ftx_engine import FtxEngine
+    from .qsolog import QsoLog
+    app[K_QSOLOG] = QsoLog(Path(cfg["storage"]["data_dir"]) / "ftx_log.jsonl")
+    app[K_FTX] = app[K_HUB].ftx = ftx_engine = FtxEngine(lambda: app[K_CFG], audio, app[K_HUB]._broadcast, lambda: driver.state.get("frequency") or 0, guard,
+                                                          lambda cid: cid in app[K_HUB].clients)
+
     watchdog = sdnotify.Watchdog(lambda: guard._task is not None and not guard._task.done())
 
     async def on_start(app):
@@ -1055,6 +1196,10 @@ def create_app(cfg: dict, driver: RadioDriver | None = None, auth: AuthStore | N
         app[K_HUB].cancel_mic_reset()
         await rigctl.stop()
         await reporter.stop()
+        try:
+            await ftx_engine.set_on(False)
+        except Exception:
+            log.exception("FT8/FT4 did not stop cleanly")
         await watchdog.stop()
         await guard.stop()          # un-keys first
         await audio.stop()
@@ -1073,6 +1218,12 @@ def create_app(cfg: dict, driver: RadioDriver | None = None, auth: AuthStore | N
     app.router.add_get("/api/audio/status", audio_status)
     app.router.add_get("/api/freedv", freedv_info)
     app.router.add_get("/api/freedv/reporter", freedv_reporter_status)
+    app.router.add_get("/api/ftx", ftx_info)
+    app.router.add_get("/api/ftx/log", ftx_log_list)
+    app.router.add_post("/api/ftx/log", ftx_log_add)
+    app.router.add_get("/api/ftx/log.adi", ftx_log_adif)
+    app.router.add_post("/api/ftx/log/{id:[0-9a-f]+}/delete", ftx_log_delete)
+    app.router.add_post("/api/ftx/upload", ftx_upload)
     app.router.add_get("/ws/audio", audio_ws)
     app.router.add_get("/api/audio/devices", audio_devices)
     app.router.add_get("/api/recordings", recordings_list)

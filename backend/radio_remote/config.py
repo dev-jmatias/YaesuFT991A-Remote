@@ -61,6 +61,14 @@ DEFAULTS: dict[str, dict[str, Any]] = {
     # FreeDV Reporter (qso.freedv.org): announce this station while FreeDV is on and show who else is on the air (see freedv_reporter.py, docs/freedv.md).
     # Off by default. callsign and grid square are shown publicly on that site. host/tls are for tests and file editing only.
     "reporter": {"enabled": False, "announce": True, "watch": True, "callsign": "", "grid_square": "", "message": "", "host": "qso.freedv.org", "tls": True},
+    # FT8 / FT4 (the FT8/FT4 tab; see ftx_engine.py and audio/ftx.py). callsign / grid_square are sent in the messages (callsign empty = the FreeDV Reporter callsign);
+    # tx_freq_hz = the audio frequency of our transmissions; tx_level_db = level of the tones sent to the radio (keep the ALC at zero); max_tx_repeats = how many times the
+    # same message is repeated unanswered before transmitting stops by itself; cq_only = list only CQ calls; clock_check = warn when the Pi's clock is not synchronised.
+    "ftx": {"mode": "FT8", "callsign": "", "grid_square": "", "tx_freq_hz": 1500, "tx_level_db": -6.0, "max_tx_repeats": 6, "cq_only": False, "clock_check": True},
+    # Uploading logged FT8/FT4 contacts (see uploaders.py). Credentials stay in this file (readable by the service only) and are never shown again in the web page.
+    # auto_* = upload a contact as soon as it is logged. clublog_api = the application key Club Log issues to a program.
+    "upload": {"qrz_key": "", "eqsl_user": "", "eqsl_password": "", "clublog_email": "", "clublog_password": "", "clublog_api": "",
+               "auto_qrz": False, "auto_eqsl": False, "auto_clublog": False},
     "storage": {"data_dir": "data"},
 }
 
@@ -154,6 +162,23 @@ def validate(cfg: dict) -> dict:
         raise ConfigError("freedv.callsign: at most 8 letters, digits or /")
     if len(fd["channels"]) > 40 or not all(isinstance(c, str) and re.fullmatch(r"[^|\n\r]{1,40}\|\d{5,9}\|(RADE|RADE2)", c) for c in fd["channels"]):
         raise ConfigError("freedv.channels: up to 40 entries, each like \"20m|14236000|RADE\"")
+    fx = cfg["ftx"]
+    if fx["mode"] not in ("FT8", "FT4"):
+        raise ConfigError("ftx.mode must be FT8 or FT4")
+    if not re.fullmatch(r"[A-Za-z0-9/]{0,13}", fx["callsign"]):
+        raise ConfigError("ftx.callsign: at most 13 letters, digits or /")
+    if fx["grid_square"] and not re.fullmatch(r"[A-Ra-r]{2}[0-9]{2}([A-Xa-x]{2})?", fx["grid_square"]):
+        raise ConfigError("ftx.grid_square must be a Maidenhead locator such as IO91 or IO91wm")
+    if not 200 <= fx["tx_freq_hz"] <= 2900:
+        raise ConfigError("ftx.tx_freq_hz must be 200..2900")
+    if not -40 <= fx["tx_level_db"] <= 0:
+        raise ConfigError("ftx.tx_level_db must be -40..0")
+    if not 1 <= fx["max_tx_repeats"] <= 30:
+        raise ConfigError("ftx.max_tx_repeats must be 1..30")
+    up = cfg["upload"]
+    for k, v in up.items():
+        if isinstance(v, str) and (len(v) > 200 or any(ord(ch) < 32 for ch in v)):
+            raise ConfigError(f"upload.{k}: at most 200 characters, no control characters")
     r = cfg["rigctl"]
     if not 1024 <= r["port"] <= 65535 or r["port"] == cfg["server"]["port"]:
         raise ConfigError("rigctl.port must be 1024..65535 and different from server.port")
@@ -209,6 +234,16 @@ def save(cfg: dict, path: str | os.PathLike) -> None:
         os.chmod(p, 0o600)
     except OSError:
         pass
+
+
+def ftx_callsign(cfg: dict) -> str:
+    """The station callsign of the FT8/FT4 tab: [ftx] callsign, else the FreeDV Reporter callsign, else [freedv] callsign."""
+    return (cfg.get("ftx", {}).get("callsign") or cfg.get("reporter", {}).get("callsign") or cfg.get("freedv", {}).get("callsign") or "").upper()
+
+
+def ftx_grid(cfg: dict) -> str:
+    """The 4-character grid square of the FT8/FT4 tab: [ftx] grid_square, else the FreeDV Reporter's."""
+    return (cfg.get("ftx", {}).get("grid_square") or cfg.get("reporter", {}).get("grid_square") or "").upper()[:6]
 
 
 def freedv_callsign(cfg: dict) -> str:
