@@ -42,6 +42,10 @@ and goes back by itself if the new version does not start. Settings and accounts
 | `radio-remote-rade-linux-aarch64.tar.xz` | the optional RADE library (FreeDV neural modes V1 and V2) for a Raspberry Pi, installed with `install_rade.sh` (the PC build is `…-x86_64.tar.xz`) |
 | `SHA256SUMS` | checksums of all of the above |
 
+### What is new in 1.1.39
+
+- **Clear message in Safari, Firefox and on iPhone/iPad.** Those browsers cannot read a Bluetooth serial PTT button (such as the B01PTT) and no helper can change that, so Bind PTT now says so and names what works (Chrome or Edge on Windows, Linux or Mac, Chrome on Android) instead of "Nothing received", and no longer offers a helper download there. Keyboard-type and headset media-button devices still work in those browsers.
+
 ### What is new in 1.1.38
 
 - **Ready-made helpers for external Bluetooth PTT buttons on Mac and Android.** No compiling any more: download **`radio-remote-ptt-mac.zip`** (a menu-bar app for macOS 13 or later, Apple silicon and Intel: unzip, open it once with right-click > Open because it is not notarised, allow Bluetooth, tick *Start at login*) or **`radio-remote-ptt-android.apk`** (install it, allow Bluetooth and notifications, choose the paired device, press Start; it starts again by itself after the phone restarts) from this release. Pair the speaker-mic or PTT button with the computer or phone first. In Radio Remote press **Bind PTT** and then the device's button. If the page cannot find the helper it now shows a download link for it. Windows and Linux in Chrome or Edge need no helper. Only for buttons that send their press as Bluetooth serial text (the B01PTT type): headset media buttons and keys work without any helper. Not possible on iPhone or iPad. If you tried the 1.1.37 test APK, uninstall it before installing this one (it was signed with another key).

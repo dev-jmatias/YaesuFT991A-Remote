@@ -317,7 +317,10 @@ export function createAudioPanel({ conn, info: initialInfo, model = "Radio" }) {
   // Local helper (tools/ptt-bridge-mac, tools/ptt-bridge-android): a small program that reads the Bluetooth serial button natively and passes it on over a local WebSocket, because
   // Chrome on a Mac cannot open such a port. One way only: it sends {"t":"hello","connected":bool,"device":name} and {"t":"ptt","down":bool}.
   const BRIDGE_URL = "ws://127.0.0.1:17991";
-  const bridgeOk = typeof WebSocket !== "undefined" && (/Android/.test(navigator.userAgent) || /Macintosh/.test(navigator.userAgent) && !(navigator.maxTouchPoints > 1));          // Mac and Android have a helper
+  // Safari, and every browser on an iPhone or iPad (they all use Safari's engine), cannot read a Bluetooth serial PTT button and cannot reach a helper
+  const ua = navigator.userAgent, iosLike = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+  const noSerialBrowser = iosLike || (/Safari\//.test(ua) && !/Chrome\/|Chromium\/|CriOS|FxiOS|Edg\/|OPR\//.test(ua) && !/Android/.test(ua)) || /Firefox\//.test(ua);
+  const bridgeOk = typeof WebSocket !== "undefined" && !noSerialBrowser && (/Android/.test(navigator.userAgent) || /Macintosh/.test(navigator.userAgent) && !(navigator.maxTouchPoints > 1));          // Mac and Android have a helper
   let bridgeWs = null, bridgeUp = false, bridgeDevice = "", bridgeLearn = null;
   function bridgeOpen() {
     if (bridgeWs) return;
@@ -467,7 +470,7 @@ export function createAudioPanel({ conn, info: initialInfo, model = "Radio" }) {
     learnTimer = setTimeout(() => {
       const had = seen.slice(); learnStop(); seen = had;
       learnMsg = seen.length ? "Received, but it cannot be used as a PTT button: " + seen.join("; ") + ". See the guide, \"Devices that do not work\"."
-        : "Nothing received. The browser did not get the button. If the headset's own microphone is the Microphone / input, choose another microphone: the headset's call mode hides its buttons. Many Bluetooth speaker-mics and POC radios send a private signal that no web page can read (see the guide, \"Devices that do not work\"). Also check the device is connected, close other players (Spotify, YouTube), reload the page and try again." + (bridgeOk && !bridgeUp ? " On a Mac or an Android phone, a Bluetooth serial PTT button needs the Radio Remote PTT helper running (see the guide)." : serialOk && !bridgeOk ? " For a Bluetooth serial PTT button press Bind PTT again and use Add Bluetooth serial device." : "");
+        : (noSerialBrowser ? "This browser (Safari, Firefox, or any browser on an iPhone or iPad) cannot read a Bluetooth serial PTT button such as the B01PTT, and no helper can work around it. Use Chrome or Edge on Windows, Linux or Mac, or Chrome on an Android phone. Keyboard-type and headset media-button devices still work here: check the device is connected and try again. " : "") + "Nothing received. The browser did not get the button. If the headset's own microphone is the Microphone / input, choose another microphone: the headset's call mode hides its buttons. Many Bluetooth speaker-mics and POC radios send a private signal that no web page can read (see the guide, \"Devices that do not work\"). Also check the device is connected, close other players (Spotify, YouTube), reload the page and try again." + (bridgeOk && !bridgeUp ? " On a Mac or an Android phone, a Bluetooth serial PTT button needs the Radio Remote PTT helper running (see the guide)." : serialOk && !bridgeOk ? " For a Bluetooth serial PTT button press Bind PTT again and use Add Bluetooth serial device." : "");
       paintBind();
     }, 15000);
   }
