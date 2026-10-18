@@ -342,16 +342,16 @@ export function createFreeDV(host, ctx) {
     paintTune();
   }
 
-  // Entering this screen remembers the radio's mode and frequency; leaving it, if FreeDV was used meanwhile, switches FreeDV off and puts them back.
+  // Entering this screen remembers the radio's mode and frequency. Leaving it does NOT switch FreeDV off: it stays on until the user switches it off. Once it is off (and was used
+  // during the visit), leaving the screen puts the radio back on the mode and frequency it had before.
   let away = null, used = false;
   const canTune = () => S.user.role !== "viewer" && S.lease.holder?.conn === S.conn;
   ctx.freedvActive = async (active) => {
     if (active) { away = { mode: S.state.mode, hz: S.state.frequency }; used = on(); return; }
     const a = away; away = null;
-    if (!(used || on()) || !canTune()) return;
+    if (on() || !used || !canTune()) return;               // still on: leave everything as it is
     used = false;
     try {
-      if (on()) await send("freedv", { on: false });
       if (a?.mode) await send("set_mode", { mode: a.mode });
       if (a?.hz) await send("set_frequency", { hz: a.hz });
     } catch (e) { toast(e.message); }
