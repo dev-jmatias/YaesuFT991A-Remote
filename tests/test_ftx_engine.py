@@ -210,3 +210,14 @@ def test_every_logged_contact_carries_the_reports_in_its_comment(tmp_path):
     assert "<COMMENT:5>Hello" in text
     recs = text.split("<EOR>")
     assert "COMMENT" not in recs[3]
+
+
+async def test_ft8_will_not_transmit_while_freedv_is_on(ftx, cfg):
+    eng, audio, guard, ev = make(cfg)
+    await eng.set_on(True, "FT8")
+    audio._fd_tx = object()                                                 # FreeDV is on
+    with pytest.raises(ValueError, match="FreeDV is on"):
+        eng.set_tx("c1", "CQ K1FM FN30", 1500, 0)
+    audio._fd_tx = None
+    assert eng.set_tx("c1", "CQ K1FM FN30", 1500, 0)["message"] == "CQ K1FM FN30"
+    await eng.set_on(False)

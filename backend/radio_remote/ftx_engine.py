@@ -235,6 +235,8 @@ class FtxEngine:
         """Send this message in every slot of this parity (0 = even slots, 1 = odd) from the next one on, until replaced or halted."""
         if not self.on:
             raise ValueError("switch FT8/FT4 on first")
+        if getattr(self.audio, "_fd_tx", None) is not None:             # FreeDV would turn the FT8/FT4 tones into modem input: never transmit like that
+            raise ValueError("FreeDV is on: switch it off before transmitting FT8/FT4")
         if parity not in (0, 1):
             raise ValueError("parity must be 0 (even) or 1 (odd)")
         if not 200 <= f0 <= 2900:
