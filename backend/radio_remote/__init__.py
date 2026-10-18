@@ -1,3 +1,3 @@
 """Radio Remote: web control for Yaesu transceivers."""
 
-__version__ = "1.1.43"
+__version__ = "1.1.44"
