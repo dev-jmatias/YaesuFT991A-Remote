@@ -27,6 +27,7 @@ Every FT8/FT4 slot starts on the UTC second, so the clock is the most important 
 * **Country:** on tablets and large screens each decode also shows the country of the station that sent it, taken from the callsign with AD1C's country files (a few long names are shortened). It is a table of prefixes, so a special-event or unusual call can show the wrong or no country. Refresh the table with `python scripts/build_cty.py cty.dat` when a new country file is out ([country-files.com](https://www.country-files.com/)).
 * **Directed to me / worked:** the messages to you, what you transmit (red) and the contacts logged.
 * **Waterfall:** the received audio, 0 to 3000 Hz, with the callsigns of the last two slots marked. The orange bar is your transmit frequency: click the waterfall to move it, or type it in *TX ... Hz*.
+* **Comment:** every logged contact carries a comment, by default the mode and the reports as exchanged (`FT8 Sent: +06 Rcvd: +01`). Type your own in the *Comment* box (next to *Erase*) before the contact is logged and it replaces the automatic one in the log, the ADIF file and the QRZ / eQSL uploads; the box empties after each logged contact.
 * **QRZ Lookup:** the button next to *Reset QSO* opens the QRZ.com page of the DX station (new tab; nothing is sent to QRZ before you click). On the FreeDV tab the callsigns in the station list work the same way.
 * **QSO messages:** the six standard messages for the current DX station, editable, each with a **Send** button.
 

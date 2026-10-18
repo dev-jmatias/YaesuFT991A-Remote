@@ -35,6 +35,15 @@ def adif_field(name: str, value) -> str:
     return f"<{name.upper()}:{len(v)}>{v}" if v != "" else ""
 
 
+def report_comment(q: dict) -> str:
+    """The comment every logged contact carries unless it has one of its own, e.g. "FT8 Sent: +06 Rcvd: +01" (the mode of the contact, FT8 or FT4, and the reports as exchanged)."""
+    parts = [q.get("mode", "FT8")]
+    for label, key in (("Sent", "rst_sent"), ("Rcvd", "rst_rcvd")):
+        if q.get(key):
+            parts.append(f"{label}: {q[key]}")
+    return " ".join(parts) if len(parts) > 1 else ""
+
+
 def adif_record(q: dict, extra: dict | None = None) -> str:
     """One contact as an ADIF record. FT8 is its own ADIF mode; FT4 is the submode FT4 of MFSK."""
     mode = q.get("mode", "FT8")
@@ -46,7 +55,7 @@ def adif_record(q: dict, extra: dict | None = None) -> str:
              adif_field("RST_SENT", q.get("rst_sent")), adif_field("RST_RCVD", q.get("rst_rcvd")),
              adif_field("GRIDSQUARE", q.get("gridsquare")), adif_field("NAME", q.get("name")),
              adif_field("STATION_CALLSIGN", q.get("station_callsign")), adif_field("MY_GRIDSQUARE", q.get("my_gridsquare")),
-             adif_field("COMMENT", q.get("comment"))]
+             adif_field("COMMENT", q.get("comment") or report_comment(q))]
     for k, v in (extra or {}).items():
         parts.append(adif_field(k, v))
     return " ".join(p for p in parts if p) + " <EOR>\n"

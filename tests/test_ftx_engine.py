@@ -192,3 +192,21 @@ def test_clock_info_reads_timedatectl_and_chrony(monkeypatch):
     assert got["ok"] is False and got["offset_ms"] == pytest.approx(-250.0) and got["source"] == "chrony"
     outputs.clear()                                                         # a machine with neither: nothing is claimed
     assert ftx_engine.clock_info() == {"ok": None, "offset_ms": None, "source": ""}
+
+
+def test_every_logged_contact_carries_the_reports_in_its_comment(tmp_path):
+    """The comment QRZ and the logging programs show: the mode and the reports as exchanged, e.g. "FT8 Sent: +06 Rcvd: +01"."""
+    lg = qsolog.QsoLog(tmp_path / "log.jsonl")
+    base = {"freq_mhz": 14.0745, "qso_date": "20261017", "time_on": "101500", "qso_date_off": "20261017", "time_off": "101600"}
+    lg.add({**base, "call": "K1ABC", "mode": "FT8", "rst_sent": "+06", "rst_rcvd": "+01"})
+    lg.add({**base, "call": "W1AW", "mode": "FT4", "rst_sent": "-12", "rst_rcvd": "-05"})
+    lg.add({**base, "call": "DL1ABC", "mode": "FT8", "rst_sent": "-10"})                        # only one report known
+    lg.add({**base, "call": "EA4XYZ", "mode": "FT8"})                                           # none: no comment
+    lg.add({**base, "call": "JA1ABC", "mode": "FT8", "rst_sent": "-03", "rst_rcvd": "-04", "comment": "Hello"})        # a comment of its own wins
+    text = lg.adif("1.0")
+    assert "<COMMENT:23>FT8 Sent: +06 Rcvd: +01" in text
+    assert "<COMMENT:23>FT4 Sent: -12 Rcvd: -05" in text
+    assert "<COMMENT:13>FT8 Sent: -10 <" in text
+    assert "<COMMENT:5>Hello" in text
+    recs = text.split("<EOR>")
+    assert "COMMENT" not in recs[3]

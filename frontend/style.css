@@ -991,3 +991,5 @@ html[data-tablet] .ftx-row .c { display: inline; }
 }
 a.call { color: var(--cyan); font-weight: 700; text-decoration: none; border-bottom: 1px dotted var(--cyan); }
 a.call:hover { color: #fff; border-bottom-style: solid; }
+.ftx-cmt { display: inline-flex; align-items: center; gap: 6px; color: var(--dim); font-size: .8rem; flex: 1 1 14em; min-width: 0; }
+.ftx-cmt input { flex: 1 1 8em; min-width: 0; min-height: 30px; padding: 2px 8px; }

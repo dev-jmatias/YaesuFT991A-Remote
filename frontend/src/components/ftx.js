@@ -69,6 +69,7 @@ export function createFtx(host, ctx) {
       <label>TX <input id="fx-txhz" inputmode="numeric" size="5" aria-label="Transmit audio frequency in Hz"> Hz</label>
       <span class="dim">tap a callsign to select it (again to call it), or the waterfall to move TX</span>
       <button type="button" id="fx-log">Log QSO</button><button type="button" id="fx-erase">Erase</button>
+      <label class="ftx-cmt" title="Your own comment for the next contact logged (sent to the log, QRZ and eQSL). Empty = the automatic one: mode, report sent and received, e.g. FT8 Sent: +06 Rcvd: +01.">Comment <input id="fx-comment" maxlength="80" size="26" placeholder="auto: FT8 Sent: +06 Rcvd: +01" autocomplete="off"></label>
       <label class="chk"><input type="checkbox" id="fx-hold"> Hold TX frequency</label>
     </div>
     <div class="ftx-bottom">
@@ -293,8 +294,10 @@ export function createFtx(host, ctx) {
     const t = new Date(nowS() * 1000), on = qso.tOn || t;
     const q = { call: qso.dx, gridsquare: qso.dxGrid || "", mode: info.mode, rst_sent: qso.rstSent || "", rst_rcvd: qso.rstRcvd || "", freq_mhz: (S.state.frequency || 0) / 1e6,
                 qso_date: utcDate(on), time_on: utcTime(on), qso_date_off: utcDate(t), time_off: utcTime(t) };
+    const cmt = $("fx-comment").value.trim();
+    if (cmt) q.comment = cmt;                               // a custom comment replaces the automatic one
     qso = { ...qso, logged: true };
-    try { await api("/api/ftx/log", "POST", { ...q, conn: S.conn }); addDirected(el(`<div class="ftx-row logged"><span class="t">✓ LOGGED ${esc(q.call)}  ${esc(q.mode)}</span></div>`)); }
+    try { await api("/api/ftx/log", "POST", { ...q, conn: S.conn }); addDirected(el(`<div class="ftx-row logged"><span class="t">✓ LOGGED ${esc(q.call)}  ${esc(q.mode)}</span></div>`)); $("fx-comment").value = ""; }
     catch (e) { toast("Could not log it: " + e.message); qso = { ...qso, logged: false }; }
     logging = false;
   }
@@ -476,7 +479,7 @@ export function createFtx(host, ctx) {
     paintTop();
   };
   $("fx-log").onclick = () => { if (!qso?.dx) return toast("Type the DX callsign first."); qso = { ...qso, logged: false }; logQso(); };
-  $("fx-erase").onclick = () => { qso = null; $("fx-dx").value = ""; paintTop(); };
+  $("fx-erase").onclick = () => { qso = null; $("fx-dx").value = ""; $("fx-comment").value = ""; paintTop(); };
   // Clear empties a list (and, for All decodes, stays empty after a reload: only decodes newer than the press come back). Reset is all of it at once plus a halt.
   const clearAll = () => { $("fx-all").replaceChildren(); seen.length = 0; pref.set("ftxClearedAt", nowS()); drawOverlay(); };
   const clearDir = () => $("fx-dir").replaceChildren();
@@ -484,14 +487,14 @@ export function createFtx(host, ctx) {
   $("fx-clr-all").onclick = clearAll;
   $("fx-clr-dir").onclick = clearDir;
   $("fx-reset").onclick = () => {
-    txEnabled = false; qso = null; $("fx-dx").value = "";
+    txEnabled = false; qso = null; $("fx-dx").value = ""; $("fx-comment").value = "";
     send("ftx_halt").catch(() => {});
     clearAll(); clearDir(); clearWf(); paintTop();
   };
   const dxCall = () => (document.activeElement === $("fx-dx") ? $("fx-dx").value : (qso?.dx || $("fx-dx").value)).trim();
   $("fx-qrz").onclick = () => { const u = qrzUrl(dxCall()); if (u) window.open(u, "_blank", "noopener,noreferrer"); else toast("Select a station first (tap it in All decodes), or type the DX callsign."); };
   $("fx-msgreset").onclick = () => {                       // back to the start: no DX station, no contact, nothing being repeated, the messages as they are before a station is chosen
-    qso = null; selected = null; $("fx-dx").value = "";
+    qso = null; selected = null; $("fx-dx").value = ""; $("fx-comment").value = "";
     for (const x of root.querySelectorAll(".ftx-row.sel")) x.classList.remove("sel");
     send("ftx_halt").catch(() => {});
     $("fx-msgs").dataset.sig = ""; paintMsgs(); paintTop();

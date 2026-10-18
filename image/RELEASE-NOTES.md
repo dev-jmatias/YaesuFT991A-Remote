@@ -42,6 +42,10 @@ and goes back by itself if the new version does not start. Settings and accounts
 | `radio-remote-rade-linux-aarch64.tar.xz` | the optional RADE library (FreeDV neural modes V1 and V2) for a Raspberry Pi, installed with `install_rade.sh` (the PC build is `…-x86_64.tar.xz`) |
 | `SHA256SUMS` | checksums of all of the above |
 
+### What is new in 1.1.43
+
+- **Comment on every logged FT8/FT4 contact.** The log, the ADIF file and the QRZ.com and eQSL uploads now carry a comment with the mode and the reports exchanged, for example `FT8 Sent: +06 Rcvd: +01` (`FT4 ...` for FT4). Contacts logged earlier get it too when they are exported or uploaded. A new **Comment** box next to *Erase* lets you type your own for the next contact; it replaces the automatic one and empties after the contact is logged.
+
 ### What is new in 1.1.42
 
 - **QRZ.com lookup.** On the **FreeDV** tab a callsign in the "On the air now" list (and "Last heard") is now a link that opens its QRZ.com page in a new tab. On the **FT8/FT4** tab the new **QRZ Lookup** button, next to *Reset QSO*, opens the page of the DX station (the one you selected by tapping a decode or a callsign on the waterfall, or typed). Nothing is sent to QRZ until you click. A portable or mobile suffix (`/P`, `/QRP`, `/M`) is dropped and for `EA8/DL1ABC` the real callsign is looked up.
