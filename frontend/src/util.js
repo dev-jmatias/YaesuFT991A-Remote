@@ -11,3 +11,11 @@ export const buzz = (ms = 4) => { try { navigator.vibrate?.(ms); } catch { /* un
 export function digitsOf(hz) {
   return String(Math.max(0, Math.round(hz))).padStart(9, "0").split("").map(Number);
 }
+
+// QRZ.com lookup of a callsign. A portable or mobile suffix (K1ABC/P, /QRP, /M...) is dropped, and for a prefix form (EA8/DL1ABC) the longer part, the real callsign, is looked up.
+const NOT_A_CALL = new Set(["P", "M", "MM", "AM", "QRP", "LH", "A", "B", "T", "R", "J", "AA", "AG", "AE", "KT"]);
+export function baseCall(call) {
+  const parts = String(call || "").trim().toUpperCase().replace(/[<>]/g, "").split("/").filter((p) => p && !NOT_A_CALL.has(p) && !/^\d$/.test(p));
+  return parts.sort((a, b) => b.length - a.length)[0] || "";
+}
+export const qrzUrl = (call) => { const c = baseCall(call); return /^[A-Z0-9]{3,10}$/.test(c) && /\d/.test(c) && /[A-Z]/.test(c) ? "https://www.qrz.com/db/" + c : ""; };       // a callsign has a digit and a letter

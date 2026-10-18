@@ -1,6 +1,6 @@
 import { api } from "../api.js";
 import { answer, fmtReport, onDecode, parseMessage, slots, utcDate, utcTime } from "../ftx-qso.js";
-import { el } from "../util.js";
+import { el, qrzUrl } from "../util.js";
 const pref = {                                            // remembered in this browser only
   get: (k, d) => { try { const v = localStorage.getItem("rr." + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
   set: (k, v) => { try { localStorage.setItem("rr." + k, JSON.stringify(v)); } catch { /* storage unavailable */ } },
@@ -60,7 +60,7 @@ export function createFtx(host, ctx) {
           <label class="ftx-par">TX <select id="fx-par" aria-label="Transmit in even or odd slots"><option value="0">even</option><option value="1">odd</option></select></label>
         </div>
         <div class="ftx-status dim" id="fx-txstat"></div>
-        <h3 class="blabel">QSO messages <span class="ftx-hb"><button type="button" class="ftx-clear" id="fx-msgreset" title="Forget the DX station and the contact in progress, stop repeating the message being sent and put the six messages back to the start">Reset QSO</button></span></h3>
+        <h3 class="blabel">QSO messages <span class="ftx-hb"><button type="button" class="ftx-clear" id="fx-msgreset" title="Forget the DX station and the contact in progress, stop repeating the message being sent and put the six messages back to the start">Reset QSO</button><button type="button" class="ftx-clear" id="fx-qrz" title="Look the DX station up on QRZ.com (opens a new tab)">QRZ Lookup</button></span></h3>
         <div class="ftx-msgs" id="fx-msgs"></div>
     </div>
     <div class="ftx-wfwrap"><canvas id="fx-wf" width="240" height="100" aria-label="Waterfall of the received audio, 0 to 3000 Hz"></canvas><canvas id="fx-ov" aria-hidden="true"></canvas></div>
@@ -74,7 +74,7 @@ export function createFtx(host, ctx) {
     <div class="ftx-bottom">
     <details class="fdv-edit ftx-logbox" id="fx-logbox"><summary id="fx-logsum">Log</summary>
       <div class="row"><a id="fx-adif" class="btn" href="/api/ftx/log.adi" download>Export ADIF</a>
-        <button type="button" data-up="qrz">Upload to QRZ</button><button type="button" data-up="eqsl">Upload to eQSL</button><button type="button" data-up="clublog">Upload to Club Log</button></div>
+        <button type="button" data-up="qrz">Upload to QRZ</button><button type="button" data-up="eqsl">Upload to eQSL</button></div>
       <div class="dim" id="fx-upmsg"></div>
       <div id="fx-logrows" class="ftx-log"></div>
     </details>
@@ -91,11 +91,9 @@ export function createFtx(host, ctx) {
         <div class="row ftx-acc">
           <label>QRZ API key <input id="fu-qrz" type="password" autocomplete="off"></label>
           <label>eQSL user <input id="fu-equser" autocomplete="off"></label><label>eQSL password <input id="fu-eqpw" type="password" autocomplete="off"></label>
-          <label>Club Log e-mail <input id="fu-cle" autocomplete="off"></label><label>Club Log password <input id="fu-clp" type="password" autocomplete="off"></label>
-          <label title="The application key Club Log issues to a program (see the FT8 guide).">Club Log API key <input id="fu-cla" type="password" autocomplete="off"></label>
         </div>
         <div class="row ftx-acc"><span class="dim">Upload as soon as a contact is logged:</span>
-          <span class="ftx-chks"><label class="chk"><input type="checkbox" id="fu-aqrz"> QRZ</label><label class="chk"><input type="checkbox" id="fu-aeq"> eQSL</label><label class="chk"><input type="checkbox" id="fu-acl"> Club Log</label></span>
+          <span class="ftx-chks"><label class="chk"><input type="checkbox" id="fu-aqrz"> QRZ</label><label class="chk"><input type="checkbox" id="fu-aeq"> eQSL</label></span>
           <button type="button" id="fu-save" class="active">Save accounts</button></div>
       </div>
     </details>
@@ -122,6 +120,7 @@ export function createFtx(host, ctx) {
     $("fx-enable").classList.toggle("active", txEnabled);
     $("fx-enable").textContent = txEnabled ? "TX enabled" : "Enable TX";
     $("fx-dx").value = document.activeElement === $("fx-dx") ? $("fx-dx").value : (qso?.dx || $("fx-dx").value);
+    $("fx-qrz").disabled = !qrzUrl(dxCall());
     const bands = info.bands[info.mode] || [];
     const sel = $("fx-band");
     if (sel.dataset.mode !== info.mode + bands.length) {
@@ -299,9 +298,9 @@ export function createFtx(host, ctx) {
     catch (e) { toast("Could not log it: " + e.message); qso = { ...qso, logged: false }; }
     logging = false;
   }
-  const chips = (q) => ["qrz", "eqsl", "clublog"].map((s) => {
+  const chips = (q) => ["qrz", "eqsl"].map((s) => {
     const u = q.uploaded?.[s];
-    return `<span class="chip ${u ? (u.ok ? "ok" : "bad") : ""}" title="${esc(u ? u.message : "not uploaded")}">${{ qrz: "QRZ", eqsl: "eQSL", clublog: "Club Log" }[s]}${u ? (u.ok ? " ✓" : " ✗") : ""}</span>`;
+    return `<span class="chip ${u ? (u.ok ? "ok" : "bad") : ""}" title="${esc(u ? u.message : "not uploaded")}">${{ qrz: "QRZ", eqsl: "eQSL" }[s]}${u ? (u.ok ? " ✓" : " ✗") : ""}</span>`;
   }).join("");
   function paintLog() {
     $("fx-logsum").textContent = `Log (${logRows.length} contact${logRows.length === 1 ? "" : "s"})`;
@@ -489,6 +488,8 @@ export function createFtx(host, ctx) {
     send("ftx_halt").catch(() => {});
     clearAll(); clearDir(); clearWf(); paintTop();
   };
+  const dxCall = () => (document.activeElement === $("fx-dx") ? $("fx-dx").value : (qso?.dx || $("fx-dx").value)).trim();
+  $("fx-qrz").onclick = () => { const u = qrzUrl(dxCall()); if (u) window.open(u, "_blank", "noopener,noreferrer"); else toast("Select a station first (tap it in All decodes), or type the DX callsign."); };
   $("fx-msgreset").onclick = () => {                       // back to the start: no DX station, no contact, nothing being repeated, the messages as they are before a station is chosen
     qso = null; selected = null; $("fx-dx").value = "";
     for (const x of root.querySelectorAll(".ftx-row.sel")) x.classList.remove("sel");
@@ -518,14 +519,14 @@ export function createFtx(host, ctx) {
     if (!admin) return;
     try {
       const u = (await api("/api/config")).config.upload;
-      $("fu-qrz").value = u.qrz_key; $("fu-equser").value = u.eqsl_user; $("fu-eqpw").value = u.eqsl_password; $("fu-cle").value = u.clublog_email; $("fu-clp").value = u.clublog_password; $("fu-cla").value = u.clublog_api;
-      $("fu-aqrz").checked = u.auto_qrz; $("fu-aeq").checked = u.auto_eqsl; $("fu-acl").checked = u.auto_clublog;
+      $("fu-qrz").value = u.qrz_key; $("fu-equser").value = u.eqsl_user; $("fu-eqpw").value = u.eqsl_password;
+      $("fu-aqrz").checked = u.auto_qrz; $("fu-aeq").checked = u.auto_eqsl;
     } catch { /* not shown */ }
   }
   $("fu-save").onclick = async () => {
     try {
-      await api("/api/config", "PUT", { upload: { qrz_key: $("fu-qrz").value.trim(), eqsl_user: $("fu-equser").value.trim(), eqsl_password: $("fu-eqpw").value, clublog_email: $("fu-cle").value.trim(),
-        clublog_password: $("fu-clp").value, clublog_api: $("fu-cla").value.trim(), auto_qrz: $("fu-aqrz").checked, auto_eqsl: $("fu-aeq").checked, auto_clublog: $("fu-acl").checked } });
+      await api("/api/config", "PUT", { upload: { qrz_key: $("fu-qrz").value.trim(), eqsl_user: $("fu-equser").value.trim(), eqsl_password: $("fu-eqpw").value,
+        auto_qrz: $("fu-aqrz").checked, auto_eqsl: $("fu-aeq").checked } });
       toast("Upload accounts saved."); loadUp();
     } catch (e) { toast(e.message); }
   };

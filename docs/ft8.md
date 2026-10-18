@@ -27,6 +27,7 @@ Every FT8/FT4 slot starts on the UTC second, so the clock is the most important 
 * **Country:** on tablets and large screens each decode also shows the country of the station that sent it, taken from the callsign with AD1C's country files (a few long names are shortened). It is a table of prefixes, so a special-event or unusual call can show the wrong or no country. Refresh the table with `python scripts/build_cty.py cty.dat` when a new country file is out ([country-files.com](https://www.country-files.com/)).
 * **Directed to me / worked:** the messages to you, what you transmit (red) and the contacts logged.
 * **Waterfall:** the received audio, 0 to 3000 Hz, with the callsigns of the last two slots marked. The orange bar is your transmit frequency: click the waterfall to move it, or type it in *TX ... Hz*.
+* **QRZ Lookup:** the button next to *Reset QSO* opens the QRZ.com page of the DX station (new tab; nothing is sent to QRZ before you click). On the FreeDV tab the callsigns in the station list work the same way.
 * **QSO messages:** the six standard messages for the current DX station, editable, each with a **Send** button.
 
 ## Calling and answering
@@ -54,7 +55,7 @@ Transmitting goes through the same protection as the PTT button: the transmit pe
 
 ## The log, ADIF and uploading
 
-Every logged contact is kept on the Pi (`ftx_log.jsonl` in the data folder). **Export ADIF** downloads all of it as a standard `.adi` file that any logging program imports (FT8 is its own ADIF mode; FT4 is the submode FT4 of MFSK). Under **Log** each contact shows what has been uploaded; **Upload to QRZ / eQSL / Club Log** sends everything not yet sent to that service, one contact at a time. Tick *Upload ... as soon as a contact is logged* to do it automatically. There is no LoTW upload (it needs your signing certificate: export the ADIF and sign it with TQSL).
+Every logged contact is kept on the Pi (`ftx_log.jsonl` in the data folder). **Export ADIF** downloads all of it as a standard `.adi` file that any logging program imports (FT8 is its own ADIF mode; FT4 is the submode FT4 of MFSK). Under **Log** each contact shows what has been uploaded; **Upload to QRZ / eQSL** sends everything not yet sent to that service, one contact at a time. Tick *Upload ... as soon as a contact is logged* to do it automatically. There is no LoTW upload (it needs your signing certificate: export the ADIF and sign it with TQSL).
 
 The accounts are entered under **FT settings** by an administrator and stay in the Pi's configuration file; they are never sent back to the page, and the settings backup never contains them.
 
@@ -62,7 +63,6 @@ The accounts are entered under **FT settings** by an administrator and stay in t
 |---|---|
 | QRZ.com | the logbook's **API key** (QRZ logbook settings); the logbook owner needs an XML (or higher) subscription |
 | eQSL | your eQSL user name and password |
-| Club Log | your e-mail and password (an *application password* if you use two-factor sign-in) **and the application API key** Club Log issues to a program. The key has to be requested from Club Log for this program; until one is entered the upload says so |
 
 These uploads were written from the services' published interfaces and tested only against stand-ins, not against the live services: the first real upload may need a small correction, so look at the message the page shows.
 

@@ -42,6 +42,11 @@ and goes back by itself if the new version does not start. Settings and accounts
 | `radio-remote-rade-linux-aarch64.tar.xz` | the optional RADE library (FreeDV neural modes V1 and V2) for a Raspberry Pi, installed with `install_rade.sh` (the PC build is `…-x86_64.tar.xz`) |
 | `SHA256SUMS` | checksums of all of the above |
 
+### What is new in 1.1.42
+
+- **QRZ.com lookup.** On the **FreeDV** tab a callsign in the "On the air now" list (and "Last heard") is now a link that opens its QRZ.com page in a new tab. On the **FT8/FT4** tab the new **QRZ Lookup** button, next to *Reset QSO*, opens the page of the DX station (the one you selected by tapping a decode or a callsign on the waterfall, or typed). Nothing is sent to QRZ until you click. A portable or mobile suffix (`/P`, `/QRP`, `/M`) is dropped and for `EA8/DL1ABC` the real callsign is looked up.
+- **Club Log removed from the FT8/FT4 upload accounts** (fields, automatic upload and the *Upload to Club Log* button): it needed an application key that was not available to this program. Uploads go to QRZ.com and eQSL; the ADIF export is unchanged.
+
 ### What is new in 1.1.41
 
 - **FT8/FT4 and FreeDV tabs retune the radio.** Opening the **FT8/FT4** tab puts the radio in data-USB on the last frequency you used for that mode (the first time, the current band if it is an FT8/FT4 band, otherwise 20 m) and switches decoding on; leaving it switches decoding off and puts back the mode and frequency the radio had. Switching between **FT8** and **FT4** moves to the same band on the other mode's frequency. Leaving the **FreeDV** tab, if FreeDV was used, switches FreeDV off and puts back the mode and frequency from before. This happens only in the page that has control of the radio (on a wide screen FreeDV is a card, not a tab, so nothing changes there).

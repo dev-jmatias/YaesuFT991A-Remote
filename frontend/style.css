@@ -989,3 +989,5 @@ html[data-tablet] .ftx-row .c { display: inline; }
   .ftx-row { padding-top: 6px; padding-bottom: 6px; border-bottom: 1px solid #0f1a30; }
   .ftx-sep { padding-top: 3px; padding-bottom: 3px; }
 }
+a.call { color: var(--cyan); font-weight: 700; text-decoration: none; border-bottom: 1px dotted var(--cyan); }
+a.call:hover { color: #fff; border-bottom-style: solid; }

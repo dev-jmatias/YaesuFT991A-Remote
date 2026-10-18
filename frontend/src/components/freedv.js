@@ -1,6 +1,6 @@
 import { api } from "../api.js";
 import { pct } from "../meter-cal.js";
-import { el } from "../util.js";
+import { el, qrzUrl } from "../util.js";
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 // FreeDV digital voice (RADE V1 and RADE V2, both from the optional RADE library). The Pi decodes the radio's modem tones into speech for every listener and encodes the operator's
@@ -218,6 +218,8 @@ export function createFreeDV(host, ctx) {
     await send("set_frequency", { hz: st.freq });
     await send("freedv", { on: true, mode: st.mode });
   };
+  // a callsign opens its QRZ.com page in a new tab (nothing is sent to QRZ until it is clicked)
+  const callLink = (call) => { const u = qrzUrl(call); return u ? `<a class="call" href="${u}" target="_blank" rel="noopener noreferrer" title="Look up ${esc(call)} on QRZ.com">${esc(call)}</a>` : `<b>${esc(call)}</b>`; };
   function paintReporter() {
     const box = $("fdv-rep-list"), line = $("fdv-rep-status");
     if (!rep) { line.textContent = "FreeDV Reporter: not available."; box.replaceChildren(); return; }
@@ -228,7 +230,7 @@ export function createFreeDV(host, ctx) {
       : rep.error ? `Cannot reach FreeDV Reporter: ${rep.error}` : "Connecting to FreeDV Reporter…";
     if (rep.needs_callsign) line.textContent += " To be listed yourself, set a callsign and grid square in the settings.";
     box.replaceChildren(...rep.stations.map((st) => {
-      const r = el(`<div class="fdv-rep-row${st.near ? " near" : ""}"><b>${esc(st.callsign)}</b> <span class="dim">${esc(st.grid)}</span>
+      const r = el(`<div class="fdv-rep-row${st.near ? " near" : ""}">${callLink(st.callsign)} <span class="dim">${esc(st.grid)}</span>
         <span class="fdv-rf">${(st.freq / 1e6).toFixed(4)} MHz</span> <span class="fdv-rm">${esc(modeName(st.mode))}</span>${st.tx ? `<span class="fdv-txb">TX</span>` : ""}${st.listening ? `<span class="dim"> (listening)</span>` : ""}
         ${st.message ? `<span class="dim fdv-rmsg">${esc(st.message)}</span>` : ""}</div>`);
       if (st.tunable) { const b = el(`<button type="button" class="fdv-tune-btn" title="Tune to this station: ${esc(st.callsign)} on ${(st.freq / 1e6).toFixed(4)} MHz, ${esc(modeName(st.mode))}">Tune</button>`); b.onclick = () => tuneTo(st); r.append(b); }
@@ -326,7 +328,7 @@ export function createFreeDV(host, ctx) {
     $("fdv-dot").className = "dot " + (!onNow ? "" : locked ? "ok" : "warn");
     const heard = onNow && s.freedv_heard ? s.freedv_heard : "";                  // the callsign in the end-of-over frame of the last over (RADE V1)
     $("fdv-heard").hidden = !heard;
-    if (heard) $("fdv-heard").textContent = `Last heard: ${heard}` + (s.freedv_heard_at ? ` (${new Date(s.freedv_heard_at * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })})` : "");
+    if (heard) $("fdv-heard").innerHTML = `Last heard: ${callLink(heard)}` + (s.freedv_heard_at ? ` (${new Date(s.freedv_heard_at * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })})` : "");
     const au = ctx.audio?.(), streaming = !!au && (au.hear || au.mic);          // the Pi only decodes while someone is listening
     $("fdv-text").textContent = !onNow ? "FreeDV is off"
       : !streaming ? `FreeDV ${modeName(s.freedv_mode)} is on. Tap the speaker icon (Listen) to hear and decode.`
