@@ -58,6 +58,23 @@ export function createSquelch(host, ctx) {
     },
   };
 }
+// The radio's TX power on its own, for the digital screens (FT8/FT4, SSTV), which hide the Levels pane: same slider, same command.
+export function createTxPower(host, ctx) {
+  const r = ctx.S.caps.levels?.rf_power;
+  if (!r) return { update() {} };
+  const w = el(`<span class="txpwr" title="The radio's transmit power. The radio keeps it for each band."><span class="alabel">${r.label}</span><input type="range" min="${r.min}" max="${r.max}" aria-label="${r.label}"><b data-v></b></span>`);
+  const inp = w.querySelector("input"), v = w.querySelector("[data-v]");
+  inp.oninput = () => (v.textContent = inp.value + " W");
+  inp.onchange = () => { ctx.send("set_level", { name: "rf_power", value: +inp.value }); };
+  host.append(w);
+  return {
+    update() {
+      const val = ctx.S.state.rf_power;
+      inp.disabled = ctx.S.user.role === "viewer";
+      if (val !== undefined && document.activeElement !== inp) { inp.value = val; v.textContent = val + " W"; }
+    },
+  };
+}
 // Main level sliders (RF / MIC / TX power ...): one row each, label | slider | value, aligned in a column.
 export function createLevels(host, ctx) {
   // AF gain is the radio's own speaker volume: irrelevant when listening through the browser, so it is not offered here,

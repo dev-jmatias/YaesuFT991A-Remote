@@ -1,3 +1,4 @@
+import { createTxPower } from "./controls.js";
 import { api } from "../api.js";
 import { answer, fmtReport, onDecode, parseMessage, slots, utcDate, utcTime } from "../ftx-qso.js";
 import { el, qrzUrl } from "../util.js";
@@ -57,6 +58,7 @@ export function createFtx(host, ctx) {
           <button type="button" id="fx-answer" class="active" title="Answer the decode you tapped (the same as tapping it twice)">Answer</button>
           <button type="button" id="fx-cq" class="active">Call CQ</button>
           <button type="button" id="fx-reset" title="Stop transmitting, forget the contact in progress and empty both lists and the waterfall">Reset all</button>
+          <span id="fx-pwr"></span>
           <label class="ftx-par">TX <select id="fx-par" aria-label="Transmit in even or odd slots"><option value="0">even</option><option value="1">odd</option></select></label>
         </div>
         <div class="ftx-status dim" id="fx-txstat"></div>
@@ -110,8 +112,11 @@ export function createFtx(host, ctx) {
   const can = () => !viewer && S.lease.holder?.conn === S.conn;
 
   // ------------------------------------------------------------------ top bar
+  let pwr = null;
   function paintTop() {
     const s = S.state;
+    pwr = pwr || createTxPower($("fx-pwr"), ctx);
+    pwr.update();
     $("fx-freq").textContent = fmtDial(s.frequency);
     $("fx-rmode").textContent = s.mode || "";
     for (const b of root.querySelectorAll("[data-fm]")) b.classList.toggle("active", b.dataset.fm === info.mode);

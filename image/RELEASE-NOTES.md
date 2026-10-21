@@ -42,6 +42,10 @@ and goes back by itself if the new version does not start. Settings and accounts
 | `radio-remote-rade-linux-aarch64.tar.xz` | the optional RADE library (FreeDV neural modes V1 and V2) for a Raspberry Pi, installed with `install_rade.sh` (the PC build is `…-x86_64.tar.xz`) |
 | `SHA256SUMS` | checksums of all of the above |
 
+### What is new in 1.1.47
+
+- **TX power on the FT8/FT4 and SSTV screens.** Those screens hide the Levels panel, so the radio's transmit power could not be set while on them. A **TX Power** slider is now on both (the radio keeps its power for each band).
+
 ### What is new in 1.1.46
 
 - **Free tuning on the SSTV screen** (for the ISS SSTV events and any other frequency): a **Frequency** box (MHz, kHz or Hz), **-** and **+** buttons with a step from 100 Hz to 10 kHz (taps in a row add up, so a Doppler shift can be followed by tapping), a **Mode** list (USB, LSB, FM, FM-N, AM and the data modes) and a **Squelch** slider in the FM modes. A new **70cm ISS 437.550 FM** preset joins the list. The screen remembers the frequency, mode and step of your last visit (also when you tuned with the radio's own knob) and returns to them; leaving it still puts the radio back as it was. SSTV is received in any mode, not only a data mode. The guide has a section for the ISS passes (start about 437.560, end about 437.540, FM mode, squelch open, step 2.5 or 5 kHz).

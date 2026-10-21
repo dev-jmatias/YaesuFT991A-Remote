@@ -1042,3 +1042,8 @@ html[data-tabbed] .ftxgo { display: none !important; }
 .sstv-sql { display: inline-flex; min-width: 0; } .sstv-sql .arow { margin: 0; }
 @media (max-width: 480px) { .sstv-tune { gap: 6px 8px; } .sstv-setf input { width: 6.5em; } }
 .sstv-sql .arow { grid-template-columns: auto 120px 3.2em; gap: 8px; min-height: 0; padding: 0; border: 0; }
+
+/* the radio's TX power on the FT8/FT4 and SSTV screens */
+.txpwr { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+.txpwr input[type=range] { width: 120px; min-height: 26px; }
+.txpwr b { min-width: 3.2em; font-weight: 600; }

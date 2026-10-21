@@ -1,7 +1,7 @@
 import { api, apiRaw } from "../api.js";
 import { el, pref } from "../util.js";
 import { soundGuard } from "./digital-sound.js";
-import { createSquelch } from "./controls.js";
+import { createSquelch, createTxPower } from "./controls.js";
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 // SSTV screen (see docs/sstv.md). The Pi decodes the radio's audio into pictures and sends them to the page line by line; a picture the operator prepares here (chosen file, the mode's
@@ -27,7 +27,7 @@ export function createSstv(host, ctx) {
       <form class="sstv-setf" id="sv-setf"><label>Frequency <input id="sv-fin" inputmode="decimal" placeholder="437.550" autocomplete="off" aria-label="Frequency in MHz (437.550), kHz (437550) or Hz"></label><button type="button" id="sv-set">Set</button></form>
       <span class="sstv-step"><button type="button" id="sv-dn" title="Tune down by one step" aria-label="Tune down">&minus;</button><select id="sv-step" aria-label="Tuning step"></select><button type="button" id="sv-up" title="Tune up by one step" aria-label="Tune up">+</button></span>
       <label>Mode <select id="sv-mode-r" aria-label="The radio's mode"></select></label>
-      <span class="sstv-sql" id="sv-sql"></span>
+      <span class="sstv-sql" id="sv-sql"></span><span id="sv-pwr"></span>
     </div>
     <p class="ftx-notice" id="sv-notice" hidden></p>
     <div class="sstv-main">
@@ -75,6 +75,7 @@ export function createSstv(host, ctx) {
   const mode = () => info.modes.find((m) => m.key === $("sv-mode").value) || info.modes[0] || { key: "robot36", name: "Robot 36", w: 320, h: 240, seconds: 36 };
   const radioMode = (k) => { const m = S.caps?.modes || []; const d = { USB: "DATA-U", LSB: "DATA-L" }[k]; return d && m.includes(d) ? d : k; };      // a data mode skips the radio's microphone processing
   const sound = soundGuard(ctx, "sstvSound", $("sv-snd"));
+  const pwr = createTxPower($("sv-pwr"), ctx);
   const sql = createSquelch($("sv-sql"), ctx);                                       // the radio's squelch: it must be open (0) for FM or the audio is muted between the signals
   const MODES = ["USB", "LSB", "FM", "FM-N", "AM", "AM-N", "DATA-U", "DATA-L", "DATA-FM"].filter((m) => (S.caps?.modes || []).includes(m));
   $("sv-mode-r").innerHTML = `<option value="">-</option>` + MODES.map((m) => `<option value="${m}">${m}</option>`).join("");
@@ -103,7 +104,7 @@ export function createSstv(host, ctx) {
       const last = pref.get("sstvLast", null);
       if (!last || last.hz !== s.frequency || last.mode !== s.mode) pref.set("sstvLast", { hz: s.frequency, mode: s.mode });
     }
-    sql.update();
+    sql.update(); pwr.update();
     $("sv-onoff").textContent = info.on ? "RX on" : "RX off";
     $("sv-onoff").classList.toggle("active", !!info.on);
     for (const b of root.querySelectorAll("#sv-onoff, #sv-band, #sv-send, #sv-halt")) b.disabled = viewer || !can();
