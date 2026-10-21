@@ -10,9 +10,10 @@ import { createRecBar } from "../components/recordings.js";
 import { createPtt } from "../components/ptt.js";
 import { createFreeDV } from "../components/freedv.js";
 import { createFtx } from "../components/ftx.js";
+import { createSstv } from "../components/sstv.js";
 import { createMemoryButtons } from "../components/memories.js";
 import { createTuner } from "../tuner.js";
-import { el, fmtStep } from "../util.js";
+import { el, fmtStep, pref } from "../util.js";
 import { openSheet } from "./admin.js";
 
 // top-bar icons (phones show these instead of the words)
@@ -27,7 +28,9 @@ const TI = {
   out: svg(`<path d="M9 4H5v16h4M16 8l4 4-4 4M20 12H9"/>`),
 };
 
-const TABS =[["radio", "Radio"], ["filters", "Filters"], ["levels", "Levels"], ["audio", "Audio"]];
+// Four tabs on phones and tablets: Levels and Audio share one, and FreeDV, FT8/FT4 and SSTV share the Digital tab (a switch at its top chooses the screen).
+const TABS = [["radio", "Radio"], ["filters", "Filters"], ["audio", "Audio & Levels"]];
+const DIGITAL = { freedv: ["FreeDV", "freedvActive"], ftx: ["FT8/FT4", "ftxActive"], sstv: ["SSTV", "sstvActive"] };      // screen -> label, and the hook of its component that retunes the radio on entering / leaving
 
 export function renderRadio(root, { onLogout, onAuthLost }) {
   const S = { state: {}, caps: null, user: null, safety: {}, ui: { steps: [100, 1000, 10000] }, audio: null, conn: "",
@@ -35,7 +38,7 @@ export function renderRadio(root, { onLogout, onAuthLost }) {
   // pttLock: "lock PTT" switch (this device only, remembered): blocks the PTT button and TUNE so a stray touch cannot transmit
   let savedLock = false;
   try { savedLock = localStorage.getItem("rr.pttLock") === "1"; } catch { /* storage blocked: unlocked */ }
-  const ui = { step: 1000, tab: "radio", coarse: false, pttLock: savedLock };
+  const ui = { step: 1000, tab: "radio", dig: "", coarse: false, pttLock: savedLock };
   let parts = [], audio = null, abort = null, wake = null;
   const view = el(`<div class="app" data-tab="radio">
       <header class="topbar">
@@ -50,7 +53,7 @@ export function renderRadio(root, { onLogout, onAuthLost }) {
           <button id="logout" title="Sign out" aria-label="Sign out">${TI.out}<span class="tl">Sign out</span></button>
         </span>
       </header>
-      <div class="radiobar"><span class="rtab"><i class="dot" id="dot" role="img" aria-label="connecting"></i><span id="model"></span></span><button id="ftxgo" class="ftxgo" hidden title="The FT8 / FT4 screen">FT8/FT4</button><div id="ctlbar" class="ctlbar"></div></div>
+      <div class="radiobar"><span class="rtab"><i class="dot" id="dot" role="img" aria-label="connecting"></i><span id="model"></span></span><span class="digbar" id="digbar" role="group" aria-label="Digital screen" hidden></span><button id="ftxgo" class="ftxgo" hidden title="The FT8 / FT4 screen">FT8/FT4</button><button id="sstvgo" class="ftxgo" hidden title="The SSTV screen">SSTV</button><div id="ctlbar" class="ctlbar"></div></div>
       <div id="mock" class="mockbanner" hidden>SIMULATED RADIO - nothing is connected or transmitting.</div>
       <div id="exp" class="mockbanner" hidden></div>
       <div id="offline" class="offline" hidden><span>Radio offline - waiting for it to come back. Controls are paused.</span><button class="active" id="poweron" hidden title="Wake the radio from standby (PS1). It needs a few seconds to start.">Power on radio</button></div>
@@ -84,6 +87,14 @@ export function renderRadio(root, { onLogout, onAuthLost }) {
       repaint();
     },
     audio: () => audio,
+    // After a screen put the radio back (mode / frequency), wait until the radio reports it, so the next screen remembers the right "before" (the state reaches the page a moment after the reply)
+    settle: async (t) => {
+      const end = performance.now() + 1500;
+      while (performance.now() < end) {
+        if ((!t.mode || S.state.mode === t.mode) && (!t.hz || S.state.frequency === t.hz)) return;
+        await new Promise((r) => setTimeout(r, 40));
+      }
+    },
   };
 
   let lastBand = null, stepBeforeAir = null;
@@ -299,42 +310,53 @@ export function renderRadio(root, { onLogout, onAuthLost }) {
     parts.push({ update: () => audio.update(S.state) });
     parts.push(createEqualizer(ap, ctx));                              // the 8-band equalizers, under the audio controls
 
-    // FreeDV (when the RADE library is installed, or can be installed from the tab's button; see docs/freedv.md): a tab beside Audio on phones and tablets, a card under the Levels/Audio row on wide screens
+    // The digital screens: FreeDV (when the RADE library is installed, or can be installed from its button; docs/freedv.md), FT8/FT4 (docs/ft8.md) and SSTV (docs/sstv.md). On phones and
+    // tablets they share the Digital tab; on a wide desktop layout FreeDV is a card of the radio page and FT8/FT4 and SSTV have a button in the bar above.
     const fdOk = !!(S.audio?.freedv?.show ?? S.audio?.freedv?.available);
+    const fxOk = !!S.audio?.ftx?.available;
+    const svOk = !!S.audio?.sstv?.available;
+    const screens = [fdOk && "freedv", fxOk && "ftx", svOk && "sstv"].filter(Boolean);
     const tabs = [...TABS];
     $("layout").classList.toggle("has-fd", fdOk);
-    if (fdOk) {
-      parts.push(createFreeDV(pane("freedv", ""), ctx));
-      tabs.splice(tabs.findIndex(([k]) => k === "audio") + 1, 0, ["freedv", "FreeDV"]);
-    }
-    // FT8 / FT4 (the FT8/FT4 tab, see docs/ft8.md): its own screen. A tab on phones and tablets; on a wide screen the FT8/FT4 button in the bar above switches to it and back
-    const fxOk = !!S.audio?.ftx?.available;
-    if (fxOk) {
-      parts.push(createFtx(pane("ftx", ""), ctx));
-      tabs.splice(tabs.findIndex(([k]) => k === "freedv") + 1 || tabs.length, 0, ["ftx", "FT8/FT4"]);
-    }
+    if (fdOk) parts.push(createFreeDV(pane("freedv", ""), ctx));
+    if (fxOk) parts.push(createFtx(pane("ftx", ""), ctx));
+    if (svOk) parts.push(createSstv(pane("sstv", ""), ctx));
+    const sw = screens.length ? pane("digsw", "", "digsw") : null;
+    if (screens.length) tabs.push(["digital", "Digital"]);
+    if (!screens.includes(ui.dig)) ui.dig = screens.includes(pref.get("digital", "")) ? pref.get("digital", "") : screens[0] || "";
     if (!tabs.some(([k]) => k === ui.tab)) ui.tab = "radio";
 
-    // Phone tab bar
+    // Tab bar. A screen is a tab, or (Digital) one of the digital screens; entering and leaving a digital screen retunes the radio: the old screen puts things back before the new one takes over.
     const nav = view.querySelector(".tabs");
-    const setTab = (k) => {
-      if (k !== ui.tab) {                                  // entering / leaving FreeDV or FT8/FT4 retunes the radio: the old screen puts things back before the new one takes over
-        const hook = { freedv: "freedvActive", ftx: "ftxActive" }, from = ui.tab;
-        ui.hooks = (ui.hooks || Promise.resolve()).then(async () => { await ctx[hook[from]]?.(false); await ctx[hook[k]]?.(true); });
+    const screenOf = (tab, dig) => (tab === "digital" ? dig : tab);
+    const go = (tab, dig = ui.dig) => {
+      const from = screenOf(ui.tab, ui.dig), to = screenOf(tab, dig);
+      if (from !== to) ui.hooks = (ui.hooks || Promise.resolve()).then(async () => { await ctx[DIGITAL[from]?.[1]]?.(false); await ctx[DIGITAL[to]?.[1]]?.(true); });
+      ui.tab = tab; ui.dig = dig;
+      if (dig) pref.set("digital", dig);
+      view.dataset.tab = tab; view.dataset.dig = dig;
+      nav.querySelectorAll("button").forEach((x) => x.classList.toggle("active", x.dataset.t === tab));
+      view.querySelectorAll(".digsw button, .digbar button").forEach((x) => x.classList.toggle("active", x.dataset.d === dig));
+      for (const [id, key] of [["ftxgo", "ftx"], ["sstvgo", "sstv"]]) {                 // the desktop layout's buttons
+        const b = $(id), on = tab === "digital" && dig === key;
+        b.textContent = on ? "Back to radio" : DIGITAL[key][0]; b.classList.toggle("active", on);
       }
-      ui.tab = k; view.dataset.tab = k;
-      nav.querySelectorAll("button").forEach((x) => x.classList.toggle("active", x.dataset.t === k));
-      const go = $("ftxgo"); go.textContent = k === "ftx" ? "Back to radio" : "FT8/FT4"; go.classList.toggle("active", k === "ftx");
     };
     nav.replaceChildren(...tabs.map(([k, label]) => {
       const b = el(`<button data-t="${k}">${label}</button>`);
-      b.onclick = () => setTab(k);
-      b.classList.toggle("active", k === ui.tab);
+      b.onclick = () => go(k);
       return b;
     }));
-    $("ftxgo").hidden = !fxOk;
-    $("ftxgo").onclick = () => setTab(ui.tab === "ftx" ? "radio" : "ftx");
-    setTab(ui.tab);
+    // the same switch twice: a thin row at the top of the Digital tab on phones, and in the radio bar (beside the radio's name) on tablets and computers; the stylesheet shows the right one
+    const swButtons = () => screens.map((k) => { const b = el(`<button type="button" class="led" data-d="${k}">${DIGITAL[k][0]}</button>`); b.onclick = () => go("digital", k); return b; });
+    sw?.append(...swButtons());
+    $("digbar").replaceChildren(...swButtons());
+    $("digbar").hidden = !screens.length;
+    for (const [id, key, ok] of [["ftxgo", "ftx", fxOk], ["sstvgo", "sstv", svOk]]) {
+      $(id).hidden = !ok;
+      $(id).onclick = () => { if (ui.tab === "digital" && ui.dig === key) go("radio"); else go("digital", key); };
+    }
+    go(ui.tab, ui.dig);
 
     $("adm").hidden = S.user.role !== "admin";
     $("adm").onclick = () => openSheet(root, { user: S.user, tab: "users", sock });
@@ -398,6 +420,8 @@ export function renderRadio(root, { onLogout, onAuthLost }) {
         build();
       } else if (m.t === "ftx") {
         ctx.ftxEvent?.(m);
+      } else if (m.t === "sstv") {
+        ctx.sstvEvent?.(m);
       } else if (m.t === "patch" || m.t === "meters") {
         Object.assign(S.state, m.d);
         repaint();

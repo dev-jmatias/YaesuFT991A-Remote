@@ -68,10 +68,6 @@ button.icon { width: 34px; padding: 0; } button.icon.wide { width: auto; padding
 .layout { display: grid; gap: var(--gap); grid-template-columns: minmax(0, 1fr); padding-bottom: 66px; }
 .tabs { position: fixed; left: 0; right: 0; bottom: 0; display: flex; gap: 6px; padding: 6px max(10px, env(safe-area-inset-left)) max(6px, env(safe-area-inset-bottom)); background: rgba(7,11,20,.95); backdrop-filter: blur(8px); border-top: 1px solid var(--line); z-index: 5; }
 .tabs button { flex: 1; min-height: 38px; }
-.app[data-tab=radio] [data-pane=filters], .app[data-tab=radio] [data-pane=audio], .app[data-tab=radio] [data-pane=levels],
-.app[data-tab=filters] [data-pane=vfo], .app[data-tab=filters] [data-pane=levels], .app[data-tab=filters] [data-pane=audio],
-.app[data-tab=audio] [data-pane=vfo], .app[data-tab=audio] [data-pane=levels], .app[data-tab=audio] [data-pane=filters],
-.app[data-tab=levels] [data-pane=vfo], .app[data-tab=levels] [data-pane=filters], .app[data-tab=levels] [data-pane=audio] { display: none; }
 [data-pane=vfo] { order: -1; }
 [data-pane=ptt] { position: sticky; bottom: 56px; z-index: 4; background: var(--bg); border: 0; border-top: 1px solid var(--line); padding: 8px 0 6px; margin: 0 -2px; }
 [data-pane=ptt] .ptt { min-height: 66px; }
@@ -384,11 +380,6 @@ html[data-tablet] .tabs { display: flex; }
 html[data-tablet] .tabs button { min-height: 44px; font-size: 1rem; }
 html[data-tablet] .layout { padding-bottom: 76px; grid-template-columns: minmax(0, 1fr); grid-template-areas: none; }
 html[data-tablet] [data-pane] { grid-area: auto; order: 0; }
-html[data-tablet] .app [data-pane] { display: block !important; }
-html[data-tablet] .app[data-tab=radio] [data-pane=filters], html[data-tablet] .app[data-tab=radio] [data-pane=audio], html[data-tablet] .app[data-tab=radio] [data-pane=levels],
-html[data-tablet] .app[data-tab=filters] [data-pane=vfo], html[data-tablet] .app[data-tab=filters] [data-pane=levels], html[data-tablet] .app[data-tab=filters] [data-pane=audio],
-html[data-tablet] .app[data-tab=audio] [data-pane=vfo], html[data-tablet] .app[data-tab=audio] [data-pane=levels], html[data-tablet] .app[data-tab=audio] [data-pane=filters],
-html[data-tablet] .app[data-tab=levels] [data-pane=vfo], html[data-tablet] .app[data-tab=levels] [data-pane=filters], html[data-tablet] .app[data-tab=levels] [data-pane=audio] { display: none !important; }
 html[data-tablet] [data-pane=ptt] { position: sticky; bottom: 62px; z-index: 4; background: var(--bg); border: 0; border-top: 1px solid var(--line); border-radius: 0; box-shadow: none; padding: 8px 0 6px; }
 html[data-tablet] [data-pane=ptt] .ptt { min-height: 74px; }
 html[data-tablet] .toast { bottom: 84px; }
@@ -605,10 +596,6 @@ button.lockbtn.on { background: var(--yellow); color: #1a1100; border-color: tra
 .ptt.latched { outline: 3px dashed var(--yellow); outline-offset: 3px; }
 
 /* ---------- FreeDV: a pane like the others (tab beside Audio on phones/tablets, a full-width card on wide screens) ---------- */
-.app:not([data-tab=freedv]) [data-pane=freedv],
-.app[data-tab=freedv] [data-pane=vfo], .app[data-tab=freedv] [data-pane=levels], .app[data-tab=freedv] [data-pane=filters], .app[data-tab=freedv] [data-pane=audio] { display: none; }
-html[data-tablet] .app:not([data-tab=freedv]) [data-pane=freedv],
-html[data-tablet] .app[data-tab=freedv] [data-pane=vfo], html[data-tablet] .app[data-tab=freedv] [data-pane=levels], html[data-tablet] .app[data-tab=freedv] [data-pane=filters], html[data-tablet] .app[data-tab=freedv] [data-pane=audio] { display: none !important; }
 @media (min-width: 700px) {
   html:not([data-tablet]) .app [data-pane=freedv] { display: block !important; grid-area: freedv; }
   html:not([data-tablet]) .layout.has-fd { grid-template-areas: "vfo vfo" "filters filters" "levels audio" "freedv freedv" "ptt ptt"; }
@@ -849,13 +836,7 @@ html[data-tablet] .app[data-tab=freedv] [data-pane=vfo], html[data-tablet] .app[
 
 
 /* ---------- FT8 / FT4 screen ---------- */
-html .app:not([data-tab=ftx]) [data-pane=ftx] { display: none !important; }
-html .app[data-tab=ftx] [data-pane]:not([data-pane=ftx]) { display: none !important; }
-html .app[data-tab=ftx] [data-pane=ftx] { display: block !important; grid-column: 1 / -1; grid-area: auto; }
-html .app[data-tab=ftx] .layout { grid-template-areas: none; grid-template-columns: minmax(0, 1fr); }
 .ftxgo { min-height: 26px; padding: 2px 12px; font-size: .8rem; }
-@media (max-width: 699px) { .ftxgo { display: none !important; } }
-html[data-tablet] .ftxgo { display: none !important; }
 .ftx { display: grid; gap: 8px; }
 .ftx-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
 .ftx-freq { display: flex; align-items: baseline; gap: 6px; padding: 1px 9px; background: #060a14; border: 1px solid var(--cyan); border-radius: 8px; }
@@ -914,8 +895,8 @@ html[data-tablet] .ftxgo { display: none !important; }
 .ftx-lrow button { min-height: 24px; padding: 0 8px; margin-left: auto; }
 .ftx-lrow .chip { font-size: .7rem; padding: 0 6px; border: 1px solid var(--line2); border-radius: 999px; color: var(--dim); cursor: default; min-height: 0; }
 .ftx-lrow .chip.ok { color: var(--green); border-color: #1f5f4a; } .ftx-lrow .chip.bad { color: var(--red); border-color: #6b1a30; }
-a.btn { display: inline-flex; align-items: center; background: linear-gradient(180deg, #1a263d, #131d31); border: 1px solid var(--line2); border-radius: 6px; color: #dbe4f6; padding: 4px 12px; min-height: 34px; font-size: .88rem; text-decoration: none; }
-a.btn:hover { border-color: var(--cyan); }
+a.btn, label.btn { display: inline-flex; align-items: center; background: linear-gradient(180deg, #1a263d, #131d31); border: 1px solid var(--line2); border-radius: 6px; color: #dbe4f6; padding: 4px 12px; min-height: 34px; font-size: .88rem; text-decoration: none; }
+a.btn:hover, label.btn:hover { border-color: var(--cyan); }
 @media (max-width: 480px) {
   .tabs { gap: 3px; }
   .tabs button { padding: 4px 1px; font-size: clamp(.56rem, 2.95vw, .8rem); min-width: 0; white-space: nowrap; letter-spacing: -.01em; }       /* every label whole: the text shrinks with the screen */
@@ -993,3 +974,60 @@ a.call { color: var(--cyan); font-weight: 700; text-decoration: none; border-bot
 a.call:hover { color: #fff; border-bottom-style: solid; }
 .ftx-cmt { display: inline-flex; align-items: center; gap: 6px; color: var(--dim); font-size: .8rem; flex: 1 1 14em; min-width: 0; }
 .ftx-cmt input { flex: 1 1 8em; min-width: 0; min-height: 30px; padding: 2px 8px; }
+
+
+/* ---------- screens: Radio / Filters / Audio & Levels / Digital (FreeDV, FT8/FT4 and SSTV share the Digital tab) ---------- */
+/* what each tab shows on phones and tablets (the desktop layout shows the whole radio page) */
+html[data-tabbed] .app[data-tab=radio] [data-pane=filters], html[data-tabbed] .app[data-tab=radio] [data-pane=levels], html[data-tabbed] .app[data-tab=radio] [data-pane=audio],
+html[data-tabbed] .app[data-tab=filters] [data-pane=vfo], html[data-tabbed] .app[data-tab=filters] [data-pane=levels], html[data-tabbed] .app[data-tab=filters] [data-pane=audio],
+html[data-tabbed] .app[data-tab=audio] [data-pane=vfo], html[data-tabbed] .app[data-tab=audio] [data-pane=filters] { display: none !important; }
+/* the three digital screens and their switch only show on the Digital tab (FreeDV is also a card of the radio page on the desktop layout) */
+html .app [data-pane=digsw], html .app [data-pane=ftx], html .app [data-pane=sstv], html[data-tabbed] .app [data-pane=freedv] { display: none !important; }
+html .app[data-tab=digital] [data-pane=digsw] { display: flex !important; }
+html .app[data-tab=digital][data-dig=freedv] [data-pane=freedv], html .app[data-tab=digital][data-dig=ftx] [data-pane=ftx], html .app[data-tab=digital][data-dig=sstv] [data-pane=sstv] { display: block !important; grid-column: 1 / -1; grid-area: auto; }
+html .app[data-tab=digital] [data-pane=vfo], html .app[data-tab=digital] [data-pane=filters], html .app[data-tab=digital] [data-pane=levels], html .app[data-tab=digital] [data-pane=audio] { display: none !important; }
+html .app[data-tab=digital][data-dig=ftx] [data-pane=ptt], html .app[data-tab=digital][data-dig=sstv] [data-pane=ptt] { display: none !important; }        /* these two transmit from the Pi: no voice PTT button */
+html:not([data-tabbed]) .app[data-tab=digital]:not([data-dig=freedv]) [data-pane=freedv] { display: none !important; }
+html .app[data-tab=digital] .layout { grid-template-areas: none; grid-template-columns: minmax(0, 1fr); }
+html .app [data-pane=digsw] { order: -2; padding: 6px 8px; }
+.digsw { display: flex; gap: 5px; }
+.digsw button { flex: 1; min-height: 30px; padding: 2px 6px 2px 14px; font-size: .82rem; }
+html .app [data-pane=digsw] { padding: 4px 6px; }
+.digbar { display: none; }
+.digbar[hidden] { display: none !important; }
+.digbar button { min-height: 26px; padding: 2px 12px 2px 16px; font-size: .8rem; }
+/* tablets and computers (700 px and wider): the switch of the digital screens sits in the radio bar, beside the radio's name, and only while the Digital tab is open */
+@media (min-width: 700px) {
+  html .app[data-tab=digital] [data-pane=digsw] { display: none !important; }
+  html .app[data-tab=digital] .digbar:not([hidden]) { display: inline-flex; gap: 5px; align-items: center; margin-left: 10px; }
+}
+.ftxgo { min-height: 26px; padding: 2px 12px; font-size: .8rem; }
+html[data-tabbed] .ftxgo { display: none !important; }
+
+/* ---------- SSTV ---------- */
+.sstv { display: grid; gap: 8px; }
+.sstv-main { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+@media (min-width: 900px) { .sstv-main { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.sstv-col { min-width: 0; display: grid; gap: 6px; align-content: start; }
+.sstv-view { position: relative; background: #000018; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.sstv-view canvas { display: block; width: 100%; height: auto; image-rendering: auto; }
+.sstv:not(.sstv-has) #sv-rx { visibility: hidden; min-height: 180px; }
+.sstv-empty[hidden] { display: none; }
+.sstv-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; padding: 16px; color: var(--dim); font-size: .85rem; }
+.sstv-prog { display: grid; gap: 4px; font-size: .8rem; }
+.sstv-ctl { gap: 6px 10px; align-items: center; }
+.sstv-ctl label { display: inline-flex; align-items: center; gap: 4px; color: var(--dim); font-size: .8rem; }
+.sstv-ctl .btn { cursor: pointer; color: #dbe4f6; }
+.sstv-msg { flex: 1 1 14em; min-width: 0; } .sstv-msg input { flex: 1 1 8em; min-width: 0; min-height: 30px; padding: 2px 8px; }
+.sstv-ctl select { min-height: 30px; padding: 1px 6px; }
+.sstv-txbar { margin-top: 2px; } .sstv-txbar i { background: var(--red); }
+.sstv-view.tx canvas { background: #000; }
+.dim.bad { color: var(--yellow); }
+.sstv-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.sstv-th { margin: 0; display: grid; gap: 3px; font-size: .7rem; color: var(--dim); line-height: 1.25; }
+.sstv-open { padding: 0; border: 1px solid var(--line2); border-radius: 6px; overflow: hidden; background: #000; min-height: 0; line-height: 0; }
+.sstv-open img { width: 100%; height: auto; display: block; }
+.sstv-lb { position: fixed; inset: 0; z-index: 30; background: rgba(2,5,12,.88); display: flex; align-items: center; justify-content: center; padding: 12px; overflow: auto; }
+.sstv-lbc { max-width: min(96vw, 1000px); display: grid; gap: 8px; justify-items: center; }
+.sstv-lbc img { max-width: 100%; max-height: 74vh; height: auto; border: 1px solid var(--line2); border-radius: 6px; background: #000; }
+@media (max-width: 480px) { .sstv-gallery { grid-template-columns: repeat(2, minmax(0, 1fr)); } .sstv-ctl label { font-size: .75rem; } }

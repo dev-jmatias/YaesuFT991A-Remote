@@ -30,7 +30,7 @@ Many people can watch at once, but **only one controls the radio**. The top bar 
 
 ## 3. The screen
 
-Phones and tablets/computers share the same layout idea: a radio panel on top, four tabs at the bottom.
+Phones and tablets/computers share the same layout idea: a radio panel on top, four tabs at the bottom: **Radio**, **Filters**, **Audio & Levels** and **Digital** (FreeDV, FT8/FT4 and SSTV, chosen with a switch: a slim row at the top of the tab on a phone, and in the bar beside the radio's name on a tablet or computer).
 
 **Top bar:** *Full* (full screen), *Help* (this manual), *Admin* (administrators), *Account* (your password), *Sign out*, and for administrators
 *Power off*. **Radio bar:** a green dot = the radio answers, the radio name, and the control status. The **Help** button opens this manual
@@ -65,7 +65,7 @@ from the Pi itself (no internet needed).
 * **Band select** and **Set frequency** (type MHz, e.g. `14.195`, or Hz, e.g. `14195000`), **Mode** buttons.
 * **PTT** (hold to transmit), always at the bottom, with the round **Lock PTT** button beside it.
 
-### Filters, Levels, Audio tabs
+### Filters, Audio & Levels tabs
 
 * **Filters & DSP** is grouped in tabs: *Filter* (width, narrow, IF shift, contour), *Noise* (manual notch, auto notch, DNR, noise blanker),
   *Receiver* (IPO/preamp, attenuator, AGC, RIT/XIT with the clarifier offset bar), *Transmit* (processor, monitor, tuner).
@@ -80,7 +80,7 @@ PTT stays at the bottom on every tab so you can adjust a level while transmittin
 
 ## 4. Memory channels
 
-**Squelch (FT-991A, FTDX101D and MP):** a **Squelch** slider appears under the mode buttons in FM, AM and C4FM and on the AIR band (and is always in the Levels tab); on the FTDX101 there is one for MAIN and one for SUB. 0 is open (no squelch); raise it until the noise just closes. It is the radio's own squelch level (`SQ`), the same as its SQL knob. On the FTDX101 it is written from the manual and simulator-tested; the FT-991A one was tested on a real radio.
+**Squelch (FT-991A, FTDX101D and MP):** a **Squelch** slider appears under the mode buttons in FM, AM and C4FM and on the AIR band (and is always in the Audio & Levels tab); on the FTDX101 there is one for MAIN and one for SUB. 0 is open (no squelch); raise it until the noise just closes. It is the radio's own squelch level (`SQ`), the same as its SQL knob. On the FTDX101 it is written from the manual and simulator-tested; the FT-991A one was tested on a real radio.
 
 **AIR band (FT-991A):** the band buttons include **AIR** (the radio's AIR key, `BS14`): the radio goes to the airband in AM by itself and the page's tuning step switches to 25 kHz, the airband channel
 spacing, and goes back to the previous step when you leave the band.
@@ -206,8 +206,9 @@ A **Recorder** block under *Mode* on the Radio tab has four buttons of one size:
 ## 7. Remote access
 
 * At home: `https://<pi-name>.local`. Your device must trust the Pi's certificate once (see [security and remote access](06-security-remote.md)).
-* **FreeDV** digital voice (RADE V1 and RADE V2): the FreeDV tab (beside Audio) switches it on and off and has preset channels; the Pi does the encoding and decoding. See [FreeDV](freedv.md).
-* **FT8 and FT4**: the FT8/FT4 tab (beside FreeDV; on a wide screen the FT8/FT4 button under the title) decodes the band, calls and answers with the standard sequence, keeps an ADIF log and can upload it to QRZ, eQSL and Club Log. See [FT8 and FT4](ft8.md).
+* **FreeDV** digital voice (RADE V1 and RADE V2): the **Digital** tab, **FreeDV** switch, switches it on and off and has preset channels; the Pi does the encoding and decoding. See [FreeDV](freedv.md).
+* **FT8 and FT4**: the **Digital** tab, **FT8/FT4** switch (on the all-in-one desktop layout the FT8/FT4 button under the title) decodes the band, calls and answers with the standard sequence, keeps an ADIF log and can upload it to QRZ, eQSL and Club Log. See [FT8 and FT4](ft8.md).
+* **SSTV** (slow-scan television): the **Digital** tab, **SSTV** switch, receives pictures from the radio's audio line by line and transmits a picture of your own with your callsign printed on it. See [SSTV](sstv.md).
 * A logbook on another computer (Log4OM and others) can follow and tune the radio over the home network: [logbook link](logbook.md).
 * Away from home: **Tailscale** ([guide](tailscale.md)). No port is opened on your router.
 

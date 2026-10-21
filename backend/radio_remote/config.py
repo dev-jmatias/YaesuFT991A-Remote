@@ -69,6 +69,8 @@ DEFAULTS: dict[str, dict[str, Any]] = {
     # auto_* = upload a contact as soon as it is logged. clublog_api = the application key Club Log issues to a program.
     "upload": {"qrz_key": "", "eqsl_user": "", "eqsl_password": "", "clublog_email": "", "clublog_password": "", "clublog_api": "",
                "auto_qrz": False, "auto_eqsl": False, "auto_clublog": False},
+    # SSTV (the SSTV tab; see sstv_engine.py and audio/sstv.py). tx_level_db = level of the tones sent to the radio (keep the ALC at zero); keep = how many received pictures are kept on the Pi.
+    "sstv": {"tx_level_db": -6.0, "keep": 60},
     "storage": {"data_dir": "data"},
 }
 
@@ -175,6 +177,11 @@ def validate(cfg: dict) -> dict:
         raise ConfigError("ftx.tx_level_db must be -40..0")
     if not 1 <= fx["max_tx_repeats"] <= 30:
         raise ConfigError("ftx.max_tx_repeats must be 1..30")
+    sv = cfg["sstv"]
+    if not -40 <= sv["tx_level_db"] <= 0:
+        raise ConfigError("sstv.tx_level_db must be -40..0")
+    if not 5 <= sv["keep"] <= 500:
+        raise ConfigError("sstv.keep must be 5..500")
     up = cfg["upload"]
     for k, v in up.items():
         if isinstance(v, str) and (len(v) > 200 or any(ord(ch) < 32 for ch in v)):

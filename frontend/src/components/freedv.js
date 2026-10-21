@@ -354,6 +354,7 @@ export function createFreeDV(host, ctx) {
     try {
       if (a?.mode) await send("set_mode", { mode: a.mode });
       if (a?.hz) await send("set_frequency", { hz: a.hz });
+      if (a) await ctx.settle?.(a);
     } catch (e) { toast(e.message); }
   };
   signal?.addEventListener("abort", () => { ctx.freedvActive = null; });

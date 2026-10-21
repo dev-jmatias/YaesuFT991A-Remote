@@ -19,7 +19,7 @@ The older codec2 modes (1600, 700D, 700E) were removed from the program; a confi
 
 ## Using it
 
-1. Open the **FreeDV** tab (beside Audio; on wide screens it is the card under Levels and Audio). **Switch FreeDV on** starts it; if the radio is
+1. Open the **Digital** tab and choose **FreeDV** in its switch (on the all-in-one desktop layout it is the card under Levels and Audio). **Switch FreeDV on** starts it; if the radio is
    not in USB or LSB it puts it in USB (LSB below 10 MHz), which is the FreeDV convention. The same button switches it off.
 2. The tab shows the status (whether the modem is locked on a signal and its signal-to-noise ratio) and has the **preset channels**: one tap sets
    LSB or USB, the frequency and the FreeDV mode, and switches FreeDV on.

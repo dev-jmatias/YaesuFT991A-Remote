@@ -458,6 +458,7 @@ export function createFtx(host, ctx) {
           const a = away; away = null;
           if (a.mode) await send("set_mode", { mode: a.mode });
           if (a.hz) await send("set_frequency", { hz: a.hz });
+          await ctx.settle?.(a);
         }
       }
     } catch (e) { toast(e.message); }

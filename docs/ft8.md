@@ -1,6 +1,6 @@
 # FT8 and FT4
 
-The **FT8/FT4** tab (beside FreeDV on a phone or tablet; the **FT8/FT4** button in the bar under the title on a wide screen) lets you listen to, call and work FT8 and FT4 stations from the browser. The Pi decodes the radio's audio in the UTC time slots (15 s for FT8, 7.5 s for FT4) and makes the transmit tones; the page shows the stations, follows the standard QSO sequence, keeps a log and can upload it.
+The **FT8/FT4** screen (the **Digital** tab, then **FT8/FT4** in its switch; on the all-in-one desktop layout the **FT8/FT4** button in the bar under the title) lets you listen to, call and work FT8 and FT4 stations from the browser. The Pi decodes the radio's audio in the UTC time slots (15 s for FT8, 7.5 s for FT4) and makes the transmit tones; the page shows the stations, follows the standard QSO sequence, keeps a log and can upload it.
 
 The codec is [ft8_lib](https://github.com/kgoba/ft8_lib) (MIT licence). FT2 is not supported.
 

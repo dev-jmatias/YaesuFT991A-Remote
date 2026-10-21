@@ -19,3 +19,9 @@ export function baseCall(call) {
   return parts.sort((a, b) => b.length - a.length)[0] || "";
 }
 export const qrzUrl = (call) => { const c = baseCall(call); return /^[A-Z0-9]{3,10}$/.test(c) && /\d/.test(c) && /[A-Z]/.test(c) ? "https://www.qrz.com/db/" + c : ""; };       // a callsign has a digit and a letter
+
+// remembered in this browser only (keys are prefixed "rr.")
+export const pref = {
+  get: (k, d) => { try { const v = localStorage.getItem("rr." + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
+  set: (k, v) => { try { localStorage.setItem("rr." + k, JSON.stringify(v)); } catch { /* storage unavailable */ } },
+};

@@ -13,7 +13,7 @@ from aiohttp import web
 
 from . import __version__, config, sysinfo
 from .common import (COOKIE, K_AUDIO, K_AUTH, K_CFG, K_CFGPATH, K_DRIVER, K_GUARD, K_HUB, K_RESTART, K_SESSION,
-                     K_REPORTER, K_FTX, K_RIGCTL, K_STARTED, K_UPDATES, client_ip, read_json, require_admin)
+                     K_REPORTER, K_FTX, K_SSTV, K_RIGCTL, K_STARTED, K_UPDATES, client_ip, read_json, require_admin)
 from .logs import RING, scrub
 
 log = logging.getLogger("admin")
@@ -32,13 +32,14 @@ EDITABLE = {
     "freedv": {"mode", "tx_level_db", "channels", "data_mode", "auto_width", "callsign"},
     "reporter": {"enabled", "announce", "watch", "callsign", "grid_square", "message"},
     "ftx": {"mode", "callsign", "grid_square", "tx_freq_hz", "tx_level_db", "max_tx_repeats", "cq_only", "clock_check"},
+    "sstv": {"tx_level_db", "keep"},
     "upload": {"qrz_key", "eqsl_user", "eqsl_password", "clublog_email", "clublog_password", "clublog_api", "auto_qrz", "auto_eqsl", "auto_clublog"},
 }
 SECRET_KEYS = {("upload", "qrz_key"), ("upload", "eqsl_password"), ("upload", "clublog_password"), ("upload", "clublog_api")}
 MASK = "********"
 LOCKED = ["safety.allow_ptt", "server.host", "server.port", "server.allowed_origins", "storage.data_dir", "updates.repo"]
 LIVE = {("logging", "level"), ("audio", "rx_gain_db"), ("audio", "tx_gain_db"), ("updates", "check"), ("rigctl", "enabled"), ("rigctl", "port"), ("rigctl", "allow"), ("rigctl", "set"), ("freedv", "mode"), ("freedv", "tx_level_db"), ("freedv", "auto_width"), ("freedv", "channels"), ("freedv", "data_mode"), ("reporter", "enabled"), ("reporter", "announce"), ("reporter", "watch"), ("reporter", "callsign"),
-        ("reporter", "grid_square"), ("reporter", "message")} | {("ftx", k) for k in EDITABLE["ftx"]} | {("upload", k) for k in EDITABLE["upload"]}
+        ("reporter", "grid_square"), ("reporter", "message")} | {("ftx", k) for k in EDITABLE["ftx"]} | {("upload", k) for k in EDITABLE["upload"]} | {("sstv", k) for k in EDITABLE["sstv"]}
 
 
 async def _run(fn, *a):
@@ -289,6 +290,8 @@ async def put_config(request):
         app[K_AUDIO].set_freedv_params(new["freedv"]["mode"], new["freedv"]["tx_level_db"], config.freedv_callsign(new))
     if "ftx" in body and app.get(K_FTX):
         app[K_FTX].apply_settings()
+    if "sstv" in body and app.get(K_SSTV):
+        app[K_SSTV].apply_settings()
     if any(k in ("rx_gain_db", "tx_gain_db") for k in body.get("audio", {})) and app[K_AUDIO]:
         app[K_AUDIO].set_gains(new["audio"]["rx_gain_db"], new["audio"]["tx_gain_db"])     # takes effect immediately
     app[K_AUTH].audit("config_changed", admin.username, client_ip(request), ", ".join(changed) or "no change")

@@ -16,6 +16,16 @@ export async function api(path, method = "GET", body) {
   return data;
 }
 
+// A request whose body is raw bytes (a picture to transmit): the JSON helper above would stringify it.
+export async function apiRaw(path, bytes, method = "POST") {
+  const r = await fetch(path, { method, credentials: "same-origin", headers: { "Content-Type": "application/octet-stream", "X-CSRF-Token": csrf }, body: bytes });
+  const text = await r.text();
+  let data = null;
+  try { data = text ? JSON.parse(text) : null; } catch { /* plain-text error */ }
+  if (!r.ok) throw new Error(data?.error || text || r.statusText);
+  return data;
+}
+
 export class RadioSocket {
   constructor(handlers) {
     this.h = handlers; this.n = 0; this.pending = new Map(); this.closed = false; this.retry = 1000;

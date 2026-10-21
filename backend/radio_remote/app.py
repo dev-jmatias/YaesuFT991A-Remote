@@ -18,7 +18,7 @@ from aiohttp import WSMsgType, web
 from . import __version__, admin, logs, sdnotify, updates
 from .audio.service import AudioService, AudioUnavailable
 from .auth import AuthStore, Session
-from .common import (COOKIE, K_AUDIO, K_AUTH, K_CFG, K_CFGPATH, K_DRIVER, K_GUARD, K_HUB, K_FTX, K_QSOLOG, K_REPORTER, K_RESTART, K_SESSION,
+from .common import (COOKIE, K_AUDIO, K_AUTH, K_CFG, K_CFGPATH, K_DRIVER, K_GUARD, K_HUB, K_FTX, K_QSOLOG, K_REPORTER, K_RESTART, K_SESSION, K_SSTV,
                      K_RIGCTL, K_STARTED, K_UPDATES, CommandError, client_ip, is_https, read_json)
 from .lease import ControlLease, LeaseError
 from .radio import controls
@@ -45,7 +45,7 @@ MAX_WS_CLIENTS = 24
 CMD_RATE, CMD_BURST, MAX_STRIKES = 40.0, 80, 200
 LEASE_OPS = {"request_control", "respond_control", "release_control", "force_control"}
 MAX_EQ_PRESETS = 20
-SCAN_KEEPS = {"scan_range", "scan_range_stop", "set_level", "set_control", "freedv", "ftx", "ftx_tx", "ftx_halt", "set_eq", "set_dyn", "eq_preset_save", "eq_preset_delete", "rec"}     # commands that leave a running range scan alone
+SCAN_KEEPS = {"scan_range", "scan_range_stop", "set_level", "set_control", "freedv", "ftx", "ftx_tx", "ftx_halt", "sstv", "sstv_halt", "set_eq", "set_dyn", "eq_preset_save", "eq_preset_delete", "rec"}     # commands that leave a running range scan alone
 
 
 def _int(v, lo=None, hi=None) -> int:
@@ -78,6 +78,7 @@ class Hub:
         self.ui: dict = {}
         self.reporter = None                     # FreeDV Reporter (set by create_app)
         self.ftx = None                          # the FT8/FT4 engine (set by create_app)
+        self.sstv = None                         # the SSTV engine (set by create_app)
         self.scanner = RangeScanner(self)        # the start/stop frequency scan (scan.py)
         self.auto_width = lambda: True           # freedv.auto_width (set by create_app): widen a narrow radio filter when FreeDV is on
         self._widen_task: asyncio.Task | None = None
@@ -116,7 +117,7 @@ class Hub:
 
     async def _widen_now(self) -> None:
         d, st = self.driver, self.driver.state
-        if not (self.audio and self.audio.freedv_state().get("on") and st.get("connected")) or st.get("tx") or st.get("tuning") or st.get("narrow"):
+        if not (self._wants_wide() and st.get("connected")) or st.get("tx") or st.get("tuning") or st.get("narrow"):
             return
         width, opts = st.get("width"), st.get("width_options") or []
         data = st.get("mode") in ("DATA-L", "DATA-U")
@@ -127,10 +128,14 @@ class Hub:
         if target < need:
             return
         await d.set_control("width", target)
-        log.info("FreeDV: the radio's %s filter was %s Hz wide; widened to %s Hz", st.get("mode"), width, target)
+        log.info("FreeDV / SSTV: the radio's %s filter was %s Hz wide; widened to %s Hz", st.get("mode"), width, target)
+
+    def _wants_wide(self) -> bool:
+        """FreeDV and SSTV both need about 1500 Hz of audio (SSTV: 1100..2300 Hz): a radio left in a narrow filter hears nothing of them."""
+        return bool((self.audio and self.audio.freedv_state().get("on")) or (self.sstv and self.sstv.on))
 
     def _on_change(self, changed: dict) -> None:
-        if "mode" in changed and self.audio is not None and self.audio.freedv_state().get("on"):
+        if "mode" in changed and self.audio is not None and self._wants_wide():
             self._schedule_widen()
         if "frequency" in changed:                                   # FreeDV keeps its software tuning when the dial moves a little
             old, self._last_freq = self._last_freq, changed["frequency"] or 0
@@ -225,7 +230,8 @@ class Hub:
             "audio": {"available": a["available"], "reason": a["reason"],
                       "mic": session.role in ("operator", "admin"),
                       "freedv": self.audio.freedv_state() if self.audio else {"available": False, "reason": "no audio service", "on": False},
-                      "ftx": {"available": self.ftx_ok(), "on": bool(self.ftx and self.ftx.on)}},
+                      "ftx": {"available": self.ftx_ok(), "on": bool(self.ftx and self.ftx.on)},
+                      "sstv": {"available": bool(self.sstv and self.audio and self.audio.available), "on": bool(self.sstv and self.sstv.on)}},
             "state": {**self.driver.state, **self.extra, "ptt_owner": self.guard.owner},
             "safety": {"ptt_permitted": self.guard.permitted, "tx_timeout_s": self.guard.max_tx_s},
         }
@@ -449,6 +455,22 @@ class Hub:
         elif typ == "ftx_halt":
             if self.ftx:
                 await self.ftx.halt("halted by the operator")
+        elif typ == "sstv":
+            on = msg.get("on")
+            if not isinstance(on, bool):
+                raise CommandError("sstv needs on (true/false)")
+            if not self.sstv or not self.audio or not self.audio.available:
+                raise CommandError("SSTV is not available (no audio)")
+            try:
+                await self.sstv.set_on(on)
+            except (ValueError, AudioUnavailable) as e:
+                raise CommandError(str(e)) from None
+            self.auth.audit("sstv_on" if on else "sstv_off", session.username, None)
+            if on:
+                self._schedule_widen()
+        elif typ == "sstv_halt":
+            if self.sstv:
+                await self.sstv.halt("halted by the operator")
         elif typ == "set_level":
             name = msg.get("name")
             rng = caps.level_range(name) if isinstance(name, str) else None
@@ -867,6 +889,65 @@ async def freedv_reporter_status(request):
     return web.json_response(app[K_REPORTER].status(near_hz=app[K_DRIVER].state.get("frequency") or 0))
 
 
+async def sstv_info(request):
+    """SSTV: the state, the modes, the standard frequencies, the settings and the saved pictures (any signed-in user)."""
+    return web.json_response(request.app[K_SSTV].state())
+
+
+async def sstv_image(request):
+    name = request.match_info["name"]
+    p = request.app[K_SSTV].image_path(name)
+    if p is None:
+        raise web.HTTPNotFound(text="no such picture")
+    headers = {"Content-Type": "image/png", "Cache-Control": "private, max-age=3600"}
+    if request.query.get("download") == "1":
+        headers["Content-Disposition"] = f'attachment; filename="{name}"'
+    return web.FileResponse(p, headers=headers)
+
+
+async def sstv_current(request):
+    png = request.app[K_SSTV].current_png()
+    if png is None:
+        raise web.HTTPNotFound(text="no picture is being received")
+    return web.Response(body=png, content_type="image/png", headers={"Cache-Control": "no-store"})
+
+
+async def sstv_image_delete(request):
+    s = _operator(request)
+    name = request.match_info["name"]
+    if not request.app[K_SSTV].delete_image(name):
+        raise web.HTTPNotFound(text="no such picture")
+    request.app[K_AUTH].audit("sstv_delete", s.username, client_ip(request), name)
+    request.app[K_HUB]._broadcast({"t": "sstv", "k": "deleted", "name": name})
+    return web.json_response({"ok": True})
+
+
+async def sstv_tx(request):
+    """Transmit a picture. The body is the raw RGB bytes (width x height x 3) of the picture the page prepared for the chosen mode (?mode=<key>&conn=<this page's connection id>). Only the
+    page that has control of the radio may do it; the transmit protection (permission, heartbeat, time limit) applies as for every transmission."""
+    from .sstv_engine import MAX_UPLOAD
+    s = _operator(request)
+    app = request.app
+    conn = request.query.get("conn", "")
+    c = app[K_HUB].clients.get(conn)
+    if c is None or c.session.user_id != s.user_id or not app[K_HUB].lease.holds(conn):
+        raise web.HTTPForbidden(text="only the page that has control of the radio can transmit")
+    n = request.content_length or 0
+    if n > MAX_UPLOAD:
+        raise web.HTTPRequestEntityTooLarge(max_size=MAX_UPLOAD, actual_size=n)
+    body = bytearray()
+    async for chunk in request.content.iter_chunked(65536):
+        body += chunk
+        if len(body) > MAX_UPLOAD:
+            raise web.HTTPRequestEntityTooLarge(max_size=MAX_UPLOAD, actual_size=len(body))
+    try:
+        r = await app[K_SSTV].transmit(conn, bytes(body), request.query.get("mode", ""))
+    except ValueError as e:
+        raise web.HTTPConflict(text=str(e)) from None
+    app[K_AUTH].audit("sstv_tx", s.username, client_ip(request), r["mode"])
+    return web.json_response(r)
+
+
 async def ftx_info(request):
     """FT8/FT4: the state, the settings, the standard frequencies and the recent decodes (any signed-in user)."""
     app = request.app
@@ -1169,8 +1250,11 @@ def create_app(cfg: dict, driver: RadioDriver | None = None, auth: AuthStore | N
     audio.on_freedv_tx = reporter.set_transmitting
     app[K_HUB].reporter = reporter
 
+    from .sstv_engine import SstvEngine
     from .ftx_engine import FtxEngine
     from .qsolog import QsoLog
+    app[K_SSTV] = app[K_HUB].sstv = sstv_engine = SstvEngine(lambda: app[K_CFG], audio, app[K_HUB]._broadcast, lambda: driver.state.get("frequency") or 0, guard,
+                                                              lambda cid: cid in app[K_HUB].clients, Path(cfg["storage"]["data_dir"]))
     app[K_QSOLOG] = QsoLog(Path(cfg["storage"]["data_dir"]) / "ftx_log.jsonl")
     app[K_FTX] = app[K_HUB].ftx = ftx_engine = FtxEngine(lambda: app[K_CFG], audio, app[K_HUB]._broadcast, lambda: driver.state.get("frequency") or 0, guard,
                                                           lambda cid: cid in app[K_HUB].clients)
@@ -1200,6 +1284,10 @@ def create_app(cfg: dict, driver: RadioDriver | None = None, auth: AuthStore | N
             await ftx_engine.set_on(False)
         except Exception:
             log.exception("FT8/FT4 did not stop cleanly")
+        try:
+            await sstv_engine.set_on(False)
+        except Exception:
+            log.exception("SSTV did not stop cleanly")
         await watchdog.stop()
         await guard.stop()          # un-keys first
         await audio.stop()
@@ -1218,6 +1306,11 @@ def create_app(cfg: dict, driver: RadioDriver | None = None, auth: AuthStore | N
     app.router.add_get("/api/audio/status", audio_status)
     app.router.add_get("/api/freedv", freedv_info)
     app.router.add_get("/api/freedv/reporter", freedv_reporter_status)
+    app.router.add_get("/api/sstv", sstv_info)
+    app.router.add_get("/api/sstv/current.png", sstv_current)
+    app.router.add_get(r"/api/sstv/images/{name:[a-z0-9.-]+}", sstv_image)
+    app.router.add_post(r"/api/sstv/images/{name:[a-z0-9.-]+}/delete", sstv_image_delete)
+    app.router.add_post("/api/sstv/tx", sstv_tx)
     app.router.add_get("/api/ftx", ftx_info)
     app.router.add_get("/api/ftx/log", ftx_log_list)
     app.router.add_post("/api/ftx/log", ftx_log_add)

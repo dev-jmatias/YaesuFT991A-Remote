@@ -4,7 +4,7 @@ import { renderRadio } from "./pages/radio.js";
 
 const root = document.getElementById("app");
 
-// Every screen at least 700 px wide (tablets AND big screens) gets the phone-style tabs (Radio / Filters / Levels / Audio) with the
+// Every screen at least 700 px wide (tablets AND big screens) gets the phone-style tabs (Radio / Filters / Audio & Levels / Digital) with the
 // compact larger layout. "?device=desktop" (remembered) switches a browser back to the old all-in-one page; "?device=auto" resets it.
 function setDevice() {
   let forced = "";
@@ -16,6 +16,7 @@ function setDevice() {
   } catch { /* storage unavailable */ }
   const tablet = forced ? forced === "tablet" : true;
   document.documentElement.toggleAttribute("data-tablet", tablet && window.innerWidth >= 700);
+  document.documentElement.toggleAttribute("data-tabbed", window.innerWidth < 700 || tablet);      // tabs (phones, tablets, big screens) or the all-in-one desktop page (?device=desktop)
 }
 setDevice();
 addEventListener("resize", setDevice);

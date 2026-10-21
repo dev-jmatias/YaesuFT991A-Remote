@@ -91,6 +91,7 @@ The manual is installed on the Pi and served at `/docs/` (Help button in the app
 | [radio-connection.md](docs/radio-connection.md) | USB CAT and audio, the radio's own menu settings |
 | [troubleshooting.md](docs/troubleshooting.md) | symptom-by-symptom fixes |
 | [freedv.md](docs/freedv.md) | FreeDV digital voice (RADE V1 and RADE V2) with preset channels |
+| [sstv.md](docs/sstv.md) | SSTV: receive pictures from the radio's audio and send your own, from the browser |
 | [ft8.md](docs/ft8.md) | FT8 and FT4 from the browser, with an ADIF log and upload to QRZ and eQSL |
 | [logbook.md](docs/logbook.md) | follow and tune the radio from Log4OM or another logbook (Hamlib rigctl) |
 | [tailscale.md](docs/tailscale.md), [06-security-remote.md](docs/06-security-remote.md) | remote access and the security model |
