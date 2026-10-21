@@ -177,7 +177,8 @@ async def test_api_state_commands_and_the_transmit_upload(make_app, tmp_path, mo
     client = await make_app()
     root = await admin_user(client)
     st = await (await client.get("/api/sstv")).json()
-    assert st["on"] is False and st["images"] == [] and {m["key"] for m in st["modes"]} >= {"robot36", "martin1", "pd120"} and st["bands"][2] == {"name": "20m", "hz": 14230000, "mode": "USB"}
+    assert st["on"] is False and st["images"] == [] and {m["key"] for m in st["modes"]} >= {"robot36", "martin1", "pd120"} and st["bands"][2] == {"name": "20m", "hz": 14230000, "mode": "USB"} \
+        and st["bands"][-1] == {"name": "70cm ISS", "hz": 437550000, "mode": "FM"}
     ws, hello = await root.ws()
     assert hello["audio"]["sstv"]["available"] is True and hello["audio"]["sstv"]["on"] is False
     conn = hello["conn"]

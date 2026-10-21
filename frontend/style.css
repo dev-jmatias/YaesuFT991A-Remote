@@ -1031,3 +1031,14 @@ html[data-tabbed] .ftxgo { display: none !important; }
 .sstv-lbc { max-width: min(96vw, 1000px); display: grid; gap: 8px; justify-items: center; }
 .sstv-lbc img { max-width: 100%; max-height: 74vh; height: auto; border: 1px solid var(--line2); border-radius: 6px; background: #000; }
 @media (max-width: 480px) { .sstv-gallery { grid-template-columns: repeat(2, minmax(0, 1fr)); } .sstv-ctl label { font-size: .75rem; } }
+.sstv-tune { gap: 6px 12px; align-items: center; }
+.sstv-tune label { display: inline-flex; align-items: center; gap: 4px; color: var(--dim); font-size: .8rem; }
+.sstv-setf { display: inline-flex; align-items: center; gap: 6px; margin: 0; }
+.sstv-setf input { width: 7.5em; min-height: 30px; padding: 2px 8px; }
+.sstv-tune button { min-height: 30px; padding: 2px 11px; }
+.sstv-step { display: inline-flex; align-items: center; gap: 4px; }
+.sstv-step button { min-width: 34px; font-size: 1.05rem; line-height: 1; }
+.sstv-tune select { min-height: 30px; padding: 1px 6px; }
+.sstv-sql { display: inline-flex; min-width: 0; } .sstv-sql .arow { margin: 0; }
+@media (max-width: 480px) { .sstv-tune { gap: 6px 8px; } .sstv-setf input { width: 6.5em; } }
+.sstv-sql .arow { grid-template-columns: auto 120px 3.2em; gap: 8px; min-height: 0; padding: 0; border: 0; }

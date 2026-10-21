@@ -1,6 +1,7 @@
 import { api, apiRaw } from "../api.js";
 import { el, pref } from "../util.js";
 import { soundGuard } from "./digital-sound.js";
+import { createSquelch } from "./controls.js";
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 // SSTV screen (see docs/sstv.md). The Pi decodes the radio's audio into pictures and sends them to the page line by line; a picture the operator prepares here (chosen file, the mode's
@@ -21,6 +22,12 @@ export function createSstv(host, ctx) {
       <label class="ftx-band">Band <select id="sv-band" aria-label="SSTV frequency"></select></label>
       <button type="button" id="sv-onoff" class="led">RX off</button>
       <div class="ftx-timebox"><span class="ftx-chip" id="sv-chip">idle</span></div>
+    </div>
+    <div class="row sstv-tune">
+      <form class="sstv-setf" id="sv-setf"><label>Frequency <input id="sv-fin" inputmode="decimal" placeholder="437.550" autocomplete="off" aria-label="Frequency in MHz (437.550), kHz (437550) or Hz"></label><button type="button" id="sv-set">Set</button></form>
+      <span class="sstv-step"><button type="button" id="sv-dn" title="Tune down by one step" aria-label="Tune down">&minus;</button><select id="sv-step" aria-label="Tuning step"></select><button type="button" id="sv-up" title="Tune up by one step" aria-label="Tune up">+</button></span>
+      <label>Mode <select id="sv-mode-r" aria-label="The radio's mode"></select></label>
+      <span class="sstv-sql" id="sv-sql"></span>
     </div>
     <p class="ftx-notice" id="sv-notice" hidden></p>
     <div class="sstv-main">
@@ -68,6 +75,15 @@ export function createSstv(host, ctx) {
   const mode = () => info.modes.find((m) => m.key === $("sv-mode").value) || info.modes[0] || { key: "robot36", name: "Robot 36", w: 320, h: 240, seconds: 36 };
   const radioMode = (k) => { const m = S.caps?.modes || []; const d = { USB: "DATA-U", LSB: "DATA-L" }[k]; return d && m.includes(d) ? d : k; };      // a data mode skips the radio's microphone processing
   const sound = soundGuard(ctx, "sstvSound", $("sv-snd"));
+  const sql = createSquelch($("sv-sql"), ctx);                                       // the radio's squelch: it must be open (0) for FM or the audio is muted between the signals
+  const MODES = ["USB", "LSB", "FM", "FM-N", "AM", "AM-N", "DATA-U", "DATA-L", "DATA-FM"].filter((m) => (S.caps?.modes || []).includes(m));
+  $("sv-mode-r").innerHTML = `<option value="">-</option>` + MODES.map((m) => `<option value="${m}">${m}</option>`).join("");
+  const STEPS = [100, 500, 1000, 2500, 5000, 10000];
+  $("sv-step").innerHTML = STEPS.map((h) => `<option value="${h}">${h >= 1000 ? h / 1000 + " kHz" : h + " Hz"}</option>`).join("");
+  $("sv-step").value = String(pref.get("sstvStep", 2500));
+  // "437.550" = MHz, "437550" = kHz, "437550000" = Hz
+  const parseHz = (t) => { const v = parseFloat(String(t).replace(",", ".")); return !(v > 0) ? 0 : v < 1000 ? Math.round(v * 1e6) : v < 1e6 ? Math.round(v * 1e3) : Math.round(v); };
+  let tracking = false;                                                               // the screen has tuned the radio: from now on its frequency and mode are remembered for the next visit
 
   // ------------------------------------------------------------------ top bar
   function paintTop() {
@@ -79,8 +95,15 @@ export function createSstv(host, ctx) {
       sel.dataset.n = String(info.bands.length);
       sel.innerHTML = `<option value="">Band...</option>` + info.bands.map((b) => `<option value="${b.hz}">${esc(b.name)}  ${(b.hz / 1e6).toFixed(b.hz % 1000 ? 4 : 3)}</option>`).join("");
     }
-    const near = info.bands.find((b) => Math.abs(b.hz - (s.frequency || 0)) < 3000);
+    const near = info.bands.find((b) => Math.abs(b.hz - (s.frequency || 0)) < (b.mode === "FM" ? 15000 : 3000));      // an FM preset is still "near" while the Doppler shift moves the signal
     sel.value = near ? String(near.hz) : "";
+    if (document.activeElement !== $("sv-mode-r")) $("sv-mode-r").value = MODES.includes(s.mode) ? s.mode : "";
+    for (const id of ["sv-fin", "sv-set", "sv-dn", "sv-up", "sv-step", "sv-mode-r"]) $(id).disabled = viewer || !can();
+    if (tracking && s.frequency && MODES.includes(s.mode)) {                           // remember where the radio is (also when it is tuned with its own knob)
+      const last = pref.get("sstvLast", null);
+      if (!last || last.hz !== s.frequency || last.mode !== s.mode) pref.set("sstvLast", { hz: s.frequency, mode: s.mode });
+    }
+    sql.update();
     $("sv-onoff").textContent = info.on ? "RX on" : "RX off";
     $("sv-onoff").classList.toggle("active", !!info.on);
     for (const b of root.querySelectorAll("#sv-onoff, #sv-band, #sv-send, #sv-halt")) b.disabled = viewer || !can();
@@ -237,10 +260,18 @@ export function createSstv(host, ctx) {
     try { await send("sstv", { on }); } catch (e) { toast(e.message); }
   }
   $("sv-onoff").onclick = () => { setOn(!info.on); };
+  // tuning: a typed frequency, and steps with the same rate-limited tuner as the Radio tab (clicks in a row add up while the radio catches up: a Doppler shift can be followed by tapping)
+  const setFreq = () => { const hz = parseHz($("sv-fin").value); if (hz) { ctx.tuner.set(hz); $("sv-fin").value = ""; } else toast("Type a frequency, for example 437.550 (MHz)."); };
+  $("sv-set").onclick = setFreq;
+  $("sv-setf").onsubmit = (e) => { e.preventDefault(); setFreq(); };
+  $("sv-fin").onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); setFreq(); } };
+  $("sv-step").onchange = () => { pref.set("sstvStep", +$("sv-step").value); ctx.setStep?.(+$("sv-step").value); };     // the arrow keys of the page tune by the same step
+  $("sv-dn").onclick = () => { ctx.tune(-(+$("sv-step").value)); };
+  $("sv-up").onclick = () => { ctx.tune(+$("sv-step").value); };
+  $("sv-mode-r").onchange = () => { const m = $("sv-mode-r").value; if (m) send("set_mode", { mode: m }); };
   async function tune(b) {
     try { await send("set_mode", { mode: radioMode(b.mode) }); } catch { /* the frequency still moves */ }
     await send("set_frequency", { hz: b.hz });
-    pref.set("sstvHz", b.hz);
   }
   $("sv-band").onchange = async (e) => {
     const b = info.bands.find((x) => x.hz === +e.target.value);
@@ -256,10 +287,19 @@ export function createSstv(host, ctx) {
       if (active) {
         if (S.state.freedv_on) { await send("freedv", { on: false }); toast("FreeDV switched off: SSTV and FreeDV cannot share the radio."); }
         away = { mode: S.state.mode, hz: S.state.frequency };
-        const last = pref.get("sstvHz", 0), b = info.bands.find((x) => x.hz === last) || info.bands.find((x) => Math.abs(x.hz - (S.state.frequency || 0)) < 3000) || info.bands.find((x) => x.name === "20m") || info.bands[0];
-        if (b) await tune(b);
+        const last = pref.get("sstvLast", null);                                     // the frequency and mode of the last visit, whatever they were (a preset, a typed frequency, the radio's knob)
+        if (last && last.hz && MODES.includes(last.mode)) {
+          await send("set_mode", { mode: last.mode });
+          await send("set_frequency", { hz: last.hz });
+          await ctx.settle?.(last);
+        } else {
+          const b = info.bands.find((x) => Math.abs(x.hz - (S.state.frequency || 0)) < 3000) || info.bands.find((x) => x.name === "20m") || info.bands[0];
+          if (b) { await tune(b); await ctx.settle?.({ mode: radioMode(b.mode), hz: b.hz }); }
+        }
+        tracking = true;
         await setOn(true);
       } else {
+        tracking = false;
         if (info.on) await setOn(false);
         if (away) {
           const a = away; away = null;

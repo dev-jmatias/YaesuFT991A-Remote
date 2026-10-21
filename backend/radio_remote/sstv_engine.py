@@ -27,7 +27,7 @@ from .safety import TxRefused
 
 log = logging.getLogger("sstv")
 
-BANDS = [("80m", 3845000, "LSB"), ("40m", 7171000, "LSB"), ("20m", 14230000, "USB"), ("15m", 21340000, "USB"), ("10m", 28680000, "USB"), ("2m ISS", 145800000, "FM")]
+BANDS = [("80m", 3845000, "LSB"), ("40m", 7171000, "LSB"), ("20m", 14230000, "USB"), ("15m", 21340000, "USB"), ("10m", 28680000, "USB"), ("2m ISS", 145800000, "FM"), ("70cm ISS", 437550000, "FM")]
 TX_RATE = 16000                    # the audio service's playback clips are 16 kHz
 LEAD_S, TAIL_S = 0.4, 0.3          # silence before and after the tones (PTT settles; the last line is not cut)
 MAX_UPLOAD = 1_300_000             # bytes of picture data accepted for a transmission (PD240: 640 x 496 x 3 = 952 320)
