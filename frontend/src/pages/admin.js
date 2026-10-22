@@ -1,6 +1,7 @@
 import { api } from "../api.js";
 import { el } from "../util.js";
 import { LIGHTS, getLights, setLight } from "../prefs.js";
+import { SKINS, getSkin, setSkin } from "../skin.js";
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const when = (ts) => (ts ? new Date(ts * 1000).toLocaleString() : "");
@@ -381,9 +382,13 @@ export function openSheet(root, { user, tab, sock }) {
           <label>New password (min 10)<input name="new" type="password" autocomplete="new-password" required></label></fieldset>
           <button class="active">Change password</button></form>
         <p class="dim">Your other signed-in devices are signed out when you change it.</p>
+        <form id="look" class="cfg"><fieldset><legend>Look</legend>
+          <label>Colours<select name="skin">${SKINS.map(([k, label]) => `<option value="${k}" ${getSkin() === k ? "selected" : ""}>${label}</option>`).join("")}</select></label>
+        </fieldset><p class="dim">Changes the colours of the whole app at once. This applies to this device only.</p></form>
         <form id="disp" class="cfg"><fieldset><legend>Display: status lights in the VFO A header</legend>
           ${(() => { const on = getLights(); return LIGHTS.map(([k, label]) => `<label class="chk"><input type="checkbox" name="${k}" ${on[k] ? "checked" : ""}> ${label}</label>`).join(""); })()}
         </fieldset><p class="dim">Switch off the lights you do not need for a cleaner header. This applies to this device only.</p></form>`;
+      body.querySelector("#look").onchange = (e) => { if (e.target.name === "skin") setSkin(e.target.value); };
       body.querySelector("#disp").onchange = (e) => { if (e.target.name) setLight(e.target.name, e.target.checked); };
       body.querySelector("#pw").onsubmit = guard(async (e) => {
         e.preventDefault();

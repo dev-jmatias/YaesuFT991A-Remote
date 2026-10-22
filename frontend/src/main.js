@@ -1,4 +1,5 @@
 import { api, setCsrf, RadioSocket } from "./api.js";
+import { applySkin } from "./skin.js";
 import { renderLogin } from "./pages/login.js";
 import { renderRadio } from "./pages/radio.js";
 
@@ -19,6 +20,7 @@ function setDevice() {
   document.documentElement.toggleAttribute("data-tabbed", window.innerWidth < 700 || tablet);      // tabs (phones, tablets, big screens) or the all-in-one desktop page (?device=desktop)
 }
 setDevice();
+applySkin();
 addEventListener("resize", setDevice);
 let socket = null;
 

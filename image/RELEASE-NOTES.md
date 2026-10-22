@@ -42,6 +42,10 @@ and goes back by itself if the new version does not start. Settings and accounts
 | `radio-remote-rade-linux-aarch64.tar.xz` | the optional RADE library (FreeDV neural modes V1 and V2) for a Raspberry Pi, installed with `install_rade.sh` (the PC build is `…-x86_64.tar.xz`) |
 | `SHA256SUMS` | checksums of all of the above |
 
+### What is new in 1.1.48
+
+- **Looks.** Pick the colours of the app under **Account > Look**: **Slate** (the usual look), **Yaesu** (black body, white digits, blue labels and buttons, red mode badge and lamps, like the radio's own display) or **FT-710** (near-black with amber digits and highlights). The choice is remembered on that device only. The meters and the tuning dial keep their own colours.
+
 ### What is new in 1.1.47
 
 - **TX power on the FT8/FT4 and SSTV screens.** Those screens hide the Levels panel, so the radio's transmit power could not be set while on them. A **TX Power** slider is now on both (the radio keeps its power for each band).

@@ -6,30 +6,59 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
   --text: #e6ecf8; --dim: #7f8fae; --seg-text: #a9b7d3;
   --blue: #3b82f6; --cyan: #22d3ee; --teal: #2dd4bf; --green: #34d399; --yellow: #fbbf24; --orange: #fb923c; --red: #f43f5e; --purple: #a78bfa;
   --accent: var(--cyan); --ok: var(--green); --warn: var(--yellow); --tx: var(--red);
+  --screen: #060a14; --well: #0a101e; --input: #0e1729; --body-top: #0a1020; --chip: #1d2a44; --chip-text: #9fb0d0;
+  --btn-top: #1a263d; --btn-bot: #131d31; --btn-text: #dbe4f6; --led-off: #38445f;
+  --sel-top: #243456; --sel-bot: #19264a; --sel-line: #3a5083;
+  --hot-top: #2bb8cf; --hot-bot: #1596b1; --hot-text: #04141c;
+  --freq: #fff; --freq-tx: #ffd0d8; --halo: 34, 211, 238; --glow: 251, 191, 36; --freq-glow: none;
   --radius: 8px; --gap: 8px;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   color-scheme: dark;
+}
+/* ---------- skins: the look is a set of colour values; "Slate" (the :root values above) is the default. The Look chooser is in Account. ---------- */
+/* Yaesu: the radio's own display: black, white digits, royal-blue headers, red mode badges, grey keys */
+html[data-skin=yaesu] {
+  --bg: #000; --panel: #07080d; --panel2: #0d0f17; --panel3: #151824; --line: #1c2033; --line2: #2f3552; --seg-off: #14172a;
+  --text: #f4f5fa; --dim: #8089b8; --seg-text: #aab2dc;
+  --cyan: #5468ff; --accent: #5468ff; --yellow: #ff4b3e; --warn: #ffb020; --red: #ff3b30; --tx: #ff3b30;
+  --screen: #000; --well: #04050a; --input: #080a12; --body-top: #05060b; --chip: #2a3160; --chip-text: #a9b4ff;
+  --btn-top: #2c2e36; --btn-bot: #1a1b21; --btn-text: #f1f2f6; --led-off: #4a4d5e;
+  --sel-top: #27306e; --sel-bot: #171d4a; --sel-line: #5468ff;
+  --hot-top: #5468ff; --hot-bot: #3446d8; --hot-text: #fff;
+  --freq: #fff; --freq-tx: #ff8d85; --halo: 84, 104, 255; --glow: 255, 75, 62; --freq-glow: none;
+}
+html[data-skin=yaesu] .vmode #mode { background: #e8321f; color: #fff; padding: 0 9px; border-radius: 3px; font-weight: 700; }      /* the red mode badge of the radio's own display */
+/* FT-710: near-black body, amber display */
+html[data-skin=ft710] {
+  --bg: #08080a; --panel: #101012; --panel2: #17171a; --panel3: #202024; --line: #26262b; --line2: #36363d; --seg-off: #19191d;
+  --text: #ecebe8; --dim: #8e8b85; --seg-text: #b9b5ad;
+  --cyan: #ffa726; --accent: #ffa726; --yellow: #ffb300; --warn: #ffb300; --red: #ff4338; --tx: #ff4338;
+  --screen: #020203; --well: #0c0c0e; --input: #0a0a0c; --body-top: #121214; --chip: #24241f; --chip-text: #b8b2a4;
+  --btn-top: #2a2a2e; --btn-bot: #1a1a1d; --btn-text: #e8e6e1; --led-off: #4b4a46;
+  --sel-top: #4a3510; --sel-bot: #2f2208; --sel-line: #a87418;
+  --hot-top: #ffa726; --hot-bot: #e08a0b; --hot-text: #140c00;
+  --freq: #ffb347; --freq-tx: #ff8a80; --halo: 255, 167, 38; --glow: 255, 179, 0; --freq-glow: 0 0 12px rgba(255, 167, 38, .5);
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { margin: 0; color: var(--text); }
 body {
   min-height: 100dvh; padding: max(8px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
-  background: linear-gradient(180deg, #0a1020 0%, var(--bg) 220px) fixed, var(--bg);
+  background: linear-gradient(180deg, var(--body-top) 0%, var(--bg) 220px) fixed, var(--bg);
 }
 h2, h3 { margin: 0; }
 button, select, input { font: inherit; color: inherit; }
 
 /* ---- buttons: flat slate; .led adds a small indicator bar on the left edge (grey off, yellow selected) ---- */
-button { background: linear-gradient(180deg, #1a263d, #131d31); border: 1px solid var(--line2); border-radius: 6px; color: #dbe4f6; padding: 4px 12px; min-height: 34px; font-size: .88rem; cursor: pointer; touch-action: manipulation; transition: border-color .12s, background .12s; }
+button { background: linear-gradient(180deg, var(--btn-top), var(--btn-bot)); border: 1px solid var(--line2); border-radius: 6px; color: var(--btn-text); padding: 4px 12px; min-height: 34px; font-size: .88rem; cursor: pointer; touch-action: manipulation; transition: border-color .12s, background .12s; }
 button:hover { border-color: var(--cyan); }
 button:focus-visible, .dial:focus-visible, .strip:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 button:disabled { opacity: .4; cursor: not-allowed; }
 button.led { position: relative; padding-left: 16px; }
-button.led::before { content: ""; position: absolute; left: 5px; top: 22%; bottom: 22%; width: 3px; border-radius: 2px; background: #38445f; }
-button.led.active, button.led.on { background: linear-gradient(180deg, #243456, #19264a); border-color: #3a5083; color: #fff; font-weight: 600; }
-button.led.active::before, button.led.on::before { background: var(--yellow); box-shadow: 0 0 7px rgba(251,191,36,.85); }
-button.active:not(.led), button.on:not(.led) { background: linear-gradient(180deg, #2bb8cf, #1596b1); border-color: transparent; color: #04141c; font-weight: 700; }
-input, select { background: #0e1729; border: 1px solid var(--line2); border-radius: 6px; padding: 4px 10px; min-height: 34px; }
+button.led::before { content: ""; position: absolute; left: 5px; top: 22%; bottom: 22%; width: 3px; border-radius: 2px; background: var(--led-off); }
+button.led.active, button.led.on { background: linear-gradient(180deg, var(--sel-top), var(--sel-bot)); border-color: var(--sel-line); color: #fff; font-weight: 600; }
+button.led.active::before, button.led.on::before { background: var(--yellow); box-shadow: 0 0 7px rgba(var(--glow), .85); }
+button.active:not(.led), button.on:not(.led) { background: linear-gradient(180deg, var(--hot-top), var(--hot-bot)); border-color: transparent; color: var(--hot-text); font-weight: 700; }
+input, select { background: var(--input); border: 1px solid var(--line2); border-radius: 6px; padding: 4px 10px; min-height: 34px; }
 .dim { color: var(--dim); }
 .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .row.center { justify-content: center; }
@@ -86,9 +115,9 @@ button.icon { width: 34px; padding: 0; } button.icon.wide { width: auto; padding
 
 /* ---------- VFO block: A (+ meters), B as a smaller attached tab ---------- */
 .vfopanels { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-.vfopanel { container-type: inline-size; background: #060a14; border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px 10px; }
-.vfopanel.a { border-color: var(--cyan); box-shadow: 0 0 0 1px rgba(34,211,238,.18); }
-.vfopanel.b.txvfo { border-color: var(--yellow); box-shadow: 0 0 0 1px rgba(251,191,36,.2); }
+.vfopanel { container-type: inline-size; background: var(--screen); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px 10px; }
+.vfopanel.a { border-color: var(--cyan); box-shadow: 0 0 0 1px rgba(var(--halo), .18); }
+.vfopanel.b.txvfo { border-color: var(--yellow); box-shadow: 0 0 0 1px rgba(var(--glow), .2); }
 .vfopanel.keyed { border-color: var(--red); box-shadow: 0 0 0 1px rgba(244,63,94,.45), 0 0 18px rgba(244,63,94,.22); }
 .vfopanel header { display: flex; align-items: center; gap: 6px; margin-bottom: 2px; }
 .vl { color: var(--cyan); font-weight: 700; letter-spacing: .05em; margin-right: 2px; }
@@ -110,7 +139,7 @@ button.icon { width: 34px; padding: 0; } button.icon.wide { width: auto; padding
 
 .freq { font-family: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace; font-weight: 600; line-height: 1.05;
   font-size: clamp(1.7rem, 9.5vw, 3.5rem); font-size: clamp(1.7rem, 10.5cqw, 3.5rem);        /* the vw line is for browsers without container units (Safari before 16): they ignore the cqw line */
-  white-space: nowrap; user-select: none; font-variant-numeric: tabular-nums; color: #fff; padding: 2px 0 4px; }
+  white-space: nowrap; user-select: none; font-variant-numeric: tabular-nums; color: var(--freq); text-shadow: var(--freq-glow); padding: 2px 0 4px; }
 .freq .digit { cursor: pointer; padding: 0 .02em; border-radius: 4px; }
 .freq.ro .digit { cursor: default; }
 .freq .digit.lead { opacity: .18; }
@@ -119,10 +148,10 @@ button.icon { width: 34px; padding: 0; } button.icon.wide { width: auto; padding
 .freq .sep { opacity: .5; }
 .freq .unit { font-size: .3em; letter-spacing: .06em; margin-left: .4em; color: var(--dim); }
 .freq.pending { color: var(--cyan); }
-.vfopanel.keyed .freq { color: #ffd0d8; }
+.vfopanel.keyed .freq { color: var(--freq-tx); }
 
 /* ---------- blocks ---------- */
-.block { border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px 9px; margin-top: 8px; background: #0a101e; }
+.block { border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px 9px; margin-top: 8px; background: var(--well); }
 .blabel { margin: 0 0 6px; font-size: .64rem; letter-spacing: .15em; text-transform: uppercase; color: var(--dim); font-weight: 600; display: block; }
 .moderow, .bandrow, .steprow { gap: 5px; }
 .moderow button, .bandrow button { min-width: 46px; }
@@ -185,7 +214,7 @@ input[type=range] { width: 100%; min-height: 28px; padding: 0; background: trans
 .sel select { width: 100%; color: var(--text); }
 .subtabs { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 8px; }
 .subtabs button { min-height: 30px; padding: 2px 14px; font-size: .82rem; border-radius: 6px; }
-.subtabs button.active { background: linear-gradient(180deg, #243456, #19264a); border-color: #3a5083; color: #fff; box-shadow: inset 0 -2px 0 var(--yellow); font-weight: 600; }
+.subtabs button.active { background: linear-gradient(180deg, var(--sel-top), var(--sel-bot)); border-color: var(--sel-line); color: #fff; box-shadow: inset 0 -2px 0 var(--yellow); font-weight: 600; }
 .filters.tabbed .ctlgroup h3 { display: none; }
 .filters.tabbed .ctlgroup { margin-top: 0; }
 .ctlgroup[hidden] { display: none; }
@@ -262,11 +291,11 @@ code { background: var(--panel2); padding: 1px 6px; border-radius: 6px; }
 .vfopanel.b .nodata { display: none; }
 /* (all screen sizes) */
 @media all {
-  .vfopanels { display: block; border: 1px solid var(--cyan); border-radius: 8px; background: #060a14; box-shadow: 0 0 0 1px rgba(34,211,238,.18); overflow: hidden; }
+  .vfopanels { display: block; border: 1px solid var(--cyan); border-radius: 8px; background: var(--screen); box-shadow: 0 0 0 1px rgba(var(--halo), .18); overflow: hidden; }
   .vfopanels .vfopanel { border: 0; box-shadow: none; border-radius: 0; background: transparent; }
   .vfopanels .vfopanel.keyed { box-shadow: none; }                 /* no inner red frame: only the outer border turns red while transmitting */
   .vfopanels:has(.vfopanel.keyed) { border-color: var(--red); box-shadow: 0 0 0 1px rgba(244,63,94,.5), 0 0 18px rgba(244,63,94,.25); }
-  .txmhost { padding: 0 12px 8px; background: #060a14; }
+  .txmhost { padding: 0 12px 8px; background: var(--screen); }
   .txmhost .txmeters { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px 8px; }
   .vfopanel.a .seg.big canvas { height: 38px; }                 /* slightly thinner signal meter */
   .vfopanel.a .freq { font-size: clamp(1.6rem, 7.4vw, 2.9rem); font-size: clamp(1.6rem, 8.2cqw, 2.9rem); }  /* slightly smaller VFO A */
@@ -274,7 +303,7 @@ code { background: var(--panel2); padding: 1px 6px; border-radius: 6px; }
   .txmhost .seg.small canvas { height: 28px; }
   .txmhost .seg .seglbl { font-size: .74rem; font-weight: 600; color: #dbe5f8; margin-bottom: 1px; }
   .txmhost .seg .seglbl b { font-size: .78rem; color: #fff; }
-  .vfopanel.b { padding: 4px 12px 6px; border-top: 1px solid var(--line) !important; background: #0a101e !important; }
+  .vfopanel.b { padding: 4px 12px 6px; border-top: 1px solid var(--line) !important; background: var(--well) !important; }
   .vfopanel.b.txvfo { border-top-color: var(--yellow) !important; }
   .vfopanel.b header { margin-bottom: 0; }
   .vfopanel.b .freq { font-size: clamp(1.1rem, 3.8vw, 1.7rem); font-size: clamp(1.1rem, 4.2cqw, 1.7rem); padding: 0; }
@@ -591,7 +620,7 @@ button.lockbtn.on { background: var(--yellow); color: #1a1100; border-color: tra
 /* hands-free transmit: slide up while holding PTT to latch it; tap to stop */
 .pttrow { position: relative; }
 .pttcue { position: absolute; left: 0; right: 66px; bottom: calc(100% + 6px); text-align: center; padding: 5px 10px; border-radius: 999px;
-  background: #1d2a44; border: 1px solid var(--line2); color: var(--text); font-size: .85rem; pointer-events: none; z-index: 5; }
+  background: var(--chip); border: 1px solid var(--line2); color: var(--text); font-size: .85rem; pointer-events: none; z-index: 5; }
 .pttcue[hidden] { display: none; }
 .ptt.latched { outline: 3px dashed var(--yellow); outline-offset: 3px; }
 
@@ -615,7 +644,7 @@ button.lockbtn.on { background: var(--yellow); color: #1a1100; border-color: tra
 .fdv-help { margin-top: 10px; }
 
 /* FreeDV indicator on the mode / band line (before the MEM tag): lit green while the modem is locked on a signal */
-.vbadge.fdvb { background: #1d2a44; color: #9fb0d0; border: 1px solid var(--line2); white-space: nowrap; }
+.vbadge.fdvb { background: var(--chip); color: var(--chip-text); border: 1px solid var(--line2); white-space: nowrap; }
 .vbadge.fdvb.on { background: var(--green); color: #04210f; border-color: transparent; }
 .vbadge.fdvb[hidden] { display: none; }
 
@@ -664,9 +693,9 @@ button.lockbtn.on { background: var(--yellow); color: #1a1100; border-color: tra
 
 .rxtx { display: inline-flex; flex-wrap: nowrap; gap: 6px; align-items: center; }
 .rxtxg { display: inline-flex; align-items: center; gap: 3px; padding: 1px 5px; border: 1px solid var(--line2); border-radius: 6px; }
-.rxtxl { font-size: .6rem; font-weight: 700; letter-spacing: .05em; color: #9fb0d0; margin-right: 1px; }
+.rxtxl { font-size: .6rem; font-weight: 700; letter-spacing: .05em; color: var(--chip-text); margin-right: 1px; }
 .led.txsel.on { background: var(--red); border-color: transparent; color: #fff; }
-.vfopanel.operating { box-shadow: 0 0 0 1px #3a5083 inset; }
+.vfopanel.operating { box-shadow: 0 0 0 1px var(--sel-line) inset; }
 .rxtxg button.led.selrx { font-weight: 700; letter-spacing: .05em; }
 
 /* VFO tools of a dual-receiver radio: one row [MAIN <-> SUB] [MAIN RX TX] [SUB RX TX], same button height as the rest of the app (the shared .vfob-ctl button rules).
@@ -712,7 +741,7 @@ button.lockbtn.on { background: var(--yellow); color: #1a1100; border-color: tra
 .eqslide { position: relative; width: 100%; height: 130px; }
 .eqslide input { position: absolute; left: 50%; top: 50%; width: 120px; height: 30px; margin: 0; padding: 0; transform: translate(-50%, -50%) rotate(-90deg); touch-action: none; }
 .eqblock.flat .eqval { opacity: .55; }
-.eqbtn.on { box-shadow: inset 0 0 0 1px #2bb8cf; }
+.eqbtn.on { box-shadow: inset 0 0 0 1px var(--hot-top); }
 
 /* Tuning step block: the buttons are on one line and of one size. Wide screens: the block takes the width it needs and VFO tools gives way; tablets: it gets a full-width row;
    phones: a tidy grid of equal buttons (- step + / Tune Scan Memories / RX EQ TX EQ). */
@@ -760,13 +789,13 @@ button.lockbtn.on { background: var(--yellow); color: #1a1100; border-color: tra
 
 /* parametric equalizer graph (Audio tab) */
 .eqgraph { width: 100%; max-width: 820px; }
-.eqsvg { width: 100%; height: auto; display: block; background: #0a101e; border: 1px solid var(--line); border-radius: 8px; user-select: none; }
+.eqsvg { width: 100%; height: auto; display: block; background: var(--well); border: 1px solid var(--line); border-radius: 8px; user-select: none; }
 .eqgrid line { stroke: var(--line); stroke-width: 1; } .eqgrid line.zero { stroke: #3a4a70; }
 .eqgrid text { fill: var(--dim); font-size: 10px; }
-.eqcurve { fill: none; stroke: #2bb8cf; stroke-width: 2; }
+.eqcurve { fill: none; stroke: var(--hot-top); stroke-width: 2; }
 .eqnode { cursor: grab; outline: none; }
 .eqnode .hit { fill: transparent; }
-.eqnode .dot { fill: #19264a; stroke: #7fd6e6; stroke-width: 2; }
+.eqnode .dot { fill: var(--sel-bot); stroke: #7fd6e6; stroke-width: 2; }
 .eqnode text { fill: #fff; font-size: 9px; font-weight: 700; pointer-events: none; }
 .eqnode.sel .dot { fill: var(--yellow); stroke: #fff; }
 .eqnode.sel text { fill: #1a1100; }
@@ -828,7 +857,7 @@ button.lockbtn.on { background: var(--yellow); color: #1a1100; border-color: tra
 /* "theme" look (the default): the app's own dark navy panel, blue-grey scale and the yellow needle, same size and glass as the other looks */
 .strip[data-dial=theme] { --dial-glow: #a9b7d3; --dial-lamp: 110, 140, 205; --dial-halo: 3; --dial-fade: .4; border-color: var(--line2);
   background: radial-gradient(ellipse 60% 120% at 50% 62%, rgba(var(--dial-lamp), .2), rgba(var(--dial-lamp), .05) 55%, transparent 80%), linear-gradient(180deg, #080d19, #0e1730); }
-.strip[data-dial=theme] .strip-needle { background: linear-gradient(180deg, #fde68a, var(--yellow) 30%, var(--yellow) 70%, #fde68a); box-shadow: 0 0 10px rgba(251,191,36,.8); }
+.strip[data-dial=theme] .strip-needle { background: linear-gradient(180deg, #fde68a, var(--yellow) 30%, var(--yellow) 70%, #fde68a); box-shadow: 0 0 10px rgba(var(--glow), .8); }
 .strip[data-dial=theme] .strip-info { color: var(--dim); }
 
 /* the PTT button note and its last-press line are two lines (inline styles are blocked by the page's security policy) */
@@ -839,7 +868,7 @@ button.lockbtn.on { background: var(--yellow); color: #1a1100; border-color: tra
 .ftxgo { min-height: 26px; padding: 2px 12px; font-size: .8rem; }
 .ftx { display: grid; gap: 8px; }
 .ftx-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
-.ftx-freq { display: flex; align-items: baseline; gap: 6px; padding: 1px 9px; background: #060a14; border: 1px solid var(--cyan); border-radius: 8px; }
+.ftx-freq { display: flex; align-items: baseline; gap: 6px; padding: 1px 9px; background: var(--screen); border: 1px solid var(--cyan); border-radius: 8px; }
 .ftx-freq b { font-size: 1.35rem; letter-spacing: .04em; font-variant-numeric: tabular-nums; color: var(--text); }
 .ftx-freq small { color: var(--cyan); font-weight: 600; font-size: .72rem; }
 .ftx-seg { display: inline-flex; gap: 4px; }
@@ -849,7 +878,7 @@ button.lockbtn.on { background: var(--yellow); color: #1a1100; border-color: tra
 .ftx-slotrow { display: flex; align-items: center; gap: 10px; font-size: .8rem; color: var(--dim); }
 .ftx-slotrow #fx-slotname { min-width: 6.5em; letter-spacing: .08em; font-weight: 600; }
 .ftx-slotrow b { min-width: 2em; text-align: right; color: var(--text); font-variant-numeric: tabular-nums; }
-.ftx-bar { flex: 1; height: 8px; background: #0e1729; border: 1px solid var(--line2); border-radius: 4px; overflow: hidden; }
+.ftx-bar { flex: 1; height: 8px; background: var(--input); border: 1px solid var(--line2); border-radius: 4px; overflow: hidden; }
 .ftx-bar i { display: block; height: 100%; width: 0; background: var(--blue); }
 .ftx.ftx-tx .ftx-bar i { background: var(--red); }
 .ftx.ftx-tx .ftx-slotrow #fx-slotname { color: var(--red); }
@@ -859,7 +888,7 @@ button.lockbtn.on { background: var(--yellow); color: #1a1100; border-color: tra
 .ftx-col .blabel { display: flex; align-items: center; justify-content: space-between; }
 .ftx-cq { font-size: .7rem; text-transform: none; letter-spacing: 0; display: inline-flex; gap: 4px; align-items: center; }
 .ftx-cq input { width: auto; min-height: 0; }
-.ftx-list { height: clamp(230px, 42vh, 400px); overflow-y: auto; background: #060a14; border: 1px solid var(--line); border-radius: 6px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .8rem; }
+.ftx-list { height: clamp(230px, 42vh, 400px); overflow-y: auto; background: var(--screen); border: 1px solid var(--line); border-radius: 6px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .8rem; }
 .ftx-sep { position: sticky; top: 0; background: #0b1428; color: var(--dim); font-size: .68rem; padding: 1px 8px; border-bottom: 1px solid var(--line); letter-spacing: .06em; }
 .ftx-row { display: flex; gap: 8px; padding: 1px 8px; white-space: nowrap; cursor: pointer; border-left: 3px solid transparent; }
 .ftx-row:hover { background: #0e1a33; }
@@ -895,7 +924,7 @@ button.lockbtn.on { background: var(--yellow); color: #1a1100; border-color: tra
 .ftx-lrow button { min-height: 24px; padding: 0 8px; margin-left: auto; }
 .ftx-lrow .chip { font-size: .7rem; padding: 0 6px; border: 1px solid var(--line2); border-radius: 999px; color: var(--dim); cursor: default; min-height: 0; }
 .ftx-lrow .chip.ok { color: var(--green); border-color: #1f5f4a; } .ftx-lrow .chip.bad { color: var(--red); border-color: #6b1a30; }
-a.btn, label.btn { display: inline-flex; align-items: center; background: linear-gradient(180deg, #1a263d, #131d31); border: 1px solid var(--line2); border-radius: 6px; color: #dbe4f6; padding: 4px 12px; min-height: 34px; font-size: .88rem; text-decoration: none; }
+a.btn, label.btn { display: inline-flex; align-items: center; background: linear-gradient(180deg, var(--btn-top), var(--btn-bot)); border: 1px solid var(--line2); border-radius: 6px; color: var(--btn-text); padding: 4px 12px; min-height: 34px; font-size: .88rem; text-decoration: none; }
 a.btn:hover, label.btn:hover { border-color: var(--cyan); }
 @media (max-width: 480px) {
   .tabs { gap: 3px; }
@@ -1017,7 +1046,7 @@ html[data-tabbed] .ftxgo { display: none !important; }
 .sstv-prog { display: grid; gap: 4px; font-size: .8rem; }
 .sstv-ctl { gap: 6px 10px; align-items: center; }
 .sstv-ctl label { display: inline-flex; align-items: center; gap: 4px; color: var(--dim); font-size: .8rem; }
-.sstv-ctl .btn { cursor: pointer; color: #dbe4f6; }
+.sstv-ctl .btn { cursor: pointer; color: var(--btn-text); }
 .sstv-msg { flex: 1 1 14em; min-width: 0; } .sstv-msg input { flex: 1 1 8em; min-width: 0; min-height: 30px; padding: 2px 8px; }
 .sstv-ctl select { min-height: 30px; padding: 1px 6px; }
 .sstv-txbar { margin-top: 2px; } .sstv-txbar i { background: var(--red); }
