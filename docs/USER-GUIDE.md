@@ -47,7 +47,7 @@ from the Pi itself (no internet needed).
   **Green = active, dark = inactive**; TUNER blinks amber while a tune runs. They
   only show what the radio reports (change the settings in *Filters & DSP > Receiver* and *Transmit*). On a phone they sit on a row of
   their own under VFO-A. A radio profile without one of these functions simply does not show that light. For a cleaner header, switch
-  off the lights you do not need in **Account > Display** (this device only). **Account > Look** changes the colours of the whole app: *Slate* (the default), *Yaesu* (black body, white digits, blue labels, red mode badge, like the radio's own display) or *FT-710* (near-black with amber digits). It is remembered on that device only.
+  off the lights you do not need in **Account > Display** (this device only). **Account > Look** changes the colours of the whole app: *Slate* (the default), *Yaesu* (black body, white digits, blue labels, red mode badge, like the radio's own display) or *FT-710* (near-black with amber digits). **Lines** sets how bright the borders around panels, tabs and buttons are (Soft, Normal or Bright). Both are remembered on that device only.
   **SWR warning:** while you transmit at or above the SWR limit (default 3:1, set by an administrator in Config > Meters, 0 = off) the
   SWR bar turns red and a line under the meters says *High SWR: 3.4:1 - check the antenna and the cable*; it stays for 5 seconds after
   the transmission. The FT-991A reports only a raw SWR value, so its ratio is an estimate ("about").

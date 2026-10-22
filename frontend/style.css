@@ -2,7 +2,7 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 /* Radio Remote - flat dark slate, LED-edge buttons (yellow = selected), labelled blocks, two VFO panels.
    Colour is kept for things that mean something: RX blue, TX red, signal/meters, selection yellow, active panel cyan. */
 :root {
-  --bg: #070b14; --panel: #0b1220; --panel2: #111a2e; --panel3: #19243d; --line: #1c2a44; --line2: #26365a; --seg-off: #131d31;
+  --bg: #070b14; --panel: #0b1220; --panel2: #111a2e; --panel3: #19243d; --line-s: #1c2a44; --line2-s: #26365a; --line-n: #30466f; --line2-n: #44598a; --line-b: #4663a0; --line2-b: #6683bd; --line: var(--line-n); --line2: var(--line2-n); --seg-off: #131d31;
   --text: #e6ecf8; --dim: #7f8fae; --seg-text: #a9b7d3;
   --blue: #3b82f6; --cyan: #22d3ee; --teal: #2dd4bf; --green: #34d399; --yellow: #fbbf24; --orange: #fb923c; --red: #f43f5e; --purple: #a78bfa;
   --accent: var(--cyan); --ok: var(--green); --warn: var(--yellow); --tx: var(--red);
@@ -18,7 +18,7 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 /* ---------- skins: the look is a set of colour values; "Slate" (the :root values above) is the default. The Look chooser is in Account. ---------- */
 /* Yaesu: the radio's own display: black, white digits, royal-blue headers, red mode badges, grey keys */
 html[data-skin=yaesu] {
-  --bg: #000; --panel: #07080d; --panel2: #0d0f17; --panel3: #151824; --line: #1c2033; --line2: #2f3552; --seg-off: #14172a;
+  --bg: #000; --panel: #07080d; --panel2: #0d0f17; --panel3: #151824; --line-s: #1c2033; --line2-s: #2f3552; --line-n: #363d63; --line2-n: #4d5684; --line-b: #50599a; --line2-b: #6f7ab8; --line: var(--line-n); --line2: var(--line2-n); --seg-off: #14172a;
   --text: #f4f5fa; --dim: #8089b8; --seg-text: #aab2dc;
   --cyan: #5468ff; --accent: #5468ff; --yellow: #ff4b3e; --warn: #ffb020; --red: #ff3b30; --tx: #ff3b30;
   --screen: #000; --well: #04050a; --input: #080a12; --body-top: #05060b; --chip: #2a3160; --chip-text: #a9b4ff;
@@ -30,7 +30,7 @@ html[data-skin=yaesu] {
 html[data-skin=yaesu] .vmode #mode { background: #e8321f; color: #fff; padding: 0 9px; border-radius: 3px; font-weight: 700; }      /* the red mode badge of the radio's own display */
 /* FT-710: near-black body, amber display */
 html[data-skin=ft710] {
-  --bg: #08080a; --panel: #101012; --panel2: #17171a; --panel3: #202024; --line: #26262b; --line2: #36363d; --seg-off: #19191d;
+  --bg: #08080a; --panel: #101012; --panel2: #17171a; --panel3: #202024; --line-s: #26262b; --line2-s: #36363d; --line-n: #46464e; --line2-n: #5c5c67; --line-b: #66666f; --line2-b: #80808b; --line: var(--line-n); --line2: var(--line2-n); --seg-off: #19191d;
   --text: #ecebe8; --dim: #8e8b85; --seg-text: #b9b5ad;
   --cyan: #ffa726; --accent: #ffa726; --yellow: #ffb300; --warn: #ffb300; --red: #ff4338; --tx: #ff4338;
   --screen: #020203; --well: #0c0c0e; --input: #0a0a0c; --body-top: #121214; --chip: #24241f; --chip-text: #b8b2a4;
@@ -39,6 +39,9 @@ html[data-skin=ft710] {
   --hot-top: #ffa726; --hot-bot: #e08a0b; --hot-text: #140c00;
   --freq: #ffb347; --freq-tx: #ff8a80; --halo: 255, 167, 38; --glow: 255, 179, 0; --freq-glow: 0 0 12px rgba(255, 167, 38, .5);
 }
+/* line strength (Account > Look): Soft = the old dim lines, Normal = default, Bright = sharper */
+html[data-lines=soft] { --line: var(--line-s); --line2: var(--line2-s); }
+html[data-lines=bright] { --line: var(--line-b); --line2: var(--line2-b); }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { margin: 0; color: var(--text); }
 body {
