@@ -18,7 +18,7 @@ from aiohttp import WSMsgType, web
 from . import __version__, admin, logs, sdnotify, updates
 from .audio.service import AudioService, AudioUnavailable
 from .auth import AuthStore, Session
-from .common import (COOKIE, K_AUDIO, K_AUTH, K_CFG, K_CFGPATH, K_DRIVER, K_GUARD, K_HUB, K_FTX, K_QSOLOG, K_REPORTER, K_RESTART, K_SESSION, K_SSTV,
+from .common import (COOKIE, K_AUDIO, K_AUTH, K_CFG, K_CFGPATH, K_DRIVER, K_GUARD, K_HUB, K_FTX, K_QSOLOG, K_REPORTER, K_RESTART, K_SESSION, K_SSTV, K_CW, K_RTTY,
                      K_RIGCTL, K_STARTED, K_UPDATES, CommandError, client_ip, is_https, read_json)
 from .lease import ControlLease, LeaseError
 from .radio import controls
@@ -45,7 +45,7 @@ MAX_WS_CLIENTS = 24
 CMD_RATE, CMD_BURST, MAX_STRIKES = 40.0, 80, 200
 LEASE_OPS = {"request_control", "respond_control", "release_control", "force_control"}
 MAX_EQ_PRESETS = 20
-SCAN_KEEPS = {"scan_range", "scan_range_stop", "set_level", "set_control", "freedv", "ftx", "ftx_tx", "ftx_halt", "sstv", "sstv_halt", "set_eq", "set_dyn", "eq_preset_save", "eq_preset_delete", "rec"}     # commands that leave a running range scan alone
+SCAN_KEEPS = {"scan_range", "scan_range_stop", "set_level", "set_control", "freedv", "ftx", "ftx_tx", "ftx_halt", "sstv", "sstv_halt", "cw", "cw_set", "cw_clear", "cw_send", "cw_halt", "cw_keyer", "rtty", "rtty_set", "rtty_clear", "rtty_send", "rtty_halt", "set_eq", "set_dyn", "eq_preset_save", "eq_preset_delete", "rec"}     # commands that leave a running range scan alone
 
 
 def _int(v, lo=None, hi=None) -> int:
@@ -79,6 +79,8 @@ class Hub:
         self.reporter = None                     # FreeDV Reporter (set by create_app)
         self.ftx = None                          # the FT8/FT4 engine (set by create_app)
         self.sstv = None                         # the SSTV engine (set by create_app)
+        self.cw = None                           # the CW engine (set by create_app)
+        self.rtty = None                         # the RTTY engine (set by create_app)
         self.scanner = RangeScanner(self)        # the start/stop frequency scan (scan.py)
         self.auto_width = lambda: True           # freedv.auto_width (set by create_app): widen a narrow radio filter when FreeDV is on
         self._widen_task: asyncio.Task | None = None
@@ -231,7 +233,9 @@ class Hub:
                       "mic": session.role in ("operator", "admin"),
                       "freedv": self.audio.freedv_state() if self.audio else {"available": False, "reason": "no audio service", "on": False},
                       "ftx": {"available": self.ftx_ok(), "on": bool(self.ftx and self.ftx.on)},
-                      "sstv": {"available": bool(self.sstv and self.audio and self.audio.available), "on": bool(self.sstv and self.sstv.on)}},
+                      "sstv": {"available": bool(self.sstv and self.audio and self.audio.available), "on": bool(self.sstv and self.sstv.on)},
+                      "cw": {"available": bool(self.cw and self.audio and self.audio.available), "on": bool(self.cw and self.cw.on)},
+                      "rtty": {"available": bool(self.rtty and self.audio and self.audio.available), "on": bool(self.rtty and self.rtty.on)}},
             "state": {**self.driver.state, **self.extra, "ptt_owner": self.guard.owner},
             "safety": {"ptt_permitted": self.guard.permitted, "tx_timeout_s": self.guard.max_tx_s},
         }
@@ -471,6 +475,92 @@ class Hub:
         elif typ == "sstv_halt":
             if self.sstv:
                 await self.sstv.halt("halted by the operator")
+        elif typ == "cw":
+            on = msg.get("on")
+            if not isinstance(on, bool):
+                raise CommandError("cw needs on (true/false)")
+            if not self.cw or not self.audio or not self.audio.available:
+                raise CommandError("CW is not available (no audio)")
+            try:
+                await self.cw.set_on(on)
+            except (ValueError, AudioUnavailable) as e:
+                raise CommandError(str(e)) from None
+            self.auth.audit("cw_on" if on else "cw_off", session.username, None)
+        elif typ == "cw_set":
+            if not self.cw:
+                raise CommandError("CW is not available")
+            pitch, wpm = msg.get("pitch"), msg.get("wpm")
+            if pitch is not None and (isinstance(pitch, bool) or not isinstance(pitch, (int, float)) or not 300 <= pitch <= 1100):
+                raise CommandError("pitch must be 300..1100 Hz (or null for automatic)")
+            if wpm is not None and (isinstance(wpm, bool) or not isinstance(wpm, (int, float)) or not 5 <= wpm <= 60):
+                raise CommandError("speed must be 5..60 WPM (or null for automatic)")
+            self.cw.set_params(pitch, wpm)
+        elif typ == "cw_clear":
+            if self.cw:
+                self.cw.clear()
+        elif typ == "cw_send":
+            if not self.cw:
+                raise CommandError("CW is not available")
+            text = msg.get("text")
+            if not isinstance(text, str) or not 1 <= len(text) <= 400:
+                raise CommandError("cw_send needs text (1..400 characters)")
+            try:
+                r = await self.cw.send(conn_id, text)
+            except ValueError as e:
+                raise CommandError(str(e)) from None
+            self.auth.audit("cw_send", session.username, None, r["text"][:80])
+            return r
+        elif typ == "cw_keyer":
+            if not self.cw or not self.cw.can_send():
+                raise CommandError("this radio cannot send CW from the keyboard")
+            sp, bi = msg.get("speed"), msg.get("break_in")
+            if sp is not None and (isinstance(sp, bool) or not isinstance(sp, int) or not 4 <= sp <= 60):
+                raise CommandError("speed must be 4..60 WPM")
+            if bi is not None and not isinstance(bi, bool):
+                raise CommandError("break_in must be true or false")
+            try:
+                return await self.cw.set_keyer(sp, bi)
+            except Exception as e:
+                raise CommandError(str(e)) from None
+        elif typ == "rtty":
+            on = msg.get("on")
+            if not isinstance(on, bool):
+                raise CommandError("rtty needs on (true/false)")
+            if not self.rtty or not self.audio or not self.audio.available:
+                raise CommandError("RTTY is not available (no audio)")
+            try:
+                await self.rtty.set_on(on)
+            except (ValueError, AudioUnavailable) as e:
+                raise CommandError(str(e)) from None
+            self.auth.audit("rtty_on" if on else "rtty_off", session.username, None)
+        elif typ == "rtty_set":
+            if not self.rtty:
+                raise CommandError("RTTY is not available")
+            try:
+                self.rtty.set_params(**{k: msg[k] for k in ("baud", "shift", "lo", "rev", "usos") if k in msg})
+            except (ValueError, TypeError) as e:
+                raise CommandError(str(e)) from None
+        elif typ == "rtty_clear":
+            if self.rtty:
+                self.rtty.clear()
+        elif typ == "rtty_send":
+            if not self.rtty:
+                raise CommandError("RTTY is not available")
+            text = msg.get("text")
+            if not isinstance(text, str) or not 1 <= len(text) <= 400:
+                raise CommandError("rtty_send needs text (1..400 characters)")
+            try:
+                r = await self.rtty.send(conn_id, text)
+            except ValueError as e:
+                raise CommandError(str(e)) from None
+            self.auth.audit("rtty_send", session.username, None, r["text"][:80])
+            return r
+        elif typ == "rtty_halt":
+            if self.rtty:
+                await self.rtty.halt("halted by the operator")
+        elif typ == "cw_halt":
+            if self.cw:
+                await self.cw.halt("halted by the operator")
         elif typ == "set_level":
             name = msg.get("name")
             rng = caps.level_range(name) if isinstance(name, str) else None
@@ -889,6 +979,18 @@ async def freedv_reporter_status(request):
     return web.json_response(app[K_REPORTER].status(near_hz=app[K_DRIVER].state.get("frequency") or 0))
 
 
+async def rtty_info(request):
+    """RTTY: the state, the standard frequencies, the settings and the decoded text of the last while (any signed-in user)."""
+    return web.json_response(request.app[K_RTTY].state())
+
+
+async def cw_info(request):
+    """CW: the state, the standard frequencies and the decoded text of the last while (any signed-in user)."""
+    eng = request.app[K_CW]
+    await eng.refresh_keyer()                                      # the radio's own keyer speed and break-in, for the screen
+    return web.json_response(eng.state())
+
+
 async def sstv_info(request):
     """SSTV: the state, the modes, the standard frequencies, the settings and the saved pictures (any signed-in user)."""
     return web.json_response(request.app[K_SSTV].state())
@@ -1251,10 +1353,14 @@ def create_app(cfg: dict, driver: RadioDriver | None = None, auth: AuthStore | N
     app[K_HUB].reporter = reporter
 
     from .sstv_engine import SstvEngine
+    from .cw_engine import CwEngine
+    from .rtty_engine import RttyEngine
     from .ftx_engine import FtxEngine
     from .qsolog import QsoLog
     app[K_SSTV] = app[K_HUB].sstv = sstv_engine = SstvEngine(lambda: app[K_CFG], audio, app[K_HUB]._broadcast, lambda: driver.state.get("frequency") or 0, guard,
                                                               lambda cid: cid in app[K_HUB].clients, Path(cfg["storage"]["data_dir"]))
+    app[K_CW] = app[K_HUB].cw = cw_engine = CwEngine(lambda: app[K_CFG], audio, app[K_HUB]._broadcast, lambda: driver.state.get("frequency") or 0, guard, lambda cid: cid in app[K_HUB].clients, driver)
+    app[K_RTTY] = app[K_HUB].rtty = rtty_engine = RttyEngine(lambda: app[K_CFG], audio, app[K_HUB]._broadcast, lambda: driver.state.get("frequency") or 0, guard, lambda cid: cid in app[K_HUB].clients, driver)
     app[K_QSOLOG] = QsoLog(Path(cfg["storage"]["data_dir"]) / "ftx_log.jsonl")
     app[K_FTX] = app[K_HUB].ftx = ftx_engine = FtxEngine(lambda: app[K_CFG], audio, app[K_HUB]._broadcast, lambda: driver.state.get("frequency") or 0, guard,
                                                           lambda cid: cid in app[K_HUB].clients)
@@ -1288,6 +1394,16 @@ def create_app(cfg: dict, driver: RadioDriver | None = None, auth: AuthStore | N
             await sstv_engine.set_on(False)
         except Exception:
             log.exception("SSTV did not stop cleanly")
+        try:
+            await rtty_engine.shutdown()
+            await rtty_engine.set_on(False)
+        except Exception:
+            log.exception("RTTY did not stop cleanly")
+        try:
+            await cw_engine.shutdown()
+            await cw_engine.set_on(False)
+        except Exception:
+            log.exception("CW did not stop cleanly")
         await watchdog.stop()
         await guard.stop()          # un-keys first
         await audio.stop()
@@ -1306,6 +1422,8 @@ def create_app(cfg: dict, driver: RadioDriver | None = None, auth: AuthStore | N
     app.router.add_get("/api/audio/status", audio_status)
     app.router.add_get("/api/freedv", freedv_info)
     app.router.add_get("/api/freedv/reporter", freedv_reporter_status)
+    app.router.add_get("/api/cw", cw_info)
+    app.router.add_get("/api/rtty", rtty_info)
     app.router.add_get("/api/sstv", sstv_info)
     app.router.add_get("/api/sstv/current.png", sstv_current)
     app.router.add_get(r"/api/sstv/images/{name:[a-z0-9.-]+}", sstv_image)

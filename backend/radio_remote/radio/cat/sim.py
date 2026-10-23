@@ -50,6 +50,9 @@ class SimulatedFT991A:
         self.reg = dict(REG_DEFAULTS)
         self.reg_defaults = dict(REG_DEFAULTS)          # payload widths of the generic registers (subclasses may change them)
         self.tune_calls = 0
+        self.keyer = {1: "", 2: "", 3: "", 4: "", 5: "STORED MSG"}      # the five keyer memories (KM)
+        self.ks, self.bi = 20, 0                                         # keyer speed (WPM) and break-in
+        self.ky_plays: list[int] = []                                    # keyer memories played with KY
         self.ft = 0                      # 0 = TX on VFO A, 1 = TX on VFO B (split)
         self.tuning = False
         self.tune_seconds = 0.4          # how long a simulated tune transmits by itself
@@ -150,6 +153,34 @@ class SimulatedFT991A:
                 return await self._send(f"MD0{MODE_CODES[self.mode]};")
             if len(p) == 2 and p[1] in MODES:
                 self.mode = MODES[p[1]]
+                return
+            return await self._send("?;")
+        if name == "KM":
+            if p[:1] in ("1", "2", "3", "4", "5"):
+                slot = int(p[0])
+                if len(p) == 1:
+                    return await self._send(f"KM{slot}{self.keyer[slot]};")
+                if len(p) <= 51:
+                    self.keyer[slot] = p[1:]
+                    return
+            return await self._send("?;")
+        if name == "KS" and "KS" not in self.reg:               # (the HF simulators have them as ordinary registers)
+            if not p:
+                return await self._send(f"KS{self.ks:03d};")
+            if len(p) == 3 and p.isdigit() and 4 <= int(p) <= 60:
+                self.ks = int(p)
+                return
+            return await self._send("?;")
+        if name == "BI" and "BI" not in self.reg:
+            if not p:
+                return await self._send(f"BI{self.bi};")
+            if p in ("0", "1"):
+                self.bi = int(p)
+                return
+            return await self._send("?;")
+        if name == "KY":
+            if p in ("1", "2", "3", "4", "5"):
+                self.ky_plays.append(int(p))
                 return
             return await self._send("?;")
         if name == "TX":

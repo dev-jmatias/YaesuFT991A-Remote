@@ -188,6 +188,8 @@ class AudioService:
         self._last_emit = 0.0
         self.ftx_feed: Callable[[bytes], None] | None = None     # FT8/FT4 receiver (ftx_engine.py): gets the radio's audio frames (never our own transmission)
         self.sstv_feed: Callable[[bytes], None] | None = None    # SSTV receiver (sstv_engine.py): the same frames
+        self.cw_feed: Callable[[bytes], None] | None = None      # CW decoder (cw_engine.py): the same frames
+        self.rtty_feed: Callable[[bytes], None] | None = None    # RTTY decoder (rtty_engine.py): the same frames
         self._holds: set[str] = set()                    # who needs the radio's audio even when no browser listens (the FT8/FT4 and SSTV screens decode on the Pi)
         self.frames_in = self.frames_to_radio = 0
         self._relay = self._rx_track = None
@@ -501,6 +503,16 @@ class AudioService:
                             self.sstv_feed(raw_pcm if not self._tx_gate_open else None)
                         except Exception:
                             log.exception("SSTV receive failed")
+                    if self.cw_feed is not None:
+                        try:
+                            self.cw_feed(raw_pcm if not self._tx_gate_open else None)
+                        except Exception:
+                            log.exception("CW receive failed")
+                    if self.rtty_feed is not None:
+                        try:
+                            self.rtty_feed(raw_pcm if not self._tx_gate_open else None)
+                        except Exception:
+                            log.exception("RTTY receive failed")
                     if self._fd_rx is not None and self._tx_gate_open:
                         pcm = bytes(FRAME_BYTES)                                 # transmitting: never decode (and replay) our own signal
                         self._rx_hold = RX_HOLD_FRAMES

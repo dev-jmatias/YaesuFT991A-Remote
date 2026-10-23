@@ -48,6 +48,7 @@ audio_out_level = true                  # EX 01 01 09 (and AM / FM): the CAT man
 audio_in_level = true                   # EX 01 01 13 RPORT GAIN: audio coming in from the USB
 rear_select = true                    # REAR SELECT DATA / USB (SSB, AM, FM, DATA): the transmit audio source from the rear
 amc_level = true                       # AO: same command as the FTDX101D (AO070)
+cw_text = true                        # typed CW through the radio's keyer memories: KM / KY: same as the FTDX101D; never tried on a radio
 cw_keyer = true                       # KS / KP / KR / BI: same command as the FTDX101D (SD is left out: the radio answers 2 digits, the manual says 4)
 dual_receiver = true                       # FA = MAIN receiver (VFO-A), FB / OI = SUB receiver: the app says MAIN / SUB and hides the A/B copy and swap buttons
 # split / quick_split stay off until tried on the radio

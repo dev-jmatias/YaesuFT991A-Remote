@@ -61,6 +61,7 @@ How to read the table:
 | audio_out_level | - | - | works | works | - |
 | C4FM mode (mode select only) | works | - | - | - | - |
 | cw_keyer | - | - | works | works | - |
+| cw_text | from the manual, untested | from the manual | works | works | from the manual |
 | dual_receiver | - | - | works | works | - |
 | Power off over CAT | works | from the manual | works | works | from the manual |
 | Power on over CAT (from standby) | works | from the manual | works | works | from the manual |

@@ -42,6 +42,14 @@ and goes back by itself if the new version does not start. Settings and accounts
 | `radio-remote-rade-linux-aarch64.tar.xz` | the optional RADE library (FreeDV neural modes V1 and V2) for a Raspberry Pi, installed with `install_rade.sh` (the PC build is `…-x86_64.tar.xz`) |
 | `SHA256SUMS` | checksums of all of the above |
 
+### What is new in 1.1.50
+
+- **CW on the Digital tab.** Decodes Morse from the radio's audio into text, with a spectrum, the pitch and speed it finds by itself (or fixed by you), and a Sound-here choice. **Send from the keyboard**: type text, or use the CQ / My call / 599 / 73 buttons; it is played by the radio's own keyer (the FT-991A's CAT can only play stored keyer memories, so the text goes through keyer memory 5 in pieces, and the radio's own text is put back). Needs the radio in CW-U or CW-L and break-in on. **Sending has not yet been tried on a real radio: try it into a dummy load first.** See `cw.md`.
+- **RTTY on the Digital tab.** Decodes and sends radio teletype (45.45 / 50 / 75 / 100 baud, 170 / 200 / 425 / 850 Hz shift) as audio tones in USB, LSB or a data mode, with mark and space shown on the spectrum, Reverse and USOS options. See `rtty.md`.
+- **Log contacts on the CW and RTTY screens.** Callsign (double-click it in the text), reports, name and comment; the contacts go into the same log as FT8/FT4 (one ADIF file, QRZ and eQSL upload).
+- **Ready for the other radio profiles.** Keyboard CW is switched on for the FTDX10, FTDX101D/MP and FT-710 profiles too (same keyer commands; tested on their simulators only, never on those radios).
+- **TX Power on the CW, RTTY, FT8/FT4 and SSTV screens**, wider spacing in the tuning row, and the Look chooser in Account shows the full look names.
+
 ### What is new in 1.1.49
 
 - **Brighter borders, and a Lines choice.** The lines around the panels, tabs and buttons are now brighter (same thickness) in every look. **Account > Look > Lines** lets you pick **Soft** (the old dim lines), **Normal** (the new default) or **Bright**. Saved on that device only.

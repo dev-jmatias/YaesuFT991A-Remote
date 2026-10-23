@@ -71,6 +71,11 @@ DEFAULTS: dict[str, dict[str, Any]] = {
                "auto_qrz": False, "auto_eqsl": False, "auto_clublog": False},
     # SSTV (the SSTV tab; see sstv_engine.py and audio/sstv.py). tx_level_db = level of the tones sent to the radio (keep the ALC at zero); keep = how many received pictures are kept on the Pi.
     "sstv": {"tx_level_db": -6.0, "keep": 60},
+    # CW (the CW tab; see cw_engine.py). The FT-991A's CAT can only play its stored keyer memories, so typed text is written into keyer memory `keyer_slot` (1-5; its old text is put back afterwards)
+    # and played, in pieces of at most `chunk_chars` characters (the memory holds 50).
+    "cw": {"keyer_slot": 5, "chunk_chars": 24},
+    # RTTY (the RTTY tab; see rtty_engine.py). tx_level_db = level of the tones sent to the radio (keep the ALC at zero).
+    "rtty": {"tx_level_db": -6.0},
     "storage": {"data_dir": "data"},
 }
 
@@ -182,6 +187,13 @@ def validate(cfg: dict) -> dict:
         raise ConfigError("sstv.tx_level_db must be -40..0")
     if not 5 <= sv["keep"] <= 500:
         raise ConfigError("sstv.keep must be 5..500")
+    if not -40 <= cfg["rtty"]["tx_level_db"] <= 0:
+        raise ConfigError("rtty.tx_level_db must be -40..0")
+    cwc = cfg["cw"]
+    if isinstance(cwc["keyer_slot"], bool) or cwc["keyer_slot"] not in (1, 2, 3, 4, 5):
+        raise ConfigError("cw.keyer_slot must be 1..5")
+    if isinstance(cwc["chunk_chars"], bool) or not isinstance(cwc["chunk_chars"], int) or not 10 <= cwc["chunk_chars"] <= 50:
+        raise ConfigError("cw.chunk_chars must be 10..50")
     up = cfg["upload"]
     for k, v in up.items():
         if isinstance(v, str) and (len(v) > 200 or any(ord(ch) < 32 for ch in v)):

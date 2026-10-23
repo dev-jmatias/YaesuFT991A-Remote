@@ -1,4 +1,4 @@
-"""The FT8 / FT4 contact log: one JSON line per contact in the data directory, exported as an ADIF file (every logging program imports ADIF).
+"""The contact log (FT8, FT4, CW and RTTY): one JSON line per contact in the data directory, exported as an ADIF file (every logging program imports ADIF).
 
 A contact is a dict with the ADIF-style fields below. `uploaded` remembers per service ("qrz", "eqsl", "clublog") whether and when it went, so nothing is sent twice.
 """
@@ -45,7 +45,7 @@ def report_comment(q: dict) -> str:
 
 
 def adif_record(q: dict, extra: dict | None = None) -> str:
-    """One contact as an ADIF record. FT8 is its own ADIF mode; FT4 is the submode FT4 of MFSK."""
+    """One contact as an ADIF record. FT8, CW and RTTY are ADIF modes of their own; FT4 is the submode FT4 of MFSK."""
     mode = q.get("mode", "FT8")
     parts = [adif_field("CALL", q["call"]), adif_field("QSO_DATE", q.get("qso_date")), adif_field("TIME_ON", q.get("time_on")),
              adif_field("QSO_DATE_OFF", q.get("qso_date_off")), adif_field("TIME_OFF", q.get("time_off")),
@@ -62,7 +62,7 @@ def adif_record(q: dict, extra: dict | None = None) -> str:
 
 
 def adif_header(version: str, extra: dict | None = None) -> str:
-    h = "Radio Remote FT8/FT4 log\n" + adif_field("ADIF_VER", "3.1.4") + adif_field("PROGRAMID", "Radio Remote") + adif_field("PROGRAMVERSION", version)
+    h = "Radio Remote log\n" + adif_field("ADIF_VER", "3.1.4") + adif_field("PROGRAMID", "Radio Remote") + adif_field("PROGRAMVERSION", version)
     for k, v in (extra or {}).items():
         h += adif_field(k, v)
     return h + "\n<EOH>\n"
@@ -80,13 +80,13 @@ def clean(entry: dict) -> dict:
         raise ValueError("the grid square does not look right")
     out["gridsquare"] = grid
     mode = str(entry.get("mode", "FT8")).upper()
-    if mode not in ("FT8", "FT4"):
-        raise ValueError("mode must be FT8 or FT4")
+    if mode not in ("FT8", "FT4", "CW", "RTTY"):
+        raise ValueError("mode must be FT8, FT4, CW or RTTY")
     out["mode"] = mode
     for k in ("rst_sent", "rst_rcvd"):
         v = str(entry.get(k, "") or "").strip()
         if v and not re.fullmatch(r"[+-]?\d{1,3}", v):
-            raise ValueError(f"{k} must be a signal report such as -10 or +05")
+            raise ValueError(f"{k} must be a signal report such as -10, +05 or 599")
         out[k] = v
     try:
         f = float(entry.get("freq_mhz"))

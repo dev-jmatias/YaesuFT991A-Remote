@@ -40,6 +40,8 @@ class MockDriver(RadioDriver):
         for m in self.memories:
             m["band"] = band_for(m["frequency"])
         self.tune_calls: list[str] = []           # for tests: "start" / "stop"
+        self.keyer_memories: dict[int, str] = {5: "MY OLD MESSAGE"}
+        self.cw_calls: list[tuple] = []           # for tests: ("set", slot, text) / ("play", slot, text) / ("stop",)
         self.tune_duration_s = 1.5                # how long the simulated tune transmits
         self._tune_task: asyncio.Task | None = None
         self._refresh_width()
@@ -176,6 +178,35 @@ class MockDriver(RadioDriver):
     async def set_ptt(self, on: bool) -> None:
         self.ptt_calls.append(on)
         self._update(tx=on)
+
+    # CW from the keyboard: keyer memories (the real FT-991A has five of 50 characters); playing one is recorded and keys the simulated radio
+    async def cw_memory_get(self, slot: int) -> str:
+        return self.keyer_memories.get(slot, "")
+
+    async def cw_memory_set(self, slot: int, text: str) -> None:
+        if not 1 <= slot <= 5 or not 0 < len(text) <= 50:
+            raise RadioError("keyer memory: slot 1..5, 1..50 characters")
+        self.keyer_memories[slot] = text
+        self.cw_calls.append(("set", slot, text))
+
+    async def cw_play(self, slot: int) -> None:
+        self.cw_calls.append(("play", slot, self.keyer_memories.get(slot, "")))
+        self._update(tx=True)
+
+    async def cw_keyer_get(self) -> dict:
+        return {"speed": int(self.state.get("cw_speed") or 20), "break_in": bool(self.state.get("break_in", True))}
+
+    async def cw_keyer_set(self, speed: int | None = None, break_in: bool | None = None) -> None:
+        if speed is not None:
+            if isinstance(speed, bool) or not isinstance(speed, int) or not 4 <= speed <= 60:
+                raise RadioError("keyer speed: 4..60 WPM")
+            self._update(cw_speed=speed)
+        if break_in is not None:
+            self._update(break_in=bool(break_in))
+
+    async def cw_stop(self) -> None:
+        self.cw_calls.append(("stop",))
+        self._update(tx=False)
 
     def _refresh_width(self) -> None:
         s = self.state

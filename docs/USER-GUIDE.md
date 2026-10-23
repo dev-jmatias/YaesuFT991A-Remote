@@ -208,6 +208,8 @@ A **Recorder** block under *Mode* on the Radio tab has four buttons of one size:
 * At home: `https://<pi-name>.local`. Your device must trust the Pi's certificate once (see [security and remote access](06-security-remote.md)).
 * **FreeDV** digital voice (RADE V1 and RADE V2): the **Digital** tab, **FreeDV** switch, switches it on and off and has preset channels; the Pi does the encoding and decoding. See [FreeDV](freedv.md).
 * **FT8 and FT4**: the **Digital** tab, **FT8/FT4** switch (on the all-in-one desktop layout the FT8/FT4 button under the title) decodes the band, calls and answers with the standard sequence, keeps an ADIF log and can upload it to QRZ, eQSL and Club Log. See [FT8 and FT4](ft8.md).
+* **CW** (Morse): the **Digital** tab, **CW** switch, decodes the Morse in the radio's audio into text, with a spectrum, the pitch and the speed it found and sends what you type through the radio's keyer (see `cw.md`).
+* **RTTY** (radio teletype): the **Digital** tab, **RTTY** switch, decodes the two tones into text, sends what you type as Baudot audio tones (45.45 baud / 170 Hz by default) and logs contacts (see `rtty.md`).
 * **SSTV** (slow-scan television): the **Digital** tab, **SSTV** switch, receives pictures from the radio's audio line by line and transmits a picture of your own with your callsign printed on it. See [SSTV](sstv.md).
 * A logbook on another computer (Log4OM and others) can follow and tune the radio over the home network: [logbook link](logbook.md).
 * Away from home: **Tailscale** ([guide](tailscale.md)). No port is opened on your router.

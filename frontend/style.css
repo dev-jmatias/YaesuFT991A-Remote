@@ -1014,11 +1014,11 @@ html[data-tabbed] .app[data-tab=radio] [data-pane=filters], html[data-tabbed] .a
 html[data-tabbed] .app[data-tab=filters] [data-pane=vfo], html[data-tabbed] .app[data-tab=filters] [data-pane=levels], html[data-tabbed] .app[data-tab=filters] [data-pane=audio],
 html[data-tabbed] .app[data-tab=audio] [data-pane=vfo], html[data-tabbed] .app[data-tab=audio] [data-pane=filters] { display: none !important; }
 /* the three digital screens and their switch only show on the Digital tab (FreeDV is also a card of the radio page on the desktop layout) */
-html .app [data-pane=digsw], html .app [data-pane=ftx], html .app [data-pane=sstv], html[data-tabbed] .app [data-pane=freedv] { display: none !important; }
+html .app [data-pane=digsw], html .app [data-pane=ftx], html .app [data-pane=sstv], html .app [data-pane=cw], html .app [data-pane=rtty], html[data-tabbed] .app [data-pane=freedv] { display: none !important; }
 html .app[data-tab=digital] [data-pane=digsw] { display: flex !important; }
-html .app[data-tab=digital][data-dig=freedv] [data-pane=freedv], html .app[data-tab=digital][data-dig=ftx] [data-pane=ftx], html .app[data-tab=digital][data-dig=sstv] [data-pane=sstv] { display: block !important; grid-column: 1 / -1; grid-area: auto; }
+html .app[data-tab=digital][data-dig=freedv] [data-pane=freedv], html .app[data-tab=digital][data-dig=ftx] [data-pane=ftx], html .app[data-tab=digital][data-dig=sstv] [data-pane=sstv], html .app[data-tab=digital][data-dig=cw] [data-pane=cw], html .app[data-tab=digital][data-dig=rtty] [data-pane=rtty] { display: block !important; grid-column: 1 / -1; grid-area: auto; }
 html .app[data-tab=digital] [data-pane=vfo], html .app[data-tab=digital] [data-pane=filters], html .app[data-tab=digital] [data-pane=levels], html .app[data-tab=digital] [data-pane=audio] { display: none !important; }
-html .app[data-tab=digital][data-dig=ftx] [data-pane=ptt], html .app[data-tab=digital][data-dig=sstv] [data-pane=ptt] { display: none !important; }        /* these two transmit from the Pi: no voice PTT button */
+html .app[data-tab=digital][data-dig=ftx] [data-pane=ptt], html .app[data-tab=digital][data-dig=sstv] [data-pane=ptt], html .app[data-tab=digital][data-dig=cw] [data-pane=ptt], html .app[data-tab=digital][data-dig=rtty] [data-pane=ptt] { display: none !important; }        /* these two transmit from the Pi: no voice PTT button */
 html:not([data-tabbed]) .app[data-tab=digital]:not([data-dig=freedv]) [data-pane=freedv] { display: none !important; }
 html .app[data-tab=digital] .layout { grid-template-areas: none; grid-template-columns: minmax(0, 1fr); }
 html .app [data-pane=digsw] { order: -2; padding: 6px 8px; }
@@ -1063,19 +1063,45 @@ html[data-tabbed] .ftxgo { display: none !important; }
 .sstv-lbc { max-width: min(96vw, 1000px); display: grid; gap: 8px; justify-items: center; }
 .sstv-lbc img { max-width: 100%; max-height: 74vh; height: auto; border: 1px solid var(--line2); border-radius: 6px; background: #000; }
 @media (max-width: 480px) { .sstv-gallery { grid-template-columns: repeat(2, minmax(0, 1fr)); } .sstv-ctl label { font-size: .75rem; } }
-.sstv-tune { gap: 6px 12px; align-items: center; }
-.sstv-tune label { display: inline-flex; align-items: center; gap: 4px; color: var(--dim); font-size: .8rem; }
-.sstv-setf { display: inline-flex; align-items: center; gap: 6px; margin: 0; }
+.sstv-tune { gap: 8px 26px; align-items: center; padding: 2px 0; }
+.sstv-tune label { display: inline-flex; align-items: center; gap: 8px; color: var(--dim); font-size: .8rem; }
+.sstv-setf { display: inline-flex; align-items: center; gap: 8px; margin: 0; }
 .sstv-setf input { width: 7.5em; min-height: 30px; padding: 2px 8px; }
 .sstv-tune button { min-height: 30px; padding: 2px 11px; }
-.sstv-step { display: inline-flex; align-items: center; gap: 4px; }
+.sstv-step { display: inline-flex; align-items: center; gap: 6px; }
 .sstv-step button { min-width: 34px; font-size: 1.05rem; line-height: 1; }
 .sstv-tune select { min-height: 30px; padding: 1px 6px; }
 .sstv-sql { display: inline-flex; min-width: 0; } .sstv-sql .arow { margin: 0; }
-@media (max-width: 480px) { .sstv-tune { gap: 6px 8px; } .sstv-setf input { width: 6.5em; } }
+@media (max-width: 480px) { .sstv-tune { gap: 8px 16px; } .sstv-setf input { width: 6.5em; } }
 .sstv-sql .arow { grid-template-columns: auto 120px 3.2em; gap: 8px; min-height: 0; padding: 0; border: 0; }
 
 /* the radio's TX power on the FT8/FT4 and SSTV screens */
 .txpwr { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
 .txpwr input[type=range] { width: 120px; min-height: 26px; }
 .txpwr b { min-width: 3.2em; font-weight: 600; }
+
+/* the Look chooser in Account: wide enough for the longest look name */
+#look fieldset { grid-template-columns: repeat(auto-fill, minmax(min(100%, 19em), 1fr)); }
+
+/* CW screen */
+.cw-scope { display: grid; gap: 4px; margin: 8px 0; }
+.cw-scope canvas { width: 100%; height: 84px; display: block; background: var(--screen); border: 1px solid var(--line); border-radius: 6px; cursor: crosshair; }
+.cw-axis { display: flex; justify-content: space-between; font-size: .66rem; color: var(--dim); font-variant-numeric: tabular-nums; }
+.cw-ctl { gap: 8px 22px; align-items: center; }
+.cw-ctl label { display: inline-flex; align-items: center; gap: 8px; color: var(--dim); font-size: .8rem; }
+.cw-ctl input[type=number] { width: 5em; min-height: 30px; padding: 2px 6px; }
+.cw-text { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 1.05rem; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--screen); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; height: clamp(180px, 34vh, 340px); overflow-y: auto; }
+.cw-send { margin-top: 8px; }
+.cw-in { flex: 1 1 16em; min-width: 0; min-height: 36px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; text-transform: uppercase; }
+.cw-in::placeholder { text-transform: none; }
+
+/* the "Log a contact" panel of the CW and RTTY screens */
+.qsop { margin-top: 8px; display: grid; gap: 6px; }
+.qsop-form { gap: 6px 10px; align-items: end; }
+.qsop-form label { display: grid; gap: 2px; font-size: .78rem; color: var(--dim); }
+.qsop-form input { min-height: 32px; padding: 2px 8px; }
+.qsop-call { width: 9em; text-transform: uppercase; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.qsop-rst { width: 4.5em; }
+.qsop-cmt { flex: 1 1 12em; }
+.qsop-cmt input { width: 100%; }
+.cw > .sstv-tune, .rtty > .sstv-tune { margin-top: 8px; }        /* the same room under the top bar as on the SSTV screen */

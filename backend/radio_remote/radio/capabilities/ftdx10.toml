@@ -10,6 +10,7 @@ bench_tested = false
 is_mock = false
 
 [features]
+cw_text = true                        # typed CW through the radio's keyer memories: KM P1 text; / KY P1; (FTDX10 CAT manual p.15-16, identical to the FT-991A's); never tried on a radio
 vhf = false
 uhf = false
 antenna_switching = false

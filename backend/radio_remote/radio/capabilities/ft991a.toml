@@ -22,6 +22,7 @@ ptt = true                            # TX0/TX1 (p.17). BENCH-VERIFIED (operator
 power_off_cat = true                  # PS0 (p.14)
 power_on_cat = true                   # PS1 (p.15): dummy data, then PS1 after 1-2 s. BENCH-VERIFIED (power on and off both work over USB from standby)
 c4fm = true                           # MD0E (p.11), mode select only
+cw_text = true                        # KM P1 text; stores a keyer memory (1-5, 50 characters), KY P1; plays it (p.8, p.9 of the CAT manual): typed CW goes through the radio's own keyer. NOT yet verified on the radio
 dnr = true                            # NR/RL
 noise_blanker = true                  # NB/NL
 auto_notch = true                     # BC

@@ -14,6 +14,7 @@ swr_meter = true
 alc_meter = true
 comp_meter = true
 ptt = true
+cw_text = true                        # typed CW through the radio's keyer memories (simulated)
 power_off_cat = false
 power_on_cat = false
 width = true

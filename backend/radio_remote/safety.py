@@ -40,6 +40,8 @@ class TxGuard:
         self.owner: str | None = None
         self.keyed = False
         self.tuning = False
+        self.keyer = False                # the radio's own keyer is sending typed CW (cw_engine.py): the radio keys itself, we only watch the clock and the operator
+        self._keyer_s = 0.0
         self._keyed_at = 0.0
         self._last_hb = 0.0
         self._last_on_request = -1e9
@@ -70,6 +72,8 @@ class TxGuard:
                     raise TxRefused("PTT locked after timeout; release first")
                 if self.tuning:
                     raise TxRefused("the antenna tuner is tuning; wait for it to finish")
+                if self.keyer:
+                    raise TxRefused("the CW keyer is sending; halt it first")
                 if self.keyed:
                     if owner != self.owner:
                         raise TxRefused("another client holds PTT")
@@ -119,6 +123,39 @@ class TxGuard:
                 raise TxRefused("only the client that started the tune can stop it")
             await self._unkey("tune stopped by user")
 
+    # ---------------------------------------------------------------- KEYER
+    async def start_keyer(self, owner: str, seconds: float) -> None:
+        """A piece of typed CW is about to be played by the radio's keyer (the radio keys itself): same permission, single owner and time limit as a PTT, held with heartbeats."""
+        async with self._lock:
+            if not self.permitted:
+                raise TxRefused("transmitting is disabled (safety.allow_ptt = false)")
+            if not self.driver.state.get("connected"):
+                raise TxRefused("radio not connected")
+            if self._locked:
+                raise TxRefused("transmit is locked after a timeout; press PTT once to reset")
+            if self.keyed or self.tuning:
+                raise TxRefused("already transmitting")
+            if seconds > self.max_tx_s:
+                raise TxRefused(f"that takes {int(seconds)} s but the transmit time limit is {int(self.max_tx_s)} s")
+            now = self.clock()
+            if now - self._last_on_request < MIN_ON_INTERVAL_S:
+                raise TxRefused("transmit requests too frequent")
+            self._last_on_request = now
+            self.keyed, self.keyer, self.owner, self._keyer_s = True, True, owner, seconds
+            self._keyed_at = self._last_hb = now
+            log.info("CW keyer on owner=%s (%.0f s)", owner, seconds)
+
+    async def end_keyer(self, owner: str, stop: bool = False) -> None:
+        """The piece has been played (stop=False: nothing is sent to the radio) or must be cut short (stop=True: the radio is told to un-key)."""
+        async with self._lock:
+            if not self.keyer or owner != self.owner:
+                return
+            if stop:
+                await self._unkey("keyer stopped")
+            else:
+                log.info("CW keyer done owner=%s", self.owner)
+                self._forget()
+
     # ------------------------------------------------------------- housekeeping
     async def heartbeat(self, owner: str) -> None:
         if self.keyed and owner == self.owner:
@@ -136,7 +173,7 @@ class TxGuard:
 
     def _forget(self) -> None:
         was_tuning = self.tuning
-        self.keyed, self.tuning, self.owner = False, False, None
+        self.keyed, self.tuning, self.keyer, self.owner = False, False, False, None
         if was_tuning:
             self.driver.publish(tuning=False)
 
@@ -146,6 +183,8 @@ class TxGuard:
         try:
             if self.tuning:
                 await self.driver.tune_stop()              # only ever sends a stop while the radio is really transmitting
+            elif self.keyer:
+                await self.driver.cw_stop()
             else:
                 await self.driver.set_ptt(False)
         except Exception:
@@ -153,7 +192,7 @@ class TxGuard:
             self._retry_needed = True
             return                    # keyed stays True -> watchdog retries
         self._retry_needed = False
-        log.info("%s off (%s) owner=%s", "TUNE" if self.tuning else "PTT", reason, self.owner)
+        log.info("%s off (%s) owner=%s", "TUNE" if self.tuning else "CW KEYER" if self.keyer else "PTT", reason, self.owner)
         self._forget()
 
     async def tick(self) -> None:
@@ -174,6 +213,15 @@ class TxGuard:
                 async with self._lock:
                     await self._unkey(reason or "retry")
             return
+        if self.keyer:
+            if now - self._keyed_at > min(self._keyer_s + 3.0, self.max_tx_s):
+                reason = "keyer timeout"
+            elif now - self._last_hb > self.hb_timeout:
+                reason = "heartbeat lost"
+            if reason or self._retry_needed:
+                async with self._lock:
+                    await self._unkey(reason or "retry")
+            return                    # the radio keys itself between the elements: its TX state says nothing about whether we may still be sending
         if self._lock.locked():
             return                    # a key or un-key is in progress: the radio's TX state is changing because of it (not on its own)
         if self.driver.state.get("connected") and self.driver.state.get("tx") is False and not self._retry_needed:

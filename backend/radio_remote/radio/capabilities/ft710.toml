@@ -10,6 +10,7 @@ bench_tested = false
 is_mock = false
 
 [features]
+cw_text = true                        # typed CW through the radio's keyer memories: KM / KY as in the FTDX10 manual (the same keyer commands); not read in this radio's own manual and never tried on a radio
 vhf = false
 uhf = false
 antenna_switching = false

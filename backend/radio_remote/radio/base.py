@@ -131,6 +131,25 @@ class RadioDriver(ABC):
     async def tune_stop(self) -> None:
         return None
 
+    # CW from the keyboard: the radio's own keyer plays text. Only the CW engine (through TxGuard) calls these.
+    async def cw_memory_get(self, slot: int) -> str:
+        raise RadioError("this radio cannot send CW from the keyboard")
+
+    async def cw_memory_set(self, slot: int, text: str) -> None:
+        raise RadioError("this radio cannot send CW from the keyboard")
+
+    async def cw_play(self, slot: int) -> None:
+        raise RadioError("this radio cannot send CW from the keyboard")
+
+    async def cw_keyer_get(self) -> dict:
+        raise RadioError("this radio cannot send CW from the keyboard")
+
+    async def cw_keyer_set(self, speed: int | None = None, break_in: bool | None = None) -> None:
+        raise RadioError("this radio cannot send CW from the keyboard")
+
+    async def cw_stop(self) -> None:
+        return None
+
     async def read_signal(self, settle_s: float) -> int | None:
         """The S-meter reading (raw 0..255) a moment after a frequency change; the range scan calls this at every step."""
         await asyncio.sleep(settle_s)

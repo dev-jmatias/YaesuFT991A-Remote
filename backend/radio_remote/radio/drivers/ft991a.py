@@ -945,6 +945,59 @@ class YaesuCatDriver(RadioDriver):
         await self._guard_cat(c.send(self.proto.TUNE_STOP, prio=PRIO_PTT))
         log.warning("tune stop sent")
 
+    # --- CW from the keyboard (FT-991A: KM stores a keyer memory, KY plays it; the CAT manual has no KY with free text) ---
+    def _need_keyer(self):
+        if not self.caps.has("cw_text"):
+            raise RadioError("this radio profile cannot send CW from the keyboard")
+        return self._need_client()
+
+    async def cw_memory_get(self, slot: int) -> str:
+        c = self._need_keyer()
+        ans = await self._guard_cat(c.request(f"KM{slot};", prio=PRIO_USER))          # KM P1 P2...;  P1 = memory 1..5
+        body = ans[3:-1] if ans.startswith(f"KM{slot}") and ans.endswith(";") else ""
+        return body.rstrip()
+
+    async def cw_memory_set(self, slot: int, text: str) -> None:
+        c = self._need_keyer()
+        if not 1 <= slot <= 5 or not 0 < len(text) <= 50 or ";" in text:
+            raise RadioError("keyer memory: slot 1..5, 1..50 characters")
+        await self._guard_cat(c.send(f"KM{slot}{text};", prio=PRIO_PTT))
+
+    async def cw_play(self, slot: int) -> None:
+        """KY P1; plays keyer memory P1 (1..5). KEYS THE TRANSMITTER (through the radio's break-in). Only TxGuard-protected callers."""
+        c = self._need_keyer()
+        if not 1 <= slot <= 5:
+            raise RadioError("keyer memory: slot 1..5")
+        await self._guard_cat(c.send(f"KY{slot};", prio=PRIO_PTT))
+
+    async def cw_keyer_get(self) -> dict:
+        """The keyer speed (KS, WPM) and break-in (BI): the sending time of a piece is worked out from the speed the radio really has."""
+        c = self._need_keyer()
+        ks = await self._guard_cat(c.request("KS;", prio=PRIO_USER))
+        bi = await self._guard_cat(c.request("BI;", prio=PRIO_USER))
+        if not (ks.startswith("KS") and ks[2:5].isdigit() and bi.startswith("BI") and bi[2:3] in ("0", "1")):
+            raise RadioError(f"unexpected keyer answers {ks!r} {bi!r}")
+        out = {"speed": int(ks[2:5]), "break_in": bi[2] == "1"}
+        self._update(cw_speed=out["speed"], break_in=out["break_in"])
+        return out
+
+    async def cw_keyer_set(self, speed: int | None = None, break_in: bool | None = None) -> None:
+        c = self._need_keyer()
+        if speed is not None:
+            if isinstance(speed, bool) or not isinstance(speed, int) or not 4 <= speed <= 60:
+                raise RadioError("keyer speed: 4..60 WPM")
+            await self._guard_cat(c.send(f"KS{speed:03d};", prio=PRIO_USER))
+        if break_in is not None:
+            await self._guard_cat(c.send(f"BI{1 if break_in else 0};", prio=PRIO_USER))
+        await self.cw_keyer_get()
+
+    async def cw_stop(self) -> None:
+        """No CAT command stops the keyer playing: TX0 un-keys the transmitter (as the PTT release does)."""
+        c = self.client
+        if c is None:
+            return
+        await self._guard_cat(c.send("TX0;", prio=PRIO_PTT))
+
     async def set_ptt(self, on: bool) -> None:
         """Only TxGuard calls this. TX1;/TX0; then read back TX; (p.17)."""
         c = self._need_client() if on else self.client
