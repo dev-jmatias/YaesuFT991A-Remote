@@ -18,7 +18,7 @@ exec > "$LOG" 2>&1
 echo "JS8 system preparation requested by ${WHO:-?} at $(date -u +%FT%TZ)"
 logger -t radio-remote-js8setup "preparation requested by ${WHO:-?} in the web page" 2>/dev/null || true
 
-PKGS="${RR_JS8_PACKAGES:-libgl1 libegl1 libfontconfig1 libharfbuzz0b libfreetype6 libx11-xcb1 pulseaudio pulseaudio-utils}"
+PKGS="${RR_JS8_PACKAGES:-libgl1 libegl1 libopengl0 libfontconfig1 libharfbuzz0b libfreetype6 libx11-xcb1 pulseaudio pulseaudio-utils}"
 if command -v apt-get >/dev/null; then
   export DEBIAN_FRONTEND=noninteractive
   apt-get install -y --no-install-recommends $PKGS || { echo "RESULT: failed (apt-get)"; exit 1; }

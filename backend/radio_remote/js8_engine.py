@@ -19,6 +19,7 @@ import collections
 import ctypes.util
 import json
 import logging
+import os
 import platform
 import shutil
 import sys
@@ -35,8 +36,26 @@ from .safety import TxRefused
 
 log = logging.getLogger("js8")
 
-VERSION = "v3.0.3"                                                  # the JS8Call-improved release this was built and tested against
-APP_URLS = {m: f"https://github.com/JS8Call-improved/JS8Call-improved/releases/download/{VERSION}/JS8Call-{VERSION}-{m}.AppImage" for m in ("aarch64", "x86_64")}
+VERSION = "v3.0.3"                                                  # the JS8Call-improved release this was built and tested against (needs glibc 2.38 or newer: Debian 13, Ubuntu 24.04)
+OLD_VERSION = "v3.0.2"                                              # the same network interface, built for older systems (Debian 12): used when the system's glibc is older than 2.38
+ARCHS = ("aarch64", "x86_64")
+
+
+def glibc() -> tuple[int, int]:
+    try:
+        v = os.confstr("CS_GNU_LIBC_VERSION").split()[-1].split(".")
+        return int(v[0]), int(v[1])
+    except (AttributeError, ValueError, OSError, IndexError):
+        return (2, 99)                                              # unknown (not glibc): try the newest
+
+
+def wanted_version() -> str:
+    return VERSION if glibc() >= (2, 38) else OLD_VERSION
+
+
+def app_url(arch: str, version: str | None = None) -> str:
+    v = version or wanted_version()
+    return f"https://github.com/JS8Call-improved/JS8Call-improved/releases/download/{v}/JS8Call-{v}-{arch}.AppImage"
 API_HOST, API_PORT = "127.0.0.1", 2442
 RX_DEVICE, TX_DEVICE = "hw:Loopback,0,0", "hw:Loopback,0,1"
 SPEEDS = [(4, "Slow", 30), (0, "Normal", 15), (1, "Fast", 10), (2, "Turbo (JS8 40)", 6), (8, "JS8 60", 4)]      # JS8Call's speed numbers, names and slot lengths in seconds
@@ -98,10 +117,10 @@ def prereqs(data: Path) -> dict:
     """What is missing on this machine for JS8Call (the web page shows it and offers the buttons that fix it)."""
     arch = platform.machine()
     missing = []
-    platform_ok = sys.platform.startswith("linux") and arch in APP_URLS
+    platform_ok = sys.platform.startswith("linux") and arch in ARCHS
     if not platform_ok:
         return {"platform_ok": False, "arch": arch, "missing": ["a supported system (Linux on a Raspberry Pi 4 or a 64-bit PC)"], "system_ok": False, "app_ok": False}
-    libs = all(ctypes.util.find_library(n) for n in ("GL", "EGL", "fontconfig", "harfbuzz", "freetype"))
+    libs = all(ctypes.util.find_library(n) for n in ("GL", "EGL", "fontconfig", "harfbuzz", "freetype") + (("OpenGL",) if wanted_version() == OLD_VERSION else ()))
     pulse = shutil.which("pulseaudio") is not None
     try:
         loop = "Loopback" in Path("/proc/asound/cards").read_text()
@@ -114,6 +133,12 @@ def prereqs(data: Path) -> dict:
     if not loop:
         missing.append("the loopback sound card")
     app_ok = (data / "app" / "squashfs-root" / "AppRun").is_file()
+    try:
+        have = (data / "app" / "version").read_text().strip()
+    except OSError:
+        have = VERSION                                              # installed before the version was recorded
+    if app_ok and have != wanted_version():
+        app_ok = False                                              # e.g. v3.0.3 on a Debian 12 system, where it cannot start: the Install button fetches the right one
     return {"platform_ok": True, "arch": arch, "libs": libs, "pulse": pulse, "loopback": loop, "system_ok": libs and pulse and loop, "app_ok": app_ok, "missing": missing}
 
 
@@ -155,7 +180,7 @@ class Js8Engine:
         return {"callsign": config.ftx_callsign(c), "grid_square": config.ftx_grid(c), "tx_level_db": c["js8"]["tx_level_db"]}
 
     def state(self) -> dict:
-        return {"on": self.on, "status": self.status, "error": self.last_error, "api_up": self.api_up, "prereq": prereqs(self.data), "installing": self.installing, "version": VERSION,
+        return {"on": self.on, "status": self.status, "error": self.last_error, "api_up": self.api_up, "prereq": prereqs(self.data), "installing": self.installing, "version": wanted_version(),
                 "dial": self.dial, "offset": self.offset, "speed": self.speed, "speeds": [{"n": n, "name": nm, "period": p} for n, nm, p in SPEEDS], "bands": [{"name": n, "hz": h} for n, h in BANDS],
                 "activity": list(self.activity)[-120:], "directed": list(self.directed), "heard": self._heard_list(), "sending": self.sending, "queue": self.queue_depth,
                 "transmitting": self.transmitting, "settings": self.settings(), "setup_log": self._setup_log(), "now": time.time()}
@@ -180,7 +205,7 @@ class Js8Engine:
     async def install(self) -> None:
         """Download JS8Call-improved from its release page and unpack it (no root needed; the program stays under <data>/js8/app)."""
         arch = platform.machine()
-        if arch not in APP_URLS:
+        if arch not in ARCHS:
             raise ValueError(f"no JS8Call build for {arch}")
         if self.installing:
             raise ValueError("already installing")
@@ -191,7 +216,7 @@ class Js8Engine:
             app.mkdir(parents=True, exist_ok=True)
             img = app / "JS8Call.AppImage"
             async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=600)) as s:
-                async with s.get(APP_URLS[arch]) as r:
+                async with s.get(app_url(arch)) as r:
                     if r.status != 200:
                         raise ValueError(f"the download failed (HTTP {r.status})")
                     total, got = int(r.headers.get("Content-Length") or 0), 0
@@ -212,7 +237,8 @@ class Js8Engine:
             if p.returncode != 0 or not (app / "squashfs-root" / "AppRun").is_file():
                 raise ValueError("could not unpack JS8Call: " + (err or b"").decode("utf-8", "replace")[-200:])
             img.unlink(missing_ok=True)
-            log.info("JS8Call %s installed in %s", VERSION, app)
+            (app / "version").write_text(wanted_version() + "\n")
+            log.info("JS8Call %s installed in %s", wanted_version(), app)
         finally:
             self.installing = ""
             self._emit("install", text="")

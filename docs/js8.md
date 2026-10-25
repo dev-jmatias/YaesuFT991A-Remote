@@ -37,5 +37,5 @@ JS8Call only transmits what you ask for: when JS8Call reports that it wants to k
 ## Limits
 
 * Messages are the ones JS8Call can send (letters, digits, punctuation); automatic replies, heartbeat networking and relaying of other stations' messages are not used.
-* JS8Call-improved version 3.0.3 is the one this was built and tested with.
+* JS8Call-improved version 3.0.3 is the one this was built and tested with. It needs glibc 2.38 or newer (Debian 13, Ubuntu 24.04); on older systems such as Debian 12 the Install button fetches version 3.0.2, which has the same network interface.
 * New: tested with a simulated radio and with JS8Call's own audio through the loopback, not yet over the air.

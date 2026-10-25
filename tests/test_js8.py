@@ -430,3 +430,21 @@ async def test_api_commands_state_and_permissions(make_app, tmp_path, monkeypatc
     r = await client.post("/api/js8/setup", json={}, headers=root.h)
     assert r.status == 200
     await close_all(root, v)
+
+
+def test_older_systems_get_the_older_js8call_and_a_wrong_build_is_not_taken_for_installed(tmp_path, monkeypatch):
+    from radio_remote import js8_engine as j
+    monkeypatch.setattr(j.sys, "platform", "linux")
+    monkeypatch.setattr(j.platform, "machine", lambda: "x86_64")
+    monkeypatch.setattr(j, "glibc", lambda: (2, 36))                                 # Debian 12
+    assert j.wanted_version() == j.OLD_VERSION and j.OLD_VERSION in j.app_url("x86_64")
+    monkeypatch.setattr(j, "glibc", lambda: (2, 41))                                 # Debian 13
+    assert j.wanted_version() == j.VERSION and j.VERSION in j.app_url("aarch64")
+    app = tmp_path / "app" / "squashfs-root"
+    app.mkdir(parents=True)
+    (app / "AppRun").write_text("x")
+    assert j.prereqs(tmp_path)["app_ok"]                                             # no version file: installed by an earlier build, which fetched v3.0.3
+    monkeypatch.setattr(j, "glibc", lambda: (2, 36))
+    assert not j.prereqs(tmp_path)["app_ok"]                                         # v3.0.3 cannot start on glibc 2.36: install again
+    (tmp_path / "app" / "version").write_text(j.OLD_VERSION + "\n")
+    assert j.prereqs(tmp_path)["app_ok"]

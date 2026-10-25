@@ -42,6 +42,10 @@ and goes back by itself if the new version does not start. Settings and accounts
 | `radio-remote-rade-linux-aarch64.tar.xz` | the optional RADE library (FreeDV neural modes V1 and V2) for a Raspberry Pi, installed with `install_rade.sh` (the PC build is `…-x86_64.tar.xz`) |
 | `SHA256SUMS` | checksums of all of the above |
 
+### What is new in 1.1.55
+
+- **JS8 on Debian 12 and other older systems.** JS8Call 3.0.3 needs glibc 2.38 (Debian 13, Ubuntu 24.04); on older systems the JS8Call program stopped as soon as it started. The Install JS8Call button now fetches version 3.0.2 there (same interface), and Prepare the system also installs `libopengl0`. If JS8 did not start on your PC, update, press **Prepare the system** and **Install JS8Call** once more (administrators).
+
 ### What is new in 1.1.54
 
 - **JS8: your own messages are listed** in the Messages box (marked TX, in their own colour) when you send them, so the conversation reads in order. JS8's default TX level is -14 dB.
