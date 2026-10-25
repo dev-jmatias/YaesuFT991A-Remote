@@ -42,6 +42,10 @@ and goes back by itself if the new version does not start. Settings and accounts
 | `radio-remote-rade-linux-aarch64.tar.xz` | the optional RADE library (FreeDV neural modes V1 and V2) for a Raspberry Pi, installed with `install_rade.sh` (the PC build is `…-x86_64.tar.xz`) |
 | `SHA256SUMS` | checksums of all of the above |
 
+### What is new in 1.1.54
+
+- **JS8: your own messages are listed** in the Messages box (marked TX, in their own colour) when you send them, so the conversation reads in order. JS8's default TX level is -14 dB.
+
 ### What is new in 1.1.53
 
 - **JS8 on the Digital tab: receive and send.** Runs the separate, free JS8Call program in the background (never bundled: the page has buttons to prepare the system and download it once, administrators only). Band activity and directed messages, heard stations, send box with CQ / Heartbeat / SNR? / HW CPY? / 73, speed and TX offset, band list, the contact log (RST filled in, "JS8Call" in the comments) and a TX level setting (default -14 dB: keep the ALC at zero). Transmitting is guarded like the other digital modes (permission, time limit, operator must stay connected). Switches on by itself when you open the screen. **Receiving is tried on real stations; sending only on the bench so far: try it into a dummy load or low power first.** See `js8.md`.

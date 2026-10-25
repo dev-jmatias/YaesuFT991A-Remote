@@ -195,10 +195,10 @@ export function createJs8(host, ctx) {
     if (d.cmd && t.toUpperCase().startsWith(d.cmd.toUpperCase())) t = t.slice(d.cmd.length).trim();
     return t;
   };
-  const dirHtml = (d) => `<span class="t">${clock(d.t)}</span><span class="x"><b>${esc(d.from)}</b> &rarr; ${esc(d.to)} ${esc(d.cmd)} ${esc(bodyOf(d))}</span><span class="s">${d.snr > 0 ? "+" : ""}${d.snr}</span>`;
+  const dirHtml = (d) => `<span class="t">${clock(d.t)}</span><span class="x"><b>${esc(d.from)}</b> &rarr; ${esc(d.to)} ${esc(d.cmd)} ${esc(bodyOf(d))}</span><span class="s">${d.tx ? "TX" : (d.snr > 0 ? "+" : "") + d.snr}</span>`;
   function paintLists() {
     act.replaceChildren(...info.activity.map((a) => el(`<div class="js8-row">${actHtml(a)}</div>`)));
-    dir.replaceChildren(...info.directed.map((d) => el(`<div class="js8-row${my() && d.to.toUpperCase() === my() ? " mine" : ""}">${dirHtml(d)}</div>`)));
+    dir.replaceChildren(...info.directed.map((d) => el(`<div class="js8-row${d.tx ? " tx" : my() && d.to.toUpperCase() === my() ? " mine" : ""}">${dirHtml(d)}</div>`)));
     act.scrollTop = act.scrollHeight; dir.scrollTop = dir.scrollHeight;
     paintHeard();
   }
@@ -316,7 +316,7 @@ export function createJs8(host, ctx) {
     else if (m.k === "state") { info.on = m.on; paintTop(); }
     else if (m.k === "tuning") { info.dial = m.dial; info.offset = m.offset; info.speed = m.speed; paintTuning(); }
     else if (m.k === "activity") { info.activity.push(m.a); addRow(act, actHtml(m.a)); }
-    else if (m.k === "directed") { info.directed.push(m.d); info.heard = m.heard; addRow(dir, dirHtml(m.d), my() && m.d.to.toUpperCase() === my() ? "mine" : ""); paintHeard(); }
+    else if (m.k === "directed") { info.directed.push(m.d); info.heard = m.heard; addRow(dir, dirHtml(m.d), m.d.tx ? "tx" : my() && m.d.to.toUpperCase() === my() ? "mine" : ""); paintHeard(); }
     else if (m.k === "heard") { info.heard = m.heard; paintHeard(); }
     else if (m.k === "tx") { info.sending = m.sending; info.transmitting = !!m.transmitting; paintTop(); }
     else if (m.k === "error") { toast("JS8: " + m.text); }

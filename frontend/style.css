@@ -1182,6 +1182,7 @@ html[data-tabbed] .ftxgo { display: none !important; }
 .js8-row .t { color: var(--dim); } .js8-row .o, .js8-row .s { color: var(--dim); text-align: right; }
 .js8-dir .js8-row { grid-template-columns: 5.4em minmax(0, 1fr) 2.6em; }
 .js8-row.mine { background: rgba(var(--halo), .14); }
+.js8-row.tx { color: var(--hot-top, #ffb347); }                                          /* what this station sent */
 .js8-heard { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
 .js8-call { min-height: 28px; padding: 1px 9px; font-size: .8rem; border-radius: 999px; }
 .js8-call.sel { border-color: var(--yellow); color: var(--yellow); }

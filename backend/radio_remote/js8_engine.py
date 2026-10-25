@@ -468,6 +468,11 @@ class Js8Engine:
             raise ValueError("JS8Call is not answering")
         self.sending = t
         self._emit("tx", sending=t, transmitting=self.transmitting)
+        me = self.settings()["callsign"]
+        to, _, rest = t.partition(" ")
+        d = {"t": time.time(), "from": me, "to": to, "cmd": "", "text": rest, "snr": 0, "offset": self.offset, "grid": "", "speed": self.speed, "tx": True}       # what we send is listed with what is heard
+        self.directed.append(d)
+        self._emit("directed", d=d, heard=self._heard_list())
         return {"text": t}
 
     async def _ptt_on(self) -> None:
