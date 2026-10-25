@@ -76,6 +76,8 @@ DEFAULTS: dict[str, dict[str, Any]] = {
     "cw": {"keyer_slot": 5, "chunk_chars": 24},
     # RTTY (the RTTY tab; see rtty_engine.py). tx_level_db = level of the tones sent to the radio (keep the ALC at zero).
     "rtty": {"tx_level_db": -6.0},
+    # JS8 (the JS8 screen; see js8_engine.py). tx_level_db = level of JS8Call's audio sent to the radio (JS8Call's own output is at full scale: keep the ALC at zero).
+    "js8": {"tx_level_db": -14.0},
     "storage": {"data_dir": "data"},
 }
 
@@ -189,6 +191,8 @@ def validate(cfg: dict) -> dict:
         raise ConfigError("sstv.keep must be 5..500")
     if not -40 <= cfg["rtty"]["tx_level_db"] <= 0:
         raise ConfigError("rtty.tx_level_db must be -40..0")
+    if not -40 <= cfg["js8"]["tx_level_db"] <= 0:
+        raise ConfigError("js8.tx_level_db must be -40..0")
     cwc = cfg["cw"]
     if isinstance(cwc["keyer_slot"], bool) or cwc["keyer_slot"] not in (1, 2, 3, 4, 5):
         raise ConfigError("cw.keyer_slot must be 1..5")

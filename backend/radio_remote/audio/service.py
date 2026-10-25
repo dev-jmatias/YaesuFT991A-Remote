@@ -190,6 +190,9 @@ class AudioService:
         self.sstv_feed: Callable[[bytes], None] | None = None    # SSTV receiver (sstv_engine.py): the same frames
         self.cw_feed: Callable[[bytes], None] | None = None      # CW decoder (cw_engine.py): the same frames
         self.rtty_feed: Callable[[bytes], None] | None = None    # RTTY decoder (rtty_engine.py): the same frames
+        self.js8_feed: Callable[[bytes | None], None] | None = None   # JS8 (js8_engine.py): the same frames, played into the loopback JS8Call listens to (None while we transmit)
+        self._stream = None                              # a live transmit audio source (js8_engine.py): .frame() -> 20 ms of 48 kHz audio or None, .gain
+        self._stream_task: asyncio.Task | None = None
         self._holds: set[str] = set()                    # who needs the radio's audio even when no browser listens (the FT8/FT4 and SSTV screens decode on the Pi)
         self.frames_in = self.frames_to_radio = 0
         self._relay = self._rx_track = None
@@ -312,6 +315,36 @@ class AudioService:
         if samples is not None and owner is not None:
             self._player_running = True
             self._player_task = asyncio.get_running_loop().create_task(self._player(owner))
+
+    def arm_stream(self, source, owner: str | None = None) -> None:
+        """Send live audio (a source with .frame() and .gain) in place of the microphone while `owner` holds PTT, like a recording but without an end of its own: the caller releases
+        PTT. None stops it. The microphone frames of the browsers are ignored meanwhile."""
+        t, self._stream_task = self._stream_task, None
+        if t is not None and not t.done():
+            t.cancel()
+        self._stream = source
+        self._player_running = source is not None
+        if source is not None and owner is not None:
+            self._stream_task = asyncio.get_running_loop().create_task(self._streamer(owner))
+
+    async def _streamer(self, owner: str) -> None:
+        peer = types.SimpleNamespace(conn_id=owner)
+        loop = asyncio.get_running_loop()
+        try:
+            waited = 0.0
+            while not self.tx_gate(owner):
+                await asyncio.sleep(0.02)
+                waited += 0.02
+                if waited > 3.0:
+                    return
+            nxt = loop.time()
+            while self.tx_gate(owner) and self._stream is not None:
+                self._mic_frame(peer, bytes(FRAME_BYTES), synthetic=True)
+                nxt += 0.02
+                await asyncio.sleep(max(0.0, nxt - loop.time()))
+        finally:
+            if self._stream_task is asyncio.current_task():
+                self._player_running = False
 
     async def _player(self, owner: str) -> None:
         peer = types.SimpleNamespace(conn_id=owner)
@@ -513,6 +546,11 @@ class AudioService:
                             self.rtty_feed(raw_pcm if not self._tx_gate_open else None)
                         except Exception:
                             log.exception("RTTY receive failed")
+                    if self.js8_feed is not None:
+                        try:
+                            self.js8_feed(raw_pcm if not self._tx_gate_open else None)
+                        except Exception:
+                            log.exception("JS8 receive failed")
                     if self._fd_rx is not None and self._tx_gate_open:
                         pcm = bytes(FRAME_BYTES)                                 # transmitting: never decode (and replay) our own signal
                         self._rx_hold = RX_HOLD_FRAMES
@@ -726,6 +764,12 @@ class AudioService:
                     tone = self._test_tone_frame()
                     self._tx_q.append(tone)
                     self._level("audio_tx_level", level_pct(tone))
+                return
+            if self._stream is not None:                           # live audio from a program on this machine (JS8Call): sent as it is, at the stream's own level, limited
+                st = self._stream.frame()
+                pcm = apply_gain(st if st is not None else bytes(FRAME_BYTES), self._stream.gain, limit=True)
+                self._tx_q.append(pcm)
+                self._level("audio_tx_level", level_pct(pcm))
                 return
             pcm = self._play_frame() if self._play_active else self.eq_tx.process(pcm)      # a recording is sent as it is (no equalizer) in place of the microphone
             # the operator's equalizer, on the microphone speech (before the modem, or before the limiter)

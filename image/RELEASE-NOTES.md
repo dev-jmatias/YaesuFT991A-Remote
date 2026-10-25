@@ -42,6 +42,12 @@ and goes back by itself if the new version does not start. Settings and accounts
 | `radio-remote-rade-linux-aarch64.tar.xz` | the optional RADE library (FreeDV neural modes V1 and V2) for a Raspberry Pi, installed with `install_rade.sh` (the PC build is `…-x86_64.tar.xz`) |
 | `SHA256SUMS` | checksums of all of the above |
 
+### What is new in 1.1.53
+
+- **JS8 on the Digital tab: receive and send.** Runs the separate, free JS8Call program in the background (never bundled: the page has buttons to prepare the system and download it once, administrators only). Band activity and directed messages, heard stations, send box with CQ / Heartbeat / SNR? / HW CPY? / 73, speed and TX offset, band list, the contact log (RST filled in, "JS8Call" in the comments) and a TX level setting (default -14 dB: keep the ALC at zero). Transmitting is guarded like the other digital modes (permission, time limit, operator must stay connected). Switches on by itself when you open the screen. **Receiving is tried on real stations; sending only on the bench so far: try it into a dummy load or low power first.** See `js8.md`.
+- **Double tap on the tuning dial** changes its look on touch screens (tablets and phones), as a double click does with a mouse.
+- **Layout.** JS8 lists side by side; the Tuning step buttons wrap instead of overflowing, with RX EQ / TX EQ on their own centred line.
+
 ### What is new in 1.1.52
 
 - **Two transmit buttons.** **HOLD TO TRANSMIT** transmits only while you hold it. The new **TX LOCK** button beside it transmits hands-free: tap once to start (it then shows STOP), tap it or the big button to stop. This replaces sliding up while holding. The safeguards are unchanged (time limit, heartbeat, release on disconnect or when the page is hidden).

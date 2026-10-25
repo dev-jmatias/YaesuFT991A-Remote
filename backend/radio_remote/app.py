@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import sys
 import hashlib
 import json
 import logging
@@ -13,12 +14,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import urlsplit
 
+import aiohttp
 from aiohttp import WSMsgType, web
 
 from . import __version__, admin, logs, sdnotify, updates
 from .audio.service import AudioService, AudioUnavailable
 from .auth import AuthStore, Session
-from .common import (COOKIE, K_AUDIO, K_AUTH, K_CFG, K_CFGPATH, K_DRIVER, K_GUARD, K_HUB, K_FTX, K_QSOLOG, K_REPORTER, K_RESTART, K_SESSION, K_SSTV, K_CW, K_RTTY, K_MENU,
+from .common import (COOKIE, K_AUDIO, K_AUTH, K_CFG, K_CFGPATH, K_DRIVER, K_GUARD, K_HUB, K_FTX, K_QSOLOG, K_REPORTER, K_RESTART, K_SESSION, K_SSTV, K_CW, K_RTTY, K_MENU, K_JS8,
                      K_RIGCTL, K_STARTED, K_UPDATES, CommandError, client_ip, is_https, read_json)
 from .lease import ControlLease, LeaseError
 from .radio import controls
@@ -45,7 +47,7 @@ MAX_WS_CLIENTS = 24
 CMD_RATE, CMD_BURST, MAX_STRIKES = 40.0, 80, 200
 LEASE_OPS = {"request_control", "respond_control", "release_control", "force_control"}
 MAX_EQ_PRESETS = 20
-SCAN_KEEPS = {"scan_range", "scan_range_stop", "set_level", "set_control", "freedv", "ftx", "ftx_tx", "ftx_halt", "sstv", "sstv_halt", "cw", "cw_set", "cw_clear", "cw_send", "cw_halt", "cw_keyer", "rtty", "rtty_set", "rtty_clear", "rtty_send", "rtty_halt", "menu_set", "set_eq", "set_dyn", "eq_preset_save", "eq_preset_delete", "rec"}     # commands that leave a running range scan alone
+SCAN_KEEPS = {"scan_range", "scan_range_stop", "set_level", "set_control", "freedv", "ftx", "ftx_tx", "ftx_halt", "sstv", "sstv_halt", "cw", "cw_set", "cw_clear", "cw_send", "cw_halt", "cw_keyer", "rtty", "rtty_set", "rtty_clear", "rtty_send", "rtty_halt", "menu_set", "js8", "js8_send", "js8_halt", "js8_set", "js8_clear", "set_eq", "set_dyn", "eq_preset_save", "eq_preset_delete", "rec"}     # commands that leave a running range scan alone
 
 
 def _int(v, lo=None, hi=None) -> int:
@@ -81,6 +83,7 @@ class Hub:
         self.sstv = None                         # the SSTV engine (set by create_app)
         self.cw = None                           # the CW engine (set by create_app)
         self.rtty = None                         # the RTTY engine (set by create_app)
+        self.js8 = None                          # the JS8 engine (set by create_app)
         self.menu = None                         # the radio's menu (menu.py, set by create_app when the radio profile has one)
         self.scanner = RangeScanner(self)        # the start/stop frequency scan (scan.py)
         self.auto_width = lambda: True           # freedv.auto_width (set by create_app): widen a narrow radio filter when FreeDV is on
@@ -236,7 +239,8 @@ class Hub:
                       "ftx": {"available": self.ftx_ok(), "on": bool(self.ftx and self.ftx.on)},
                       "sstv": {"available": bool(self.sstv and self.audio and self.audio.available), "on": bool(self.sstv and self.sstv.on)},
                       "cw": {"available": bool(self.cw and self.audio and self.audio.available), "on": bool(self.cw and self.cw.on)},
-                      "rtty": {"available": bool(self.rtty and self.audio and self.audio.available), "on": bool(self.rtty and self.rtty.on)}},
+                      "rtty": {"available": bool(self.rtty and self.audio and self.audio.available), "on": bool(self.rtty and self.rtty.on)},
+                      "js8": {"available": bool(self.js8 and self.audio and self.audio.available and (sys.platform.startswith("linux") or bool(os.environ.get("RADIO_REMOTE_TESTING")))), "on": bool(self.js8 and self.js8.on)}},
             "state": {**self.driver.state, **self.extra, "ptt_owner": self.guard.owner},
             "safety": {"ptt_permitted": self.guard.permitted, "tx_timeout_s": self.guard.max_tx_s},
         }
@@ -556,6 +560,50 @@ class Hub:
                 raise CommandError(str(e)) from None
             self.auth.audit("rtty_send", session.username, None, r["text"][:80])
             return r
+        elif typ == "js8":
+            on = msg.get("on")
+            if not isinstance(on, bool):
+                raise CommandError("js8 needs on (true/false)")
+            if not self.js8 or not self.audio or not self.audio.available:
+                raise CommandError("JS8 is not available")
+            try:
+                await self.js8.set_on(on)
+            except (ValueError, AudioUnavailable) as e:
+                raise CommandError(str(e)) from None
+            self.auth.audit("js8_on" if on else "js8_off", session.username, None)
+        elif typ == "js8_send":
+            if not self.js8:
+                raise CommandError("JS8 is not available")
+            text = msg.get("text")
+            if not isinstance(text, str) or not 1 <= len(text) <= 400:
+                raise CommandError("js8_send needs text (1..400 characters)")
+            try:
+                r = await self.js8.send(conn_id, text)
+            except ValueError as e:
+                raise CommandError(str(e)) from None
+            self.auth.audit("js8_send", session.username, None, r["text"][:80])
+            return r
+        elif typ == "js8_halt":
+            if self.js8:
+                await self.js8.halt("halted by the operator")
+        elif typ == "js8_clear":
+            if self.js8:
+                self.js8.clear()
+        elif typ == "js8_set":
+            if not self.js8:
+                raise CommandError("JS8 is not available")
+            sp, off = msg.get("speed"), msg.get("offset")
+            try:
+                if sp is not None:
+                    if isinstance(sp, bool) or not isinstance(sp, int):
+                        raise ValueError("speed must be a number")
+                    await self.js8.set_speed(sp)
+                if off is not None:
+                    if isinstance(off, bool) or not isinstance(off, int):
+                        raise ValueError("offset must be a number")
+                    await self.js8.set_offset(off)
+            except ValueError as e:
+                raise CommandError(str(e)) from None
         elif typ == "menu_set":
             if not self.menu:
                 raise CommandError("this radio's menu is not available here")
@@ -990,6 +1038,36 @@ async def freedv_reporter_status(request):
     return web.json_response(app[K_REPORTER].status(near_hz=app[K_DRIVER].state.get("frequency") or 0))
 
 
+async def js8_info(request):
+    """JS8: the state, the system checks, the heard stations and the recent messages (any signed-in user)."""
+    return web.json_response(request.app[K_JS8].state())
+
+
+async def js8_install(request):
+    """Download and unpack JS8Call-improved (administrators)."""
+    from .common import require_admin
+    admin_user = require_admin(request)
+    eng = request.app[K_JS8]
+    request.app[K_AUTH].audit("js8_install", admin_user.username, client_ip(request), "")
+    try:
+        await eng.install()
+    except (ValueError, OSError, aiohttp.ClientError, asyncio.TimeoutError) as e:
+        raise web.HTTPBadRequest(text=str(e) or type(e).__name__) from None
+    return web.json_response(eng.state())
+
+
+async def js8_setup(request):
+    """Ask the root helper to prepare the system for JS8Call: libraries, PulseAudio, the loopback sound module (administrators)."""
+    from .common import require_admin
+    admin_user = require_admin(request)
+    request.app[K_AUTH].audit("js8_setup", admin_user.username, client_ip(request), "")
+    try:
+        request.app[K_JS8].request_setup(admin_user.username)
+    except OSError as e:
+        raise web.HTTPInternalServerError(text=f"could not ask for it: {e}") from None
+    return web.json_response({"ok": True})
+
+
 async def menu_list(request):
     """The radio's menu: the table of items with the values read so far (any signed-in user)."""
     menu = request.app.get(K_MENU)
@@ -1417,6 +1495,7 @@ def create_app(cfg: dict, driver: RadioDriver | None = None, auth: AuthStore | N
     from .sstv_engine import SstvEngine
     from .cw_engine import CwEngine
     from .rtty_engine import RttyEngine
+    from .js8_engine import Js8Engine
     from .ftx_engine import FtxEngine
     from .qsolog import QsoLog
     app[K_SSTV] = app[K_HUB].sstv = sstv_engine = SstvEngine(lambda: app[K_CFG], audio, app[K_HUB]._broadcast, lambda: driver.state.get("frequency") or 0, guard,
@@ -1427,6 +1506,7 @@ def create_app(cfg: dict, driver: RadioDriver | None = None, auth: AuthStore | N
     menu_model = "ft991a" if driver.caps.is_mock else driver.caps.data["model"]["id"]
     if driver.caps.has("menu") and menu_mod.available(menu_model):
         app[K_MENU] = app[K_HUB].menu = menu_mod.MenuService(driver, guard, app[K_HUB]._broadcast, lambda ev, detail: auth.audit(ev, None, None, detail), menu_mod.MenuDef(menu_mod.load(menu_model)))
+    app[K_JS8] = app[K_HUB].js8 = js8_engine = Js8Engine(lambda: app[K_CFG], audio, app[K_HUB]._broadcast, lambda: driver.state.get("frequency") or 0, guard, lambda cid: cid in app[K_HUB].clients, driver)
     app[K_QSOLOG] = QsoLog(Path(cfg["storage"]["data_dir"]) / "ftx_log.jsonl")
     app[K_FTX] = app[K_HUB].ftx = ftx_engine = FtxEngine(lambda: app[K_CFG], audio, app[K_HUB]._broadcast, lambda: driver.state.get("frequency") or 0, guard,
                                                           lambda cid: cid in app[K_HUB].clients)
@@ -1461,6 +1541,10 @@ def create_app(cfg: dict, driver: RadioDriver | None = None, auth: AuthStore | N
         except Exception:
             log.exception("SSTV did not stop cleanly")
         try:
+            await js8_engine.shutdown()
+        except Exception:
+            log.exception("JS8 did not stop cleanly")
+        try:
             await rtty_engine.shutdown()
             await rtty_engine.set_on(False)
         except Exception:
@@ -1492,6 +1576,9 @@ def create_app(cfg: dict, driver: RadioDriver | None = None, auth: AuthStore | N
     app.router.add_post("/api/menu/read", menu_read)
     app.router.add_get("/api/menu/backup.json", menu_backup)
     app.router.add_post("/api/menu/restore", menu_restore)
+    app.router.add_get("/api/js8", js8_info)
+    app.router.add_post("/api/js8/install", js8_install)
+    app.router.add_post("/api/js8/setup", js8_setup)
     app.router.add_get("/api/cw", cw_info)
     app.router.add_get("/api/rtty", rtty_info)
     app.router.add_get("/api/sstv", sstv_info)

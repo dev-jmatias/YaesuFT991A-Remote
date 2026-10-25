@@ -14,6 +14,7 @@ import { createSstv } from "../components/sstv.js";
 import { createCw } from "../components/cw.js";
 import { createRtty } from "../components/rtty.js";
 import { createMenu } from "../components/menu.js";
+import { createJs8 } from "../components/js8.js";
 import { createMemoryButtons } from "../components/memories.js";
 import { createTuner } from "../tuner.js";
 import { el, fmtStep, pref } from "../util.js";
@@ -33,7 +34,7 @@ const TI = {
 
 // Four tabs on phones and tablets: Levels and Audio share one, and FreeDV, FT8/FT4 and SSTV share the Digital tab (a switch at its top chooses the screen).
 const TABS = [["radio", "Radio"], ["filters", "Filters"], ["audio", "Audio & Levels"]];
-const DIGITAL = { freedv: ["FreeDV", "freedvActive"], ftx: ["FT8/FT4", "ftxActive"], sstv: ["SSTV", "sstvActive"], cw: ["CW", "cwActive"], rtty: ["RTTY", "rttyActive"] };      // screen -> label, and the hook of its component that retunes the radio on entering / leaving
+const DIGITAL = { freedv: ["FreeDV", "freedvActive"], ftx: ["FT8/FT4", "ftxActive"], sstv: ["SSTV", "sstvActive"], cw: ["CW", "cwActive"], rtty: ["RTTY", "rttyActive"], js8: ["JS8", "js8Active"] };      // screen -> label, and the hook of its component that retunes the radio on entering / leaving
 
 export function renderRadio(root, { onLogout, onAuthLost }) {
   const S = { state: {}, caps: null, user: null, safety: {}, ui: { steps: [100, 1000, 10000] }, audio: null, conn: "",
@@ -56,7 +57,7 @@ export function renderRadio(root, { onLogout, onAuthLost }) {
           <button id="logout" title="Sign out" aria-label="Sign out">${TI.out}<span class="tl">Sign out</span></button>
         </span>
       </header>
-      <div class="radiobar"><span class="rtab"><i class="dot" id="dot" role="img" aria-label="connecting"></i><span id="model"></span></span><span class="digbar" id="digbar" role="group" aria-label="Digital screen" hidden></span><button id="ftxgo" class="ftxgo" hidden title="The FT8 / FT4 screen">FT8/FT4</button><button id="sstvgo" class="ftxgo" hidden title="The SSTV screen">SSTV</button><button id="cwgo" class="ftxgo" hidden title="The CW screen">CW</button><button id="rttygo" class="ftxgo" hidden title="The RTTY screen">RTTY</button><button id="menugo" class="ftxgo" hidden title="The radio's menu">Menu</button><div id="ctlbar" class="ctlbar"></div></div>
+      <div class="radiobar"><span class="rtab"><i class="dot" id="dot" role="img" aria-label="connecting"></i><span id="model"></span></span><span class="digbar" id="digbar" role="group" aria-label="Digital screen" hidden></span><button id="ftxgo" class="ftxgo" hidden title="The FT8 / FT4 screen">FT8/FT4</button><button id="sstvgo" class="ftxgo" hidden title="The SSTV screen">SSTV</button><button id="cwgo" class="ftxgo" hidden title="The CW screen">CW</button><button id="rttygo" class="ftxgo" hidden title="The RTTY screen">RTTY</button><button id="js8go" class="ftxgo" hidden title="The JS8 screen">JS8</button><button id="menugo" class="ftxgo" hidden title="The radio's menu">Menu</button><div id="ctlbar" class="ctlbar"></div></div>
       <div id="mock" class="mockbanner" hidden>SIMULATED RADIO - nothing is connected or transmitting.</div>
       <div id="exp" class="mockbanner" hidden></div>
       <div id="offline" class="offline" hidden><span>Radio offline - waiting for it to come back. Controls are paused.</span><button class="active" id="poweron" hidden title="Wake the radio from standby (PS1). It needs a few seconds to start.">Power on radio</button></div>
@@ -320,7 +321,8 @@ export function renderRadio(root, { onLogout, onAuthLost }) {
     const svOk = !!S.audio?.sstv?.available;
     const cwOk = !!S.audio?.cw?.available;
     const rtOk = !!S.audio?.rtty?.available;
-    const screens = [fdOk && "freedv", fxOk && "ftx", svOk && "sstv", cwOk && "cw", rtOk && "rtty"].filter(Boolean);
+    const j8Ok = !!S.audio?.js8?.available;
+    const screens = [fdOk && "freedv", fxOk && "ftx", svOk && "sstv", cwOk && "cw", rtOk && "rtty", j8Ok && "js8"].filter(Boolean);
     const tabs = [...TABS];
     const menuOk = !!S.caps?.features?.menu;
     $("layout").classList.toggle("has-fd", fdOk);
@@ -329,6 +331,7 @@ export function renderRadio(root, { onLogout, onAuthLost }) {
     if (svOk) parts.push(createSstv(pane("sstv", ""), ctx));
     if (cwOk) parts.push(createCw(pane("cw", ""), ctx));
     if (rtOk) parts.push(createRtty(pane("rtty", ""), ctx));
+    if (j8Ok) parts.push(createJs8(pane("js8", ""), ctx));
     if (menuOk) parts.push(createMenu(pane("menu", ""), ctx));
     const sw = screens.length ? pane("digsw", "", "digsw") : null;
     if (screens.length) tabs.push(["digital", "Digital"]);
@@ -347,7 +350,7 @@ export function renderRadio(root, { onLogout, onAuthLost }) {
       view.dataset.tab = tab; view.dataset.dig = dig;
       nav.querySelectorAll("button").forEach((x) => x.classList.toggle("active", x.dataset.t === tab));
       view.querySelectorAll(".digsw button, .digbar button").forEach((x) => x.classList.toggle("active", x.dataset.d === dig));
-      for (const [id, key] of [["ftxgo", "ftx"], ["sstvgo", "sstv"], ["cwgo", "cw"], ["rttygo", "rtty"]]) {                 // the desktop layout's buttons
+      for (const [id, key] of [["ftxgo", "ftx"], ["sstvgo", "sstv"], ["cwgo", "cw"], ["rttygo", "rtty"], ["js8go", "js8"]]) {                 // the desktop layout's buttons
         const b = $(id), on = tab === "digital" && dig === key;
         b.textContent = on ? "Back to radio" : DIGITAL[key][0]; b.classList.toggle("active", on);
       }
@@ -362,7 +365,7 @@ export function renderRadio(root, { onLogout, onAuthLost }) {
     sw?.append(...swButtons());
     $("digbar").replaceChildren(...swButtons());
     $("digbar").hidden = !screens.length;
-    for (const [id, key, ok] of [["ftxgo", "ftx", fxOk], ["sstvgo", "sstv", svOk], ["cwgo", "cw", cwOk], ["rttygo", "rtty", rtOk]]) {
+    for (const [id, key, ok] of [["ftxgo", "ftx", fxOk], ["sstvgo", "sstv", svOk], ["cwgo", "cw", cwOk], ["rttygo", "rtty", rtOk], ["js8go", "js8", j8Ok]]) {
       $(id).hidden = !ok;
       $(id).onclick = () => { if (ui.tab === "digital" && ui.dig === key) go("radio"); else go("digital", key); };
     }
@@ -430,6 +433,8 @@ export function renderRadio(root, { onLogout, onAuthLost }) {
       } else if (m.t === "safety") {
         S.safety = { ...S.safety, ...m.d };                  // the administrator switched transmitting on or off
         build();
+      } else if (m.t === "js8") {
+        ctx.js8Event?.(m);
       } else if (m.t === "menu") {
         ctx.menuEvent?.(m);
       } else if (m.t === "rtty") {

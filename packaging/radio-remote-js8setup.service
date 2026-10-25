@@ -1,0 +1,8 @@
+[Unit]
+Description=Prepare the system for JS8Call (asked for in the Radio Remote web page)
+
+[Service]
+Type=oneshot
+# runs as root: js8_setup.sh only installs a fixed list of packages and loads the loopback sound module
+ExecStart=/opt/radio-remote/current/scripts/js8_setup.sh
+TimeoutStartSec=900

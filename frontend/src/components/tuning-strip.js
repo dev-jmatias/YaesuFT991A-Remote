@@ -108,6 +108,7 @@ export function createTuningStrip(host, ctx) {
     cancelAnimationFrame(raf); raf = 0; down = true; vel = 0;
     try { root.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
     last = e.clientX; lastT = performance.now(); acc = 0;
+    tapX = e.clientX; tapT = lastT; tapOk = e.target !== coarseBtn;
   };
   root.onpointermove = (e) => {
     if (!down || last === null) return;
@@ -116,25 +117,36 @@ export function createTuningStrip(host, ctx) {
     last = e.clientX; lastT = now;
     emit(dx);
   };
+  let tapX = 0, tapT = 0, tapOk = false, prevTap = 0;          // a quick tap that did not move: two of them in a row change the look of the scale (a touch screen has no double-click)
+  const tapEnd = (e) => {
+    if (!tapOk || e.pointerType === "mouse") return;               // a mouse has the double-click below
+    tapOk = false;
+    const now = performance.now();
+    if (Math.abs(e.clientX - tapX) > 10 || now - tapT > 350) { prevTap = 0; return; }
+    if (prevTap && now - prevTap < 500) { prevTap = 0; nextLook(); } else prevTap = now;
+  };
   const end = () => { down = false; last = null; if (Math.abs(vel) > 2 && !raf) raf = requestAnimationFrame(glide); };
-  root.onpointerup = end; root.onpointercancel = end; root.onlostpointercapture = end;
+  root.onpointerup = (e) => { tapEnd(e); end(); }; root.onpointercancel = end; root.onlostpointercapture = end;
   root.onwheel = (e) => { e.preventDefault(); emit(-(Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY)); };
   root.onkeydown = (e) => {
     const k = { ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1 }[e.key];
     if (k) { e.preventDefault(); ctx.tune(k * stepHz()); }
   };
   coarseBtn.onclick = () => { ctx.ui.coarse = !ctx.ui.coarse; ctx.setStep(ctx.ui.step); };
-  // the look of the scale (theme = the app colours, then paper = an old meter face, then a lit old white, green, amber): double-click the scale to try the next one; remembered in this browser
+  // the look of the scale (theme = the app colours, then paper = an old meter face, then a lit old white, green, amber): double-click (or, on a touch screen, tap twice) the scale to try the next one; remembered in this browser
   const LOOKS = ["theme", "paper", "white", "green", "amber"];
   const look = (v) => { root.dataset.dial = v; draw(); };
   root.dataset.dial = "theme";
   try { const v = localStorage.getItem("rr.dial"); if (LOOKS.includes(v)) root.dataset.dial = v; } catch { /* storage blocked */ }
-  root.ondblclick = (e) => {
-    if (e.target === coarseBtn) return;
+  let lookAt = 0;
+  const nextLook = () => {
+    if (performance.now() - lookAt < 600) return;                  // a touch browser may send a double-click as well as the two taps: one change only
+    lookAt = performance.now();
     const v = LOOKS[(LOOKS.indexOf(root.dataset.dial) + 1) % LOOKS.length];
     look(v);
     try { localStorage.setItem("rr.dial", v); } catch { /* storage blocked */ }
   };
+  root.ondblclick = (e) => { if (e.target !== coarseBtn) nextLook(); };
 
   return {
     update() {

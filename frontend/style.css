@@ -754,13 +754,16 @@ button.lockbtn.on { background: var(--yellow); color: #1a1100; border-color: tra
    phones: a tidy grid of equal buttons (- step + / Tune Scan Memories / RX EQ TX EQ). */
 .steprow .tune { margin-left: 0; }
 @media (min-width: 700px) {
-  .block.tuning .steprow { flex-wrap: nowrap !important; gap: 4px; }
+  .block.tuning .steprow { flex-wrap: wrap !important; gap: 4px; }              /* wraps onto a second line when the block is too narrow for all the buttons (extra buttons, large text) */
   .block.tuning .steprow > button { white-space: nowrap; }
   .block.tuning .steprow > button:not(#dn):not(#up) { flex: 1 1 6.4em; min-width: 6.4em; padding-left: 14px; padding-right: 8px; }
   .block.tuning .steprow > button#dn, .block.tuning .steprow > button#up { flex: 0 0 34px; padding-left: 0; padding-right: 0; }
   .block.tuning .steprow > select { flex: 0 0 auto; }
+  /* RX EQ and TX EQ: a second line of their own, centred, smaller (the empty ::after sits between the two groups and takes the whole line) */
+  .block.tuning .steprow::after { content: ""; order: 1; flex: 0 0 100%; height: 0; }
+  .block.tuning .steprow > button.eqbtn:not(#dn):not(#up) { order: 2; flex: 0 0 auto; min-width: 0; padding: 4px 12px; min-height: 28px; font-size: .74rem; }
 }
-@media (min-width: 1060px) { .toolrow { grid-template-columns: minmax(0, 1fr) auto; } }
+@media (min-width: 1060px) { .toolrow { grid-template-columns: minmax(0, 1fr) auto; } .toolrow .block.tuning { min-width: 0; } }
 @media (min-width: 700px) and (max-width: 1059px) { .toolrow { grid-template-columns: minmax(0, 1fr); gap: 0; } }
 @media (max-width: 699px) {
   .block.tuning .steprow { display: grid !important; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px; }
@@ -768,6 +771,8 @@ button.lockbtn.on { background: var(--yellow); color: #1a1100; border-color: tra
   .block.tuning .steprow > select { grid-column: span 4; }
   .block.tuning .steprow > button:not(#dn):not(#up) { grid-column: span 2; white-space: nowrap; padding-left: 12px; padding-right: 4px; }
   .block.tuning .steprow > button[data-tovfo] { grid-column: span 6; }
+  .block.tuning .steprow > button.eqbtn:not(#dn):not(#up) { grid-column: 2 / span 2; font-size: .74rem; }              /* RX EQ and TX EQ centred on their own line */
+  .block.tuning .steprow > button.eqbtn:not(#dn):not(#up) + button.eqbtn { grid-column: 4 / span 2; }
 }
 
 /* recordings (Audio tab) */
@@ -1022,11 +1027,11 @@ html .app [data-pane=menu] { display: none !important; }
 html .app[data-tab=menu] [data-pane=menu] { display: block !important; grid-column: 1 / -1; grid-area: auto; }
 html .app[data-tab=menu] [data-pane]:not([data-pane=menu]) { display: none !important; }
 html .app[data-tab=menu] .layout { grid-template-areas: none; grid-template-columns: minmax(0, 1fr); }
-html .app [data-pane=digsw], html .app [data-pane=ftx], html .app [data-pane=sstv], html .app [data-pane=cw], html .app [data-pane=rtty], html[data-tabbed] .app [data-pane=freedv] { display: none !important; }
+html .app [data-pane=digsw], html .app [data-pane=ftx], html .app [data-pane=sstv], html .app [data-pane=cw], html .app [data-pane=rtty], html .app [data-pane=js8], html[data-tabbed] .app [data-pane=freedv] { display: none !important; }
 html .app[data-tab=digital] [data-pane=digsw] { display: flex !important; }
-html .app[data-tab=digital][data-dig=freedv] [data-pane=freedv], html .app[data-tab=digital][data-dig=ftx] [data-pane=ftx], html .app[data-tab=digital][data-dig=sstv] [data-pane=sstv], html .app[data-tab=digital][data-dig=cw] [data-pane=cw], html .app[data-tab=digital][data-dig=rtty] [data-pane=rtty] { display: block !important; grid-column: 1 / -1; grid-area: auto; }
+html .app[data-tab=digital][data-dig=freedv] [data-pane=freedv], html .app[data-tab=digital][data-dig=ftx] [data-pane=ftx], html .app[data-tab=digital][data-dig=sstv] [data-pane=sstv], html .app[data-tab=digital][data-dig=cw] [data-pane=cw], html .app[data-tab=digital][data-dig=rtty] [data-pane=rtty], html .app[data-tab=digital][data-dig=js8] [data-pane=js8] { display: block !important; grid-column: 1 / -1; grid-area: auto; }
 html .app[data-tab=digital] [data-pane=vfo], html .app[data-tab=digital] [data-pane=filters], html .app[data-tab=digital] [data-pane=levels], html .app[data-tab=digital] [data-pane=audio] { display: none !important; }
-html .app[data-tab=digital][data-dig=ftx] [data-pane=ptt], html .app[data-tab=digital][data-dig=sstv] [data-pane=ptt], html .app[data-tab=digital][data-dig=cw] [data-pane=ptt], html .app[data-tab=digital][data-dig=rtty] [data-pane=ptt] { display: none !important; }        /* these two transmit from the Pi: no voice PTT button */
+html .app[data-tab=digital][data-dig=ftx] [data-pane=ptt], html .app[data-tab=digital][data-dig=sstv] [data-pane=ptt], html .app[data-tab=digital][data-dig=cw] [data-pane=ptt], html .app[data-tab=digital][data-dig=rtty] [data-pane=ptt], html .app[data-tab=digital][data-dig=js8] [data-pane=ptt] { display: none !important; }        /* these two transmit from the Pi: no voice PTT button */
 html:not([data-tabbed]) .app[data-tab=digital]:not([data-dig=freedv]) [data-pane=freedv] { display: none !important; }
 html .app[data-tab=digital] .layout { grid-template-areas: none; grid-template-columns: minmax(0, 1fr); }
 html .app [data-pane=digsw] { order: -2; padding: 6px 8px; }
@@ -1162,3 +1167,32 @@ html[data-tabbed] .ftxgo { display: none !important; }
   html [data-pane=ptt] { padding-top: 5px; padding-bottom: 4px; }
   .pttrow .ptt { padding-top: 2px; padding-bottom: 2px; }
 }
+
+/* JS8 screen */
+.js8-setup { border: 1px solid var(--yellow); border-radius: 8px; padding: 8px 12px; margin: 8px 0; display: grid; gap: 8px; }
+.js8-setup p { margin: 0; }
+.js8-setup[hidden], .js8-log[hidden] { display: none; }
+.js8-log { margin: 0; max-height: 9em; overflow: auto; font-size: .72rem; background: var(--screen); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; white-space: pre-wrap; }
+.js8-main { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 8px; }
+@media (max-width: 559px) { .js8-main { grid-template-columns: minmax(0, 1fr); } }          /* side by side on tablets, one under the other on phones */
+.js8-col { min-width: 0; }
+.js8-col > h3.blabel { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 26px; margin: 0 0 4px; }          /* both headings one height, so the Clear button does not push its list down */
+.js8-list { height: clamp(150px, 26vh, 280px); overflow-y: auto; background: var(--screen); border: 1px solid var(--line); border-radius: 6px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .8rem; }
+.js8-row { display: grid; grid-template-columns: 5.4em 3.2em 2.6em minmax(0, 1fr); gap: 6px; padding: 2px 8px; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+.js8-row .t { color: var(--dim); } .js8-row .o, .js8-row .s { color: var(--dim); text-align: right; }
+.js8-dir .js8-row { grid-template-columns: 5.4em minmax(0, 1fr) 2.6em; }
+.js8-row.mine { background: rgba(var(--halo), .14); }
+.js8-heard { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+.js8-call { min-height: 28px; padding: 1px 9px; font-size: .8rem; border-radius: 999px; }
+.js8-call.sel { border-color: var(--yellow); color: var(--yellow); }
+.js8-call small { color: var(--dim); }
+.js8-to { width: 9em; text-transform: uppercase; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; min-height: 36px; }
+/* six digital screens: the switch wraps onto two rows on phones */
+@media (max-width: 520px) {
+  .digsw { flex-wrap: wrap; }
+  .digsw button { flex: 1 1 30%; }
+}
+
+/* the send boxes (CW, RTTY, JS8): room between the line with the callsign and message and the line with the buttons */
+.cw-send .row + .row { margin-top: 12px; }
+.cw-send .blabel + .ftx-notice + .row, .cw-send .blabel + .row { margin-top: 4px; }

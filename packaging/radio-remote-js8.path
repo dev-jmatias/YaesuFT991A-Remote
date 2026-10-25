@@ -1,0 +1,9 @@
+[Unit]
+Description=Start JS8Call when the Radio Remote web page asks for it
+
+[Path]
+PathExists=/var/lib/radio-remote/js8/run
+Unit=radio-remote-js8.service
+
+[Install]
+WantedBy=multi-user.target

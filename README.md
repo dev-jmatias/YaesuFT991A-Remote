@@ -94,6 +94,7 @@ The manual is installed on the Pi and served at `/docs/` (Help button in the app
 | [sstv.md](docs/sstv.md) | SSTV: receive pictures from the radio's audio and send your own, from the browser |
 | [cw.md](docs/cw.md) | CW: decode Morse, send from the keyboard through the radio's keyer, and log contacts |
 | [menu.md](docs/menu.md) | The radio's own menu (all 153 items of the FT-991A) on a tab, with backup and restore |
+| [js8.md](docs/js8.md) | JS8: keyboard messaging with JS8Call (a separate program installed with a button), receive and transmit |
 | [rtty.md](docs/rtty.md) | RTTY: decode and send radio teletype as audio tones, and log contacts |
 | [ft8.md](docs/ft8.md) | FT8 and FT4 from the browser, with an ADIF log and upload to QRZ and eQSL |
 | [logbook.md](docs/logbook.md) | follow and tune the radio from Log4OM or another logbook (Hamlib rigctl) |

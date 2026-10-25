@@ -52,9 +52,13 @@ run install -m 0644 "$NEW_RELEASE/packaging/radio-remote-update.path" /etc/syste
 run install -m 0644 "$NEW_RELEASE/packaging/radio-remote-update.service" /etc/systemd/system/radio-remote-update.service
 run install -m 0644 "$NEW_RELEASE/packaging/radio-remote-power.path" /etc/systemd/system/radio-remote-power.path
 run install -m 0644 "$NEW_RELEASE/packaging/radio-remote-power.service" /etc/systemd/system/radio-remote-power.service
+for u in radio-remote-js8.service radio-remote-js8.path radio-remote-js8setup.path radio-remote-js8setup.service; do
+  run install -m 0644 "$NEW_RELEASE/packaging/$u" "/etc/systemd/system/$u"
+done
 run systemctl daemon-reload
 run systemctl enable --now radio-remote-update.path          # the "Update now" button in the web page (also for Pis installed before it existed)
 run systemctl enable --now radio-remote-power.path           # the "Reboot the system" button in the web page
+run systemctl enable --now radio-remote-js8.path radio-remote-js8setup.path    # the JS8 screen: start JS8Call / prepare the system (only act when the web page asks)
 
 if service_restart_and_check; then
   echo "==> Updated and healthy."

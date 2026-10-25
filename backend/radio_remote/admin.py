@@ -13,7 +13,7 @@ from aiohttp import web
 
 from . import __version__, config, sysinfo
 from .common import (COOKIE, K_AUDIO, K_AUTH, K_CFG, K_CFGPATH, K_DRIVER, K_GUARD, K_HUB, K_RESTART, K_SESSION,
-                     K_REPORTER, K_FTX, K_SSTV, K_RTTY, K_RIGCTL, K_STARTED, K_UPDATES, client_ip, read_json, require_admin)
+                     K_REPORTER, K_FTX, K_SSTV, K_RTTY, K_JS8, K_RIGCTL, K_STARTED, K_UPDATES, client_ip, read_json, require_admin)
 from .logs import RING, scrub
 
 log = logging.getLogger("admin")
@@ -35,13 +35,14 @@ EDITABLE = {
     "sstv": {"tx_level_db", "keep"},
     "cw": {"keyer_slot", "chunk_chars"},
     "rtty": {"tx_level_db"},
+    "js8": {"tx_level_db"},
     "upload": {"qrz_key", "eqsl_user", "eqsl_password", "clublog_email", "clublog_password", "clublog_api", "auto_qrz", "auto_eqsl", "auto_clublog"},
 }
 SECRET_KEYS = {("upload", "qrz_key"), ("upload", "eqsl_password"), ("upload", "clublog_password"), ("upload", "clublog_api")}
 MASK = "********"
 LOCKED = ["safety.allow_ptt", "server.host", "server.port", "server.allowed_origins", "storage.data_dir", "updates.repo"]
 LIVE = {("logging", "level"), ("audio", "rx_gain_db"), ("audio", "tx_gain_db"), ("updates", "check"), ("rigctl", "enabled"), ("rigctl", "port"), ("rigctl", "allow"), ("rigctl", "set"), ("freedv", "mode"), ("freedv", "tx_level_db"), ("freedv", "auto_width"), ("freedv", "channels"), ("freedv", "data_mode"), ("reporter", "enabled"), ("reporter", "announce"), ("reporter", "watch"), ("reporter", "callsign"),
-        ("reporter", "grid_square"), ("reporter", "message")} | {("ftx", k) for k in EDITABLE["ftx"]} | {("upload", k) for k in EDITABLE["upload"]} | {("sstv", k) for k in EDITABLE["sstv"]} | {("cw", k) for k in EDITABLE["cw"]} | {("rtty", k) for k in EDITABLE["rtty"]}
+        ("reporter", "grid_square"), ("reporter", "message")} | {("ftx", k) for k in EDITABLE["ftx"]} | {("upload", k) for k in EDITABLE["upload"]} | {("sstv", k) for k in EDITABLE["sstv"]} | {("cw", k) for k in EDITABLE["cw"]} | {("rtty", k) for k in EDITABLE["rtty"]} | {("js8", k) for k in EDITABLE["js8"]}
 
 
 async def _run(fn, *a):
@@ -296,6 +297,8 @@ async def put_config(request):
         app[K_SSTV].apply_settings()
     if "rtty" in body and app.get(K_RTTY):
         app[K_RTTY].apply_settings()
+    if "js8" in body and app.get(K_JS8):
+        app[K_JS8]._emit("settings", settings=app[K_JS8].settings())
     if any(k in ("rx_gain_db", "tx_gain_db") for k in body.get("audio", {})) and app[K_AUDIO]:
         app[K_AUDIO].set_gains(new["audio"]["rx_gain_db"], new["audio"]["tx_gain_db"])     # takes effect immediately
     app[K_AUTH].audit("config_changed", admin.username, client_ip(request), ", ".join(changed) or "no change")

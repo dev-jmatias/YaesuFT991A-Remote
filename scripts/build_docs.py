@@ -38,6 +38,7 @@ SECTIONS = [
         ("sstv", "SSTV", "Receive and send slow-scan television pictures from the browser"),
         ("cw", "CW", "Decode Morse, send from the keyboard and log contacts, from the browser"),
         ("menu", "Radio menu", "The radio's own menu on a tab, with backup and restore"),
+        ("js8", "JS8", "Keyboard messaging with JS8Call, installed with a button"),
         ("rtty", "RTTY", "Decode and send radio teletype, and log contacts, from the browser"),
         ("ft8", "FT8 and FT4", "Decode, call and work FT8/FT4 from the browser; ADIF log and upload to QRZ, eQSL and Club Log"),
         ("logbook", "Logbook link", "Let Log4OM and other logbooks follow and tune the radio (Hamlib rigctl)"),

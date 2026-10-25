@@ -1,4 +1,4 @@
-"""The contact log (FT8, FT4, CW and RTTY): one JSON line per contact in the data directory, exported as an ADIF file (every logging program imports ADIF).
+"""The contact log (FT8, FT4, JS8, CW and RTTY): one JSON line per contact in the data directory, exported as an ADIF file (every logging program imports ADIF).
 
 A contact is a dict with the ADIF-style fields below. `uploaded` remembers per service ("qrz", "eqsl", "clublog") whether and when it went, so nothing is sent twice.
 """
@@ -45,13 +45,13 @@ def report_comment(q: dict) -> str:
 
 
 def adif_record(q: dict, extra: dict | None = None) -> str:
-    """One contact as an ADIF record. FT8, CW and RTTY are ADIF modes of their own; FT4 is the submode FT4 of MFSK."""
+    """One contact as an ADIF record. FT8, CW and RTTY are ADIF modes of their own; FT4 and JS8 are submodes of MFSK."""
     mode = q.get("mode", "FT8")
     parts = [adif_field("CALL", q["call"]), adif_field("QSO_DATE", q.get("qso_date")), adif_field("TIME_ON", q.get("time_on")),
              adif_field("QSO_DATE_OFF", q.get("qso_date_off")), adif_field("TIME_OFF", q.get("time_off")),
              adif_field("BAND", q.get("band") or band_of(float(q.get("freq_mhz") or 0))),
              adif_field("FREQ", f"{float(q['freq_mhz']):.6f}" if q.get("freq_mhz") else ""),
-             adif_field("MODE", "MFSK" if mode == "FT4" else mode), adif_field("SUBMODE", "FT4" if mode == "FT4" else ""),
+             adif_field("MODE", "MFSK" if mode in ("FT4", "JS8") else mode), adif_field("SUBMODE", mode if mode in ("FT4", "JS8") else ""),
              adif_field("RST_SENT", q.get("rst_sent")), adif_field("RST_RCVD", q.get("rst_rcvd")),
              adif_field("GRIDSQUARE", q.get("gridsquare")), adif_field("NAME", q.get("name")),
              adif_field("STATION_CALLSIGN", q.get("station_callsign")), adif_field("MY_GRIDSQUARE", q.get("my_gridsquare")),
@@ -80,8 +80,8 @@ def clean(entry: dict) -> dict:
         raise ValueError("the grid square does not look right")
     out["gridsquare"] = grid
     mode = str(entry.get("mode", "FT8")).upper()
-    if mode not in ("FT8", "FT4", "CW", "RTTY"):
-        raise ValueError("mode must be FT8, FT4, CW or RTTY")
+    if mode not in ("FT8", "FT4", "JS8", "CW", "RTTY"):
+        raise ValueError("mode must be FT8, FT4, JS8, CW or RTTY")
     out["mode"] = mode
     for k in ("rst_sent", "rst_rcvd"):
         v = str(entry.get(k, "") or "").strip()

@@ -1,0 +1,28 @@
+[Unit]
+Description=JS8Call and its private sound server for the JS8 screen of Radio Remote
+Documentation=file:///opt/radio-remote/current/docs/js8.md
+After=sound.target
+
+[Service]
+Type=simple
+User=radio-remote
+Group=radio-remote
+SupplementaryGroups=audio
+WorkingDirectory=/var/lib/radio-remote
+ExecStart=/opt/radio-remote/current/scripts/js8_run.sh
+Restart=no
+KillMode=control-group
+TimeoutStopSec=10
+# counted apart from the web service: JS8Call is a full Qt program
+MemoryMax=700M
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/radio-remote
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK

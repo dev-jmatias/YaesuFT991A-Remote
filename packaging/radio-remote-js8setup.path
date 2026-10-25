@@ -1,0 +1,9 @@
+[Unit]
+Description=Prepare the system for JS8Call when an administrator asks for it in the Radio Remote web page
+
+[Path]
+PathExists=/var/lib/radio-remote/js8-setup-request
+Unit=radio-remote-js8setup.service
+
+[Install]
+WantedBy=multi-user.target
