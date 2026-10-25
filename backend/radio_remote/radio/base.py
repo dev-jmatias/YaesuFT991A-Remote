@@ -131,6 +131,13 @@ class RadioDriver(ABC):
     async def tune_stop(self) -> None:
         return None
 
+    # The radio's own menu (EX command): the address is the menu number as the radio's table writes it (menu.py), the value its raw text.
+    async def menu_read(self, address: str) -> str:
+        raise RadioError("this radio's menu cannot be read from here")
+
+    async def menu_write(self, address: str, raw: str) -> None:
+        raise RadioError("this radio's menu cannot be written from here")
+
     # CW from the keyboard: the radio's own keyer plays text. Only the CW engine (through TxGuard) calls these.
     async def cw_memory_get(self, slot: int) -> str:
         raise RadioError("this radio cannot send CW from the keyboard")

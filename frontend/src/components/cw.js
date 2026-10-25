@@ -26,6 +26,7 @@ export function createCw(host, ctx) {
       <form class="sstv-setf" id="cw-setf"><label>Frequency <input id="cw-fin" inputmode="decimal" placeholder="7.030" autocomplete="off" aria-label="Frequency in MHz (7.030), kHz (7030) or Hz"></label><button type="button" id="cw-set">Set</button></form>
       <span class="sstv-step"><button type="button" id="cw-dn" title="Tune down by one step" aria-label="Tune down">&minus;</button><select id="cw-step" aria-label="Tuning step"></select><button type="button" id="cw-up" title="Tune up by one step" aria-label="Tune up">+</button></span>
       <label>Mode <select id="cw-mode-r" aria-label="The radio's mode"></select></label>
+      <label class="chk" title="Below 10 MHz the radio is put in CW-L (lower sideband), from 10 MHz up in CW-U, like the sideband of SSB. It is set when you enter this screen and when you cross 10 MHz; you can still change the mode by hand."><input type="checkbox" id="cw-asb"> Auto CW-L / CW-U</label>
       <span id="cw-pwr"></span>
     </div>
     <p class="ftx-notice" id="cw-notice" hidden></p>
@@ -79,7 +80,19 @@ export function createCw(host, ctx) {
   $("cw-step").innerHTML = STEPS.map((h) => `<option value="${h}">${h >= 1000 ? h / 1000 + " kHz" : h + " Hz"}</option>`).join("");
   $("cw-step").value = String(pref.get("cwStep", 100));
   const parseHz = (t) => { const v = parseFloat(String(t).replace(",", ".")); return !(v > 0) ? 0 : v < 1000 ? Math.round(v * 1e6) : v < 1e6 ? Math.round(v * 1e3) : Math.round(v); };
-  let tracking = false;                                                     // the screen has tuned the radio: its frequency and mode are remembered for the next visit
+  let tracking = false;
+  let active = false, lastWant = null;                                      // the screen is open / the sideband the last automatic choice was made for
+  const wantMode = (hz) => (hz < 10_000_000 ? "CW-L" : "CW-U");
+  const autoSb = () => pref.get("cwAutoSb", true);
+  // Automatic sideband: only while this screen is open, only when the radio is already in a CW mode, and only when the wanted sideband changes (so a mode chosen by hand stays until the band changes).
+  function applyAuto(force) {
+    const s = S.state;
+    if (!active || !autoSb() || !can() || !s.frequency || !CWMODES.includes(s.mode)) return;
+    const want = wantMode(s.frequency);
+    if (!force && want === lastWant) return;
+    lastWant = want;
+    if (s.mode !== want && (S.caps?.modes || []).includes(want)) send("set_mode", { mode: want }).catch(() => {});
+  }                                                     // the screen has tuned the radio: its frequency and mode are remembered for the next visit
 
   // ------------------------------------------------------------------ top bar
   function paintTop() {
@@ -99,6 +112,8 @@ export function createCw(host, ctx) {
       const last = pref.get("cwLast", null);
       if (!last || last.hz !== s.frequency || last.mode !== s.mode) pref.set("cwLast", { hz: s.frequency, mode: s.mode });
     }
+    $("cw-asb").checked = autoSb(); $("cw-asb").disabled = viewer;
+    applyAuto(false);
     $("cw-onoff").textContent = info.on ? "RX on" : "RX off";
     $("cw-onoff").classList.toggle("active", !!info.on);
     const n = $("cw-notice");
@@ -231,23 +246,28 @@ export function createCw(host, ctx) {
   $("cw-step").onchange = () => { pref.set("cwStep", +$("cw-step").value); ctx.setStep?.(+$("cw-step").value); };
   $("cw-dn").onclick = () => { ctx.tune(-(+$("cw-step").value)); };
   $("cw-up").onclick = () => { ctx.tune(+$("cw-step").value); };
+  $("cw-asb").onchange = () => { pref.set("cwAutoSb", $("cw-asb").checked); lastWant = null; applyAuto(true); };
   $("cw-mode-r").onchange = () => { const m = $("cw-mode-r").value; if (m) send("set_mode", { mode: m }); };
   $("cw-band").onchange = async (e) => {
     const b = info.bands.find((x) => x.hz === +e.target.value);
     if (!b) return;
     try {
-      if (!CWMODES.includes(S.state.mode)) await send("set_mode", { mode: S.caps?.modes?.includes("CW-U") ? "CW-U" : "USB" });
+      const want = autoSb() ? wantMode(b.hz) : "CW-U";
+      if (!CWMODES.includes(S.state.mode) || (autoSb() && S.state.mode !== want)) await send("set_mode", { mode: (S.caps?.modes || []).includes(want) ? want : "USB" });
+      lastWant = autoSb() ? want : lastWant;
       await send("set_frequency", { hz: b.hz });
       if (!info.on) await setOn(true);
     } catch (err) { toast(err.message); }
   };
   // Entering this screen puts the radio in a CW mode (on the last CW frequency, when there is one) and switches decoding on; leaving it switches decoding off and puts back the mode and frequency the radio had.
   let away = null;
-  ctx.cwActive = async (active) => {
-    sound.set(active);
+  ctx.cwActive = async (on) => {
+    const active_ = on;
+    active = on; lastWant = null;
+    sound.set(on);
     if (!can()) return;
     try {
-      if (active) {
+      if (active_) {
         if (S.state.freedv_on) { await send("freedv", { on: false }); toast("FreeDV switched off: CW and FreeDV cannot share the radio."); }
         away = { mode: S.state.mode, hz: S.state.frequency };
         const last = pref.get("cwLast", null);
@@ -256,10 +276,12 @@ export function createCw(host, ctx) {
           await send("set_frequency", { hz: last.hz });
           await ctx.settle?.(last);
         } else if (!CWMODES.includes(S.state.mode) && S.caps?.modes?.includes("CW-U")) {
-          await send("set_mode", { mode: "CW-U" });
-          await ctx.settle?.({ mode: "CW-U", hz: S.state.frequency });
+          const m = autoSb() && S.state.frequency < 10_000_000 && S.caps.modes.includes("CW-L") ? "CW-L" : "CW-U";
+          await send("set_mode", { mode: m });
+          await ctx.settle?.({ mode: m, hz: S.state.frequency });
         }
         tracking = true;
+        applyAuto(true);
         await setOn(true);
       } else {
         tracking = false;

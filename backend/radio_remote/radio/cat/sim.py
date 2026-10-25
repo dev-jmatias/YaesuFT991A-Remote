@@ -22,6 +22,9 @@ BAND_START = {14: 118_000_000, 0: 1_840_000, 1: 3_573_000, 2: 5_357_000, 3: 7_07
 
 
 class SimulatedFT991A:
+    MENU_MODEL = "ft991a"               # the menu table the simulated radio answers EX with (a default value until one is written)
+    MENU_ALEN = 3
+
     def __init__(self, transport: MemoryTransport):
         self.t = transport
         self.freq, self.freq_b, self.mode = 14_200_000, 7_100_000, "USB"
@@ -51,6 +54,7 @@ class SimulatedFT991A:
         self.reg_defaults = dict(REG_DEFAULTS)          # payload widths of the generic registers (subclasses may change them)
         self.tune_calls = 0
         self.keyer = {1: "", 2: "", 3: "", 4: "", 5: "STORED MSG"}      # the five keyer memories (KM)
+        self.menu_vals: dict[str, str] = {}                            # menu items that were written (the others answer a default)
         self.ks, self.bi = 20, 0                                         # keyer speed (WPM) and break-in
         self.ky_plays: list[int] = []                                    # keyer memories played with KY
         self.ft = 0                      # 0 = TX on VFO A, 1 = TX on VFO B (split)
@@ -163,6 +167,23 @@ class SimulatedFT991A:
                 if len(p) <= 51:
                     self.keyer[slot] = p[1:]
                     return
+            return await self._send("?;")
+        if self.MENU_MODEL and name == "EX" and p[:self.MENU_ALEN].isdigit() and ("EX" + p[:self.MENU_ALEN]) not in self.reg:          # the menu items without a register of their own
+            from ... import menu
+            if getattr(self, "menu_defs", None) is None:
+                self.menu_defs = menu.MenuDef(menu.load(self.MENU_MODEL))
+                self.menu_by_addr = {self.menu_defs.address(n): n for n in self.menu_defs.items}
+            addr, rest = p[:self.MENU_ALEN], p[self.MENU_ALEN:]
+            n = self.menu_by_addr.get(addr)
+            it = self.menu_defs.items.get(n) if n else None
+            if it is None or it["kind"] == "none":
+                return await self._send("?;")
+            cur = self.menu_vals.get(addr) or menu.default_raw(it)
+            if rest == "":
+                return await self._send(f"EX{addr}{cur};")
+            if len(rest) == (it["digits"] or 0):
+                self.menu_vals[addr] = rest
+                return
             return await self._send("?;")
         if name == "KS" and "KS" not in self.reg:               # (the HF simulators have them as ordinary registers)
             if not p:

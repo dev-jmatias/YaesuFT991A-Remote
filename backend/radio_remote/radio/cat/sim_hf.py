@@ -16,10 +16,16 @@ _SUB_CMDS = ("NA", "IS", "CO", "BP", "BC", "NR", "RL", "NB", "PA", "RA", "GT", "
 
 
 class SimulatedYaesuHf(SimulatedFT991A):
+    MENU_MODEL = None
+    MENU_ALEN = 6
+
     def __init__(self, transport: MemoryTransport, model: str = "ftdx10"):
         super().__init__(transport)
         self.m = MODELS[model]
         self.model = model
+        from ... import menu
+        if menu.available(model):
+            self.MENU_MODEL = model                                      # EX P1P1 P2P2 P3P3: the six-digit menu addresses of the manual's table
         self.split = 0
         self.fr = "01"                                                   # FTDX101: MAIN listening, SUB muted
         self.ag1 = 2                                                     # FTDX101: SUB AF gain

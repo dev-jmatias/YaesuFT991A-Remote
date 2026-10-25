@@ -14,6 +14,7 @@ swr_meter = true
 alc_meter = true
 comp_meter = true
 ptt = true
+menu = true                           # the radio's own menu through the EX command (menu.py, radio/menus/ft991a.json): 153 items from the CAT manual
 cw_text = true                        # typed CW through the radio's keyer memories (simulated)
 power_off_cat = false
 power_on_cat = false

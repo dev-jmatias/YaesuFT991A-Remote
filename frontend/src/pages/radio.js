@@ -13,6 +13,7 @@ import { createFtx } from "../components/ftx.js";
 import { createSstv } from "../components/sstv.js";
 import { createCw } from "../components/cw.js";
 import { createRtty } from "../components/rtty.js";
+import { createMenu } from "../components/menu.js";
 import { createMemoryButtons } from "../components/memories.js";
 import { createTuner } from "../tuner.js";
 import { el, fmtStep, pref } from "../util.js";
@@ -55,7 +56,7 @@ export function renderRadio(root, { onLogout, onAuthLost }) {
           <button id="logout" title="Sign out" aria-label="Sign out">${TI.out}<span class="tl">Sign out</span></button>
         </span>
       </header>
-      <div class="radiobar"><span class="rtab"><i class="dot" id="dot" role="img" aria-label="connecting"></i><span id="model"></span></span><span class="digbar" id="digbar" role="group" aria-label="Digital screen" hidden></span><button id="ftxgo" class="ftxgo" hidden title="The FT8 / FT4 screen">FT8/FT4</button><button id="sstvgo" class="ftxgo" hidden title="The SSTV screen">SSTV</button><button id="cwgo" class="ftxgo" hidden title="The CW screen">CW</button><button id="rttygo" class="ftxgo" hidden title="The RTTY screen">RTTY</button><div id="ctlbar" class="ctlbar"></div></div>
+      <div class="radiobar"><span class="rtab"><i class="dot" id="dot" role="img" aria-label="connecting"></i><span id="model"></span></span><span class="digbar" id="digbar" role="group" aria-label="Digital screen" hidden></span><button id="ftxgo" class="ftxgo" hidden title="The FT8 / FT4 screen">FT8/FT4</button><button id="sstvgo" class="ftxgo" hidden title="The SSTV screen">SSTV</button><button id="cwgo" class="ftxgo" hidden title="The CW screen">CW</button><button id="rttygo" class="ftxgo" hidden title="The RTTY screen">RTTY</button><button id="menugo" class="ftxgo" hidden title="The radio's menu">Menu</button><div id="ctlbar" class="ctlbar"></div></div>
       <div id="mock" class="mockbanner" hidden>SIMULATED RADIO - nothing is connected or transmitting.</div>
       <div id="exp" class="mockbanner" hidden></div>
       <div id="offline" class="offline" hidden><span>Radio offline - waiting for it to come back. Controls are paused.</span><button class="active" id="poweron" hidden title="Wake the radio from standby (PS1). It needs a few seconds to start.">Power on radio</button></div>
@@ -321,14 +322,17 @@ export function renderRadio(root, { onLogout, onAuthLost }) {
     const rtOk = !!S.audio?.rtty?.available;
     const screens = [fdOk && "freedv", fxOk && "ftx", svOk && "sstv", cwOk && "cw", rtOk && "rtty"].filter(Boolean);
     const tabs = [...TABS];
+    const menuOk = !!S.caps?.features?.menu;
     $("layout").classList.toggle("has-fd", fdOk);
     if (fdOk) parts.push(createFreeDV(pane("freedv", ""), ctx));
     if (fxOk) parts.push(createFtx(pane("ftx", ""), ctx));
     if (svOk) parts.push(createSstv(pane("sstv", ""), ctx));
     if (cwOk) parts.push(createCw(pane("cw", ""), ctx));
     if (rtOk) parts.push(createRtty(pane("rtty", ""), ctx));
+    if (menuOk) parts.push(createMenu(pane("menu", ""), ctx));
     const sw = screens.length ? pane("digsw", "", "digsw") : null;
     if (screens.length) tabs.push(["digital", "Digital"]);
+    if (menuOk) tabs.push(["menu", "Menu"]);
     if (!screens.includes(ui.dig)) ui.dig = screens.includes(pref.get("digital", "")) ? pref.get("digital", "") : screens[0] || "";
     if (!tabs.some(([k]) => k === ui.tab)) ui.tab = "radio";
 
@@ -362,6 +366,8 @@ export function renderRadio(root, { onLogout, onAuthLost }) {
       $(id).hidden = !ok;
       $(id).onclick = () => { if (ui.tab === "digital" && ui.dig === key) go("radio"); else go("digital", key); };
     }
+    $("menugo").hidden = !menuOk;
+    $("menugo").onclick = () => { go(ui.tab === "menu" ? "radio" : "menu"); $("menugo").textContent = ui.tab === "menu" ? "Back to radio" : "Menu"; };
     go(ui.tab, ui.dig);
 
     $("adm").hidden = S.user.role !== "admin";
@@ -424,6 +430,8 @@ export function renderRadio(root, { onLogout, onAuthLost }) {
       } else if (m.t === "safety") {
         S.safety = { ...S.safety, ...m.d };                  // the administrator switched transmitting on or off
         build();
+      } else if (m.t === "menu") {
+        ctx.menuEvent?.(m);
       } else if (m.t === "rtty") {
         ctx.rttyEvent?.(m);
       } else if (m.t === "ftx") {

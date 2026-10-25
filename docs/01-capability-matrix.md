@@ -63,6 +63,7 @@ How to read the table:
 | cw_keyer | - | - | works | works | - |
 | cw_text | from the manual, untested | from the manual | works | works | from the manual |
 | dual_receiver | - | - | works | works | - |
+| menu | works | from the manual | works | works | from the manual |
 | Power off over CAT | works | from the manual | works | works | from the manual |
 | Power on over CAT (from standby) | works | from the manual | works | works | from the manual |
 | range_scan | works | - | - | - | - |

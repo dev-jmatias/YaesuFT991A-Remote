@@ -945,6 +945,24 @@ class YaesuCatDriver(RadioDriver):
         await self._guard_cat(c.send(self.proto.TUNE_STOP, prio=PRIO_PTT))
         log.warning("tune stop sent")
 
+    # --- the radio's own menu (EX): EX P1 P1 P1 P2...; (FT-991A: 001..153) ---
+    async def menu_read(self, address: str) -> str:
+        if not self.caps.has("menu"):
+            raise RadioError("this radio profile has no menu table")
+        c = self._need_client()
+        ans = await self._guard_cat(c.request(f"EX{address};", prio=PRIO_POLL))
+        if not (ans.startswith(f"EX{address}") and ans.endswith(";")):
+            raise RadioError(f"unexpected menu answer {ans!r}")
+        return ans[2 + len(address):-1]
+
+    async def menu_write(self, address: str, raw: str) -> None:
+        if not self.caps.has("menu"):
+            raise RadioError("this radio profile has no menu table")
+        if not (address.isdigit() and raw and ";" not in raw and len(raw) <= 12):
+            raise RadioError("not a menu address and value")
+        c = self._need_client()
+        await self._guard_cat(c.send(f"EX{address}{raw};", prio=PRIO_USER))
+
     # --- CW from the keyboard (FT-991A: KM stores a keyer memory, KY plays it; the CAT manual has no KY with free text) ---
     def _need_keyer(self):
         if not self.caps.has("cw_text"):

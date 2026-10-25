@@ -18,7 +18,7 @@ from aiohttp import WSMsgType, web
 from . import __version__, admin, logs, sdnotify, updates
 from .audio.service import AudioService, AudioUnavailable
 from .auth import AuthStore, Session
-from .common import (COOKIE, K_AUDIO, K_AUTH, K_CFG, K_CFGPATH, K_DRIVER, K_GUARD, K_HUB, K_FTX, K_QSOLOG, K_REPORTER, K_RESTART, K_SESSION, K_SSTV, K_CW, K_RTTY,
+from .common import (COOKIE, K_AUDIO, K_AUTH, K_CFG, K_CFGPATH, K_DRIVER, K_GUARD, K_HUB, K_FTX, K_QSOLOG, K_REPORTER, K_RESTART, K_SESSION, K_SSTV, K_CW, K_RTTY, K_MENU,
                      K_RIGCTL, K_STARTED, K_UPDATES, CommandError, client_ip, is_https, read_json)
 from .lease import ControlLease, LeaseError
 from .radio import controls
@@ -45,7 +45,7 @@ MAX_WS_CLIENTS = 24
 CMD_RATE, CMD_BURST, MAX_STRIKES = 40.0, 80, 200
 LEASE_OPS = {"request_control", "respond_control", "release_control", "force_control"}
 MAX_EQ_PRESETS = 20
-SCAN_KEEPS = {"scan_range", "scan_range_stop", "set_level", "set_control", "freedv", "ftx", "ftx_tx", "ftx_halt", "sstv", "sstv_halt", "cw", "cw_set", "cw_clear", "cw_send", "cw_halt", "cw_keyer", "rtty", "rtty_set", "rtty_clear", "rtty_send", "rtty_halt", "set_eq", "set_dyn", "eq_preset_save", "eq_preset_delete", "rec"}     # commands that leave a running range scan alone
+SCAN_KEEPS = {"scan_range", "scan_range_stop", "set_level", "set_control", "freedv", "ftx", "ftx_tx", "ftx_halt", "sstv", "sstv_halt", "cw", "cw_set", "cw_clear", "cw_send", "cw_halt", "cw_keyer", "rtty", "rtty_set", "rtty_clear", "rtty_send", "rtty_halt", "menu_set", "set_eq", "set_dyn", "eq_preset_save", "eq_preset_delete", "rec"}     # commands that leave a running range scan alone
 
 
 def _int(v, lo=None, hi=None) -> int:
@@ -81,6 +81,7 @@ class Hub:
         self.sstv = None                         # the SSTV engine (set by create_app)
         self.cw = None                           # the CW engine (set by create_app)
         self.rtty = None                         # the RTTY engine (set by create_app)
+        self.menu = None                         # the radio's menu (menu.py, set by create_app when the radio profile has one)
         self.scanner = RangeScanner(self)        # the start/stop frequency scan (scan.py)
         self.auto_width = lambda: True           # freedv.auto_width (set by create_app): widen a narrow radio filter when FreeDV is on
         self._widen_task: asyncio.Task | None = None
@@ -555,6 +556,16 @@ class Hub:
                 raise CommandError(str(e)) from None
             self.auth.audit("rtty_send", session.username, None, r["text"][:80])
             return r
+        elif typ == "menu_set":
+            if not self.menu:
+                raise CommandError("this radio's menu is not available here")
+            n, value = msg.get("n"), msg.get("value")
+            if isinstance(n, bool) or not isinstance(n, int):
+                raise CommandError("menu_set needs n (the menu number) and value")
+            try:
+                return await self.menu.set(n, value, session.username)
+            except (ValueError, RadioError) as e:
+                raise CommandError(str(e)) from None
         elif typ == "rtty_halt":
             if self.rtty:
                 await self.rtty.halt("halted by the operator")
@@ -979,6 +990,57 @@ async def freedv_reporter_status(request):
     return web.json_response(app[K_REPORTER].status(near_hz=app[K_DRIVER].state.get("frequency") or 0))
 
 
+async def menu_list(request):
+    """The radio's menu: the table of items with the values read so far (any signed-in user)."""
+    menu = request.app.get(K_MENU)
+    if menu is None:
+        raise web.HTTPNotFound(text="this radio has no menu table")
+    return web.json_response(menu.listing())
+
+
+async def menu_read(request):
+    """Read some items from the radio: {"numbers": [1, 2, 3]} (at most 60 at a time)."""
+    menu = request.app.get(K_MENU)
+    if menu is None:
+        raise web.HTTPNotFound(text="this radio has no menu table")
+    b = await read_json(request)
+    nums = b.get("numbers")
+    if not isinstance(nums, list) or not 1 <= len(nums) <= 60 or any(isinstance(x, bool) or not isinstance(x, int) for x in nums):
+        raise web.HTTPBadRequest(text="numbers must be a list of 1 to 60 menu numbers")
+    if not request.app[K_DRIVER].state.get("connected"):
+        raise web.HTTPServiceUnavailable(text="the radio is not connected")
+    return web.json_response({"items": await menu.read(nums)})
+
+
+async def menu_backup(request):
+    """The whole menu as a file to keep (read from the radio now)."""
+    menu = request.app.get(K_MENU)
+    if menu is None:
+        raise web.HTTPNotFound(text="this radio has no menu table")
+    if not request.app[K_DRIVER].state.get("connected"):
+        raise web.HTTPServiceUnavailable(text="the radio is not connected")
+    data = await menu.backup()
+    request.app[K_AUTH].audit("menu_backup", request[K_SESSION].username, client_ip(request), f"{len(data['values'])} items")
+    name = f"menu-{data['model']}-{time.strftime('%Y%m%d-%H%M%S', time.gmtime())}.json"
+    return web.Response(text=json.dumps(data, indent=1) + "\n", content_type="application/json", headers={"Content-Disposition": f'attachment; filename="{name}"'})
+
+
+async def menu_restore(request):
+    """Write a backup back to the radio (administrators; the radio must not be transmitting)."""
+    from .common import require_admin
+    admin_user = require_admin(request)
+    menu = request.app.get(K_MENU)
+    if menu is None:
+        raise web.HTTPNotFound(text="this radio has no menu table")
+    if not request.app[K_DRIVER].state.get("connected"):
+        raise web.HTTPServiceUnavailable(text="the radio is not connected")
+    b = await read_json(request)
+    try:
+        return web.json_response(await menu.restore(b, admin_user.username))
+    except ValueError as e:
+        raise web.HTTPBadRequest(text=str(e)) from None
+
+
 async def rtty_info(request):
     """RTTY: the state, the standard frequencies, the settings and the decoded text of the last while (any signed-in user)."""
     return web.json_response(request.app[K_RTTY].state())
@@ -1361,6 +1423,10 @@ def create_app(cfg: dict, driver: RadioDriver | None = None, auth: AuthStore | N
                                                               lambda cid: cid in app[K_HUB].clients, Path(cfg["storage"]["data_dir"]))
     app[K_CW] = app[K_HUB].cw = cw_engine = CwEngine(lambda: app[K_CFG], audio, app[K_HUB]._broadcast, lambda: driver.state.get("frequency") or 0, guard, lambda cid: cid in app[K_HUB].clients, driver)
     app[K_RTTY] = app[K_HUB].rtty = rtty_engine = RttyEngine(lambda: app[K_CFG], audio, app[K_HUB]._broadcast, lambda: driver.state.get("frequency") or 0, guard, lambda cid: cid in app[K_HUB].clients, driver)
+    from . import menu as menu_mod
+    menu_model = "ft991a" if driver.caps.is_mock else driver.caps.data["model"]["id"]
+    if driver.caps.has("menu") and menu_mod.available(menu_model):
+        app[K_MENU] = app[K_HUB].menu = menu_mod.MenuService(driver, guard, app[K_HUB]._broadcast, lambda ev, detail: auth.audit(ev, None, None, detail), menu_mod.MenuDef(menu_mod.load(menu_model)))
     app[K_QSOLOG] = QsoLog(Path(cfg["storage"]["data_dir"]) / "ftx_log.jsonl")
     app[K_FTX] = app[K_HUB].ftx = ftx_engine = FtxEngine(lambda: app[K_CFG], audio, app[K_HUB]._broadcast, lambda: driver.state.get("frequency") or 0, guard,
                                                           lambda cid: cid in app[K_HUB].clients)
@@ -1422,6 +1488,10 @@ def create_app(cfg: dict, driver: RadioDriver | None = None, auth: AuthStore | N
     app.router.add_get("/api/audio/status", audio_status)
     app.router.add_get("/api/freedv", freedv_info)
     app.router.add_get("/api/freedv/reporter", freedv_reporter_status)
+    app.router.add_get("/api/menu", menu_list)
+    app.router.add_post("/api/menu/read", menu_read)
+    app.router.add_get("/api/menu/backup.json", menu_backup)
+    app.router.add_post("/api/menu/restore", menu_restore)
     app.router.add_get("/api/cw", cw_info)
     app.router.add_get("/api/rtty", rtty_info)
     app.router.add_get("/api/sstv", sstv_info)

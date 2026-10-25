@@ -40,6 +40,8 @@ class MockDriver(RadioDriver):
         for m in self.memories:
             m["band"] = band_for(m["frequency"])
         self.tune_calls: list[str] = []           # for tests: "start" / "stop"
+        self.menu_store: dict[str, str] = {}      # menu items written by a test
+        self.menu_writes: list[tuple[str, str]] = []
         self.keyer_memories: dict[int, str] = {5: "MY OLD MESSAGE"}
         self.cw_calls: list[tuple] = []           # for tests: ("set", slot, text) / ("play", slot, text) / ("stop",)
         self.tune_duration_s = 1.5                # how long the simulated tune transmits
@@ -178,6 +180,21 @@ class MockDriver(RadioDriver):
     async def set_ptt(self, on: bool) -> None:
         self.ptt_calls.append(on)
         self._update(tx=on)
+
+    # The radio's own menu: every item answers with a plausible default until it is written
+    async def menu_read(self, address: str) -> str:
+        from .. import menu
+        if address in self.menu_store:
+            return self.menu_store[address]
+        defs = menu.MenuDef(menu.load("ft991a"))
+        n = int(address)
+        if n not in defs.items:
+            raise RadioError("no such menu item")
+        return menu.default_raw(defs.items[n])
+
+    async def menu_write(self, address: str, raw: str) -> None:
+        self.menu_store[address] = raw
+        self.menu_writes.append((address, raw))
 
     # CW from the keyboard: keyer memories (the real FT-991A has five of 50 characters); playing one is recorded and keys the simulated radio
     async def cw_memory_get(self, slot: int) -> str:

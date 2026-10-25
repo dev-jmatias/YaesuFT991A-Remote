@@ -42,6 +42,12 @@ and goes back by itself if the new version does not start. Settings and accounts
 | `radio-remote-rade-linux-aarch64.tar.xz` | the optional RADE library (FreeDV neural modes V1 and V2) for a Raspberry Pi, installed with `install_rade.sh` (the PC build is `…-x86_64.tar.xz`) |
 | `SHA256SUMS` | checksums of all of the above |
 
+### What is new in 1.1.51
+
+- **The radio's own menu on a new Menu tab.** Every item the CAT manual lists, with search, groups, an editor that fits each item, "changed" marks with Undo, and **backup and restore** of the whole menu to a file (restore: administrators). FT-991A: all 153 items. FTDX10, FTDX101D/MP and FT-710: their menus (sections, groups, items) built from their CAT manuals. Items that could cut the link or change the keying (CAT and serial speed, PTT and port selection, ...) are shown read only; every change is in the audit log. **Tried only on a simulated radio so far: back up the menu first.** See `menu.md`.
+- **CW: automatic CW-L / CW-U.** Below 10 MHz the radio is put in CW-L, from 10 MHz up in CW-U (tick box on the CW screen, on by default; a mode you choose by hand stays until the band changes side).
+- **Phone fit.** The "Audio & Levels" tab label, the recorder's "Recordings" button and the Digital switch no longer overflow their buttons on narrow phones.
+
 ### What is new in 1.1.50
 
 - **CW on the Digital tab.** Decodes Morse from the radio's audio into text, with a spectrum, the pitch and speed it finds by itself (or fixed by you), and a Sound-here choice. **Send from the keyboard**: type text, or use the CQ / My call / 599 / 73 buttons; it is played by the radio's own keyer (the FT-991A's CAT can only play stored keyer memories, so the text goes through keyer memory 5 in pieces, and the radio's own text is put back). Needs the radio in CW-U or CW-L and break-in on. **Sending has not yet been tried on a real radio: try it into a dummy load first.** See `cw.md`.

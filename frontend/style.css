@@ -784,7 +784,7 @@ button.lockbtn.on { background: var(--yellow); color: #1a1100; border-color: tra
 .screen-locked [inert] { opacity: .78; user-select: none; }
 
 /* the Recorder block under Mode: four buttons of one size */
-.recbar { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; }
+.recbar { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, 1.7fr); gap: 5px; }
 .recbar button { white-space: nowrap; padding-left: 14px; padding-right: 6px; }
 .recbar .recb { color: #ff9aa9; font-weight: 700; }
 .recbar .recb.on { background: linear-gradient(180deg, #ff5a75, var(--red)); border-color: transparent; color: #fff; animation: pulse 1s infinite; }
@@ -931,7 +931,7 @@ a.btn, label.btn { display: inline-flex; align-items: center; background: linear
 a.btn:hover, label.btn:hover { border-color: var(--cyan); }
 @media (max-width: 480px) {
   .tabs { gap: 3px; }
-  .tabs button { padding: 4px 1px; font-size: clamp(.56rem, 2.95vw, .8rem); min-width: 0; white-space: nowrap; letter-spacing: -.01em; }       /* every label whole: the text shrinks with the screen */
+  .tabs button { flex: 1 1 auto; padding: 4px 3px; font-size: clamp(.56rem, 2.95vw, .8rem); min-width: 0; white-space: nowrap; letter-spacing: -.01em; }       /* every label whole: the text shrinks with the screen */
   .ftx button, .ftx select, .ftx a.btn { font-size: clamp(.66rem, 3.1vw, .82rem); }
   .ftx button { padding-left: 8px; padding-right: 8px; }
   .ftx button.led { padding-left: 12px; padding-right: 7px; }
@@ -1014,6 +1014,10 @@ html[data-tabbed] .app[data-tab=radio] [data-pane=filters], html[data-tabbed] .a
 html[data-tabbed] .app[data-tab=filters] [data-pane=vfo], html[data-tabbed] .app[data-tab=filters] [data-pane=levels], html[data-tabbed] .app[data-tab=filters] [data-pane=audio],
 html[data-tabbed] .app[data-tab=audio] [data-pane=vfo], html[data-tabbed] .app[data-tab=audio] [data-pane=filters] { display: none !important; }
 /* the three digital screens and their switch only show on the Digital tab (FreeDV is also a card of the radio page on the desktop layout) */
+html .app [data-pane=menu] { display: none !important; }
+html .app[data-tab=menu] [data-pane=menu] { display: block !important; grid-column: 1 / -1; grid-area: auto; }
+html .app[data-tab=menu] [data-pane]:not([data-pane=menu]) { display: none !important; }
+html .app[data-tab=menu] .layout { grid-template-areas: none; grid-template-columns: minmax(0, 1fr); }
 html .app [data-pane=digsw], html .app [data-pane=ftx], html .app [data-pane=sstv], html .app [data-pane=cw], html .app [data-pane=rtty], html[data-tabbed] .app [data-pane=freedv] { display: none !important; }
 html .app[data-tab=digital] [data-pane=digsw] { display: flex !important; }
 html .app[data-tab=digital][data-dig=freedv] [data-pane=freedv], html .app[data-tab=digital][data-dig=ftx] [data-pane=ftx], html .app[data-tab=digital][data-dig=sstv] [data-pane=sstv], html .app[data-tab=digital][data-dig=cw] [data-pane=cw], html .app[data-tab=digital][data-dig=rtty] [data-pane=rtty] { display: block !important; grid-column: 1 / -1; grid-area: auto; }
@@ -1105,3 +1109,40 @@ html[data-tabbed] .ftxgo { display: none !important; }
 .qsop-cmt { flex: 1 1 12em; }
 .qsop-cmt input { width: 100%; }
 .cw > .sstv-tune, .rtty > .sstv-tune { margin-top: 8px; }        /* the same room under the top bar as on the SSTV screen */
+
+/* the Menu tab */
+.menu-top { gap: 8px 14px; align-items: end; margin-bottom: 6px; }
+.menu-top label { display: grid; gap: 2px; font-size: .78rem; color: var(--dim); }
+.menu-q { flex: 1 1 14em; }
+.menu-q input { width: 100%; min-height: 34px; }
+.menu-top .btn.disabled { opacity: .5; pointer-events: none; }
+.menu-rows { display: grid; gap: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); overflow: hidden; }
+.menu-row { display: grid; grid-template-columns: 4.6em minmax(8em, 1.1fr) minmax(10em, 1.4fr) 8.5em; gap: 4px 12px; align-items: center; padding: 6px 10px; border-bottom: 1px solid var(--line); min-width: 0; }
+.menu-row:last-child { border-bottom: 0; }
+.menu-row.changed { background: rgba(var(--halo), .07); }
+.menu-n { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--dim); font-size: .8rem; }
+.menu-name { display: grid; gap: 1px; font-size: .88rem; min-width: 0; overflow-wrap: anywhere; }
+.menu-caut { color: var(--dim); font-size: .7rem; line-height: 1.25; }
+.menu-ctl { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.menu-ctl select, .menu-ctl input[type=number] { min-height: 32px; padding: 1px 8px; max-width: 100%; }
+.menu-ctl input[type=number] { width: 7.5em; }
+.menu-int { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+.menu-int input[type=range] { width: 8em; min-height: 24px; }
+.menu-flag { display: flex; gap: 6px; align-items: center; }
+.menu-row.locked .menu-name { opacity: .85; }
+.menu-empty { padding: 14px; }
+.menu-rep { margin-top: 10px; padding: 8px 12px; border: 1px solid var(--line2); border-radius: 8px; font-size: .85rem; }
+.menu-rep ul { margin: 6px 0 0; padding-left: 1.2em; }
+@media (max-width: 640px) { .menu-row { grid-template-columns: 4.2em 1fr; } .menu-ctl, .menu-flag { grid-column: 2; } }
+
+/* phones: the recorder buttons and the digital switch keep their labels inside the buttons (the indicator bar of a "led" button takes room on the left) */
+@media (max-width: 480px) {
+  .recbar { gap: 4px; }
+  .recbar button { font-size: .76rem; padding-left: 12px; padding-right: 3px; }
+}
+@media (max-width: 360px) {
+  .digsw, .digbar { gap: 3px; }
+  .digsw button, .digbar button { font-size: .7rem; padding-left: 11px; padding-right: 2px; }
+  .recbar { grid-template-columns: repeat(2, minmax(0, 1fr)) minmax(0, .9fr) minmax(0, 1.5fr); }
+  .recbar button { font-size: .72rem; }
+}
