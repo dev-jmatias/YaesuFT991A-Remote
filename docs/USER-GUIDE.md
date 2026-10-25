@@ -107,8 +107,8 @@ says *Hold to transmit*. An administrator can switch it off again at any time, w
 Rules that always apply:
 
 * **Hold** the button to transmit; let go to stop. The server un-keys on any hiccup: lost connection, lost control, time limit, shutdown.
-* **Hands-free transmit:** while you hold the button, slide your finger (or the mouse) **up** until the message says "Locked on", then let go.
-  The radio keeps transmitting; the button shows a dashed outline and "TRANSMITTING - TAP TO STOP". Tap it once to stop. The safeguards still
+* **Hands-free transmit:** tap **TX LOCK** (the button beside HOLD TO TRANSMIT) once. The radio keeps transmitting, without holding anything; the buttons show a dashed
+  outline, "TRANSMITTING - TAP TO STOP" and "STOP". Tap TX LOCK (or the big button) once more to stop. (This replaces sliding up while holding.) The safeguards still
   apply: the time limit ends it, and it also ends when the page is hidden (screen locked, another app or tab), when control is lost or the
   connection drops. Use it only when you are sure of the band, the antenna and your power.
 * Only the client with control can transmit; microphone audio reaches the radio only while that client is keyed.

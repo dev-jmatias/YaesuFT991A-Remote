@@ -561,7 +561,9 @@ html[data-tablet] .layout { align-items: stretch; }        /* flex column: every
 .seg.alarm .seglbl b { color: var(--red); }
 /* PTT lock: round button beside HOLD TO TRANSMIT */
 .pttrow { display: flex; align-items: stretch; gap: 10px; }
-.pttrow .ptt { flex: 1 1 auto; width: auto; min-width: 0; }
+.pttrow .ptt { flex: 1.6 1 0; width: auto; min-width: 0; }
+.pttrow .pttlatch { flex: 1 1 0; font-size: .95rem; letter-spacing: .04em; }
+.pttrow .pttlatch[hidden] { display: none; }
 .lockbtn { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 56px; min-height: 56px; align-self: center; padding: 0; border-radius: 50%; }
 .lockbtn svg { width: 24px; height: 24px; }
 .lockbtn[hidden] { display: none; }
@@ -620,12 +622,14 @@ button.lockbtn.on { background: var(--yellow); color: #1a1100; border-color: tra
 /* MEM channel tag sits on the mode / band line under the frequency (all screens) */
 .vmode { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; } .vmode .vbadge.memb { margin-left: 4px; white-space: nowrap; }
 
-/* hands-free transmit: slide up while holding PTT to latch it; tap to stop */
+/* hands-free transmit: the TX LOCK button latches it; a tap on either button stops it */
 .pttrow { position: relative; }
 .pttcue { position: absolute; left: 0; right: 66px; bottom: calc(100% + 6px); text-align: center; padding: 5px 10px; border-radius: 999px;
   background: var(--chip); border: 1px solid var(--line2); color: var(--text); font-size: .85rem; pointer-events: none; z-index: 5; }
 .pttcue[hidden] { display: none; }
 .ptt.latched { outline: 3px dashed var(--yellow); outline-offset: 3px; }
+.pttlatch:not(.keyed):not(.latched):not(:disabled) { border-color: var(--yellow); }
+.pttlatch.latched { background: var(--yellow); color: #1a1100; border-color: transparent; }
 
 /* ---------- FreeDV: a pane like the others (tab beside Audio on phones/tablets, a full-width card on wide screens) ---------- */
 @media (min-width: 700px) {
@@ -1145,4 +1149,16 @@ html[data-tabbed] .ftxgo { display: none !important; }
   .digsw button, .digbar button { font-size: .7rem; padding-left: 11px; padding-right: 2px; }
   .recbar { grid-template-columns: repeat(2, minmax(0, 1fr)) minmax(0, .9fr) minmax(0, 1.5fr); }
   .recbar button { font-size: .72rem; }
+}
+
+/* phones: the transmit buttons' labels ("TRANSMITTING - TAP TO STOP", "HOLD TO TRANSMIT") are smaller and may wrap, so they stay inside the button */
+@media (max-width: 480px) {
+  .pttrow { gap: 6px; }
+  .pttrow .ptt { padding: 4px 6px; font-size: clamp(.8rem, 4.3vw, 1rem); letter-spacing: .03em; line-height: 1.15; overflow-wrap: anywhere; }
+  .pttrow .pttlatch { font-size: clamp(.78rem, 3.9vw, .92rem); letter-spacing: .02em; }
+  .lockbtn { width: 44px; min-height: 44px; }
+  /* thinner on phones: the PTT bar takes less of the screen (still a big, easy target) */
+  html [data-pane=ptt] .ptt { min-height: 46px; }
+  html [data-pane=ptt] { padding-top: 5px; padding-bottom: 4px; }
+  .pttrow .ptt { padding-top: 2px; padding-bottom: 2px; }
 }

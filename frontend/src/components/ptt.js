@@ -1,12 +1,11 @@
 import { el } from "../util.js";
 
-// Hold-to-transmit, with a hands-free option: while holding, slide the finger (or mouse) UP past the lock point and let go; the
-// transmission stays on until the button is tapped again. The client sends a heartbeat every 250 ms while the button is held; the SERVER un-keys on
-// silence, disconnect or timeout, so nothing here is a safety net - it only mirrors what the server enforces.
+// Two transmit buttons: HOLD TO TRANSMIT (transmits while it is held) and TX LOCK (one tap starts a hands-free transmission, a tap on either button stops it). The client sends a
+// heartbeat every 250 ms while transmitting; the SERVER un-keys on silence, disconnect or timeout, so nothing here is a safety net - it only mirrors what the server enforces.
 export function createPtt(host, ctx) {
   const { S, send, sock, signal } = ctx;
   const root = el(`<div class="pttbox">
-    <div class="pttrow"><span class="pttcue" hidden></span><button class="ptt" aria-label="Press and hold to transmit">HOLD TO TRANSMIT</button></div>
+    <div class="pttrow"><span class="pttcue" hidden></span><button class="ptt" aria-label="Press and hold to transmit">HOLD TO TRANSMIT</button><button class="ptt pttlatch" aria-pressed="false" aria-label="Transmit hands-free: tap once to start, tap again to stop">TX LOCK</button></div>
     <div class="txtimer" hidden><div class="bar"><i></i></div><span></span></div>
     <div class="err" role="alert"></div>
   </div>`);
@@ -14,7 +13,9 @@ export function createPtt(host, ctx) {
   const btn = root.querySelector(".ptt"), tt = root.querySelector(".txtimer"), bar = tt.querySelector("i"), lbl = tt.querySelector("span");
   const canPtt = S.user.role !== "viewer" && S.caps.features.ptt;
   const blocked = !canPtt || !S.safety.ptt_permitted;            // viewers / PTT disabled in the config: nothing to lock
-  btn.disabled = blocked;
+  const latchBtn = root.querySelector(".pttlatch");
+  btn.disabled = latchBtn.disabled = blocked;
+  latchBtn.hidden = blocked;                                     // viewers / PTT disabled in the config: nothing to lock on
   if (S.user.role === "viewer") btn.textContent = "VIEW ONLY";
   else if (!S.safety.ptt_permitted) btn.textContent = "PTT DISABLED IN CONFIG";
 
@@ -28,17 +29,17 @@ export function createPtt(host, ctx) {
   lockBtn.onclick = () => { ctx.setPttLock(!ctx.ui.pttLock); if (ctx.ui.pttLock) release(); };      // (release is hoisted below)
 
   let hb = null, held = false, txStart = 0, tick = 0;
-  // hands-free latch: slide up LATCH_PX while holding. Everything the server enforces still applies (heartbeat while latched, time
-  // limit, un-key on disconnect); a hidden page, the lock button or the end of the transmission also end it.
-  const LATCH_PX = 70, cue = root.querySelector(".pttcue");
-  let latched = false, startY = 0, sawTx = false;
+  // hands-free latch (the TX LOCK button): everything the server enforces still applies (heartbeat while latched, time limit, un-key on disconnect);
+  // a hidden page, the screen lock button or the end of the transmission also end it.
+  const cue = root.querySelector(".pttcue");
+  let latched = false, sawTx = false;
   const showCue = (on, text) => { cue.hidden = !on; if (on) cue.textContent = text; };
   const err = (m) => { root.querySelector(".err").textContent = m || ""; if (m) setTimeout(() => (root.querySelector(".err").textContent = ""), 4000); };
 
   let sendingClip = false;
   const release = () => {
     sendingClip = false;
-    latched = false; sawTx = false; showCue(false); btn.classList.remove("latched");
+    latched = false; sawTx = false; showCue(false); btn.classList.remove("latched"); latchBtn.classList.remove("latched");
     if (!held) return;
     held = false;
     ctx.audio()?.setPtt(false);
@@ -52,28 +53,32 @@ export function createPtt(host, ctx) {
       if (!held) { send("ptt", { on: false }); return; }      // released while the request was in flight
       ctx.audio()?.setPtt(true);
       hb = setInterval(() => sock.ping("ptt_hb"), 250);
-    } catch (x) { held = false; latched = false; btn.classList.remove("latched"); showCue(false); err(x.message); }
+    } catch (x) { held = false; latched = false; btn.classList.remove("latched"); latchBtn.classList.remove("latched"); showCue(false); err(x.message); }
   };
   btn.onpointerdown = async (e) => {
     e.preventDefault();
-    if (latched) { release(); return; }                      // a tap on the latched button ends the transmission
+    if (latched) { release(); return; }                      // a tap on the button of a latched transmission ends it
     if (btn.disabled || held) return;
-    held = true; startY = e.clientY;
-    showCue(true, "▲ slide up to lock transmit");
+    held = true;
     try { btn.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
     await begin();
   };
-  btn.onpointermove = (e) => {
-    if (!held || latched) return;
-    if (startY - e.clientY >= LATCH_PX) {
-      latched = true;
-      btn.classList.add("latched");
-      showCue(true, "Locked on - tap the button to stop");
-    }
-  };
-  const letGo = () => { showCue(latched, "Locked on - tap the button to stop"); if (!latched) release(); };   // finger up: latched stays on
+  const letGo = () => { if (!latched) release(); };          // finger up: a latched transmission stays on
   btn.onpointerup = letGo; btn.onpointercancel = letGo; btn.onlostpointercapture = letGo;
   btn.oncontextmenu = (e) => e.preventDefault();
+  // TX LOCK: one tap starts a hands-free transmission, the next tap (on this button or on HOLD TO TRANSMIT) stops it
+  const startLatched = () => {
+    held = true; latched = true; sawTx = false;
+    btn.classList.add("latched"); latchBtn.classList.add("latched");
+    showCue(true, "Locked on - tap TX LOCK or the button to stop");
+    begin();
+  };
+  latchBtn.onclick = () => {
+    if (held) { release(); return; }
+    if (latchBtn.disabled || btn.disabled) return;
+    startLatched();
+  };
+  latchBtn.oncontextmenu = (e) => e.preventDefault();
   window.addEventListener("blur", () => { if (!latched) release(); }, { signal });
   document.addEventListener("visibilitychange", () => document.hidden && release(), { signal });
 
@@ -82,12 +87,12 @@ export function createPtt(host, ctx) {
   async function sendClip(id) {
     if (btn.disabled || held || !id) return;
     held = true; latched = true; sendingClip = true; sawTx = false;
-    btn.classList.add("latched");
+    btn.classList.add("latched"); latchBtn.classList.add("latched");
     showCue(true, "Sending the recording - tap the button to stop");
     try {
       await sock.send("ptt", { on: true, play: id });
       hb = setInterval(() => sock.ping("ptt_hb"), 250);
-    } catch (x) { held = false; latched = false; sendingClip = false; btn.classList.remove("latched"); showCue(false); err(x.message); }
+    } catch (x) { held = false; latched = false; sendingClip = false; btn.classList.remove("latched"); latchBtn.classList.remove("latched"); showCue(false); err(x.message); }
   }
   // An external button (a Bluetooth PTT button, a key) learned on the Audio tab: down/up = hold to talk, toggle = press to start, press again to stop.
   // The same rules apply as for the screen button (lock, permission, heartbeat, time limit).
@@ -102,7 +107,7 @@ export function createPtt(host, ctx) {
     toggle() {
       if (held) { release(); return "stopped"; }
       if (btn.disabled) return `ignored: the PTT button is disabled (${blocked ? "PTT not permitted for this account or disabled in the config" : "screen lock is on"})`;
-      held = true; latched = true; sawTx = false; btn.classList.add("latched");
+      held = true; latched = true; sawTx = false; btn.classList.add("latched"); latchBtn.classList.add("latched");
       showCue(true, "Locked on - press the button again to stop");
       begin(); return "transmit requested (latched)";
     },
@@ -119,6 +124,12 @@ export function createPtt(host, ctx) {
       else if (latched && sawTx) release();                        // the transmission ended (time limit, radio, lost control): drop the latch
       btn.classList.toggle("locked", locked && !blocked);
       btn.disabled = blocked || (locked && !tx);                     // a transmission that is already running can still be released
+      latchBtn.disabled = btn.disabled;
+      latchBtn.classList.toggle("keyed", tx);
+      latchBtn.classList.toggle("locked", locked && !blocked);
+      latchBtn.setAttribute("aria-pressed", String(latched));
+      latchBtn.textContent = latched ? "STOP" : "TX LOCK";
+      latchBtn.title = latched ? "Stop the hands-free transmission" : "Transmit hands-free: tap once to start, tap again to stop";
       lockBtn.classList.toggle("on", locked);
       lockBtn.setAttribute("aria-pressed", String(locked));
       lockBtn.title = locked ? "The screen is locked on this device (PTT, TUNE and every control). Tap to unlock." : "Lock the whole screen on this device so a stray touch changes nothing and cannot transmit";

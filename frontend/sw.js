@@ -1,6 +1,6 @@
 // App-shell cache. Network-first so a new deploy is never masked by a stale cache; the cache is only the
 // offline / slow-link fallback. API, WebSocket and audio signalling are never cached.
-const CACHE = "rr-shell-v209";
+const CACHE = "rr-shell-v212";
 const SHELL = [
   "/", "/style.css", "/manifest.webmanifest", "/icons/icon-192.png",
   "/src/main.js", "/src/api.js", "/src/audio.js", "/src/components/freedv.js", "/src/components/ftx.js", "/src/ftx-qso.js", "/src/components/sstv.js", "/src/components/cw.js", "/src/components/menu.js", "/src/components/rtty.js", "/src/components/qso-panel.js", "/src/components/digital-sound.js", "/src/worklets/capture.js", "/src/util.js", "/src/prefs.js", "/src/skin.js", "/src/tuner.js", "/src/pages/login.js", "/src/pages/radio.js", "/src/pages/admin.js",

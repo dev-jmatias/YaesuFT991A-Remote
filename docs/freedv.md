@@ -25,7 +25,7 @@ The older codec2 modes (1600, 700D, 700E) were removed from the program; a confi
    LSB or USB, the frequency and the FreeDV mode, and switches FreeDV on.
 3. Switch **Listen** on (speaker icon). When a FreeDV signal is locked you hear the decoded speech. Without a signal you hear nothing: the Pi
    passes no noise on. Tune carefully (the modem finds the signal within about 100 Hz); watch the status.
-4. **Transmit:** arm the microphone (microphone button, which also sets the radio's input to REAR), hold PTT (or slide up to lock it) and talk.
+4. **Transmit:** arm the microphone (microphone button, which also sets the radio's input to REAR), hold PTT (or tap TX LOCK to transmit hands-free and tap it again to stop) and talk.
    The Pi encodes your voice for as long as you hold PTT.
 
 Switching FreeDV off passes the radio's audio through as before (it does not change the radio's mode back).

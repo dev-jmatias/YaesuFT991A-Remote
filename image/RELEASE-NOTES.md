@@ -42,6 +42,11 @@ and goes back by itself if the new version does not start. Settings and accounts
 | `radio-remote-rade-linux-aarch64.tar.xz` | the optional RADE library (FreeDV neural modes V1 and V2) for a Raspberry Pi, installed with `install_rade.sh` (the PC build is `…-x86_64.tar.xz`) |
 | `SHA256SUMS` | checksums of all of the above |
 
+### What is new in 1.1.52
+
+- **Two transmit buttons.** **HOLD TO TRANSMIT** transmits only while you hold it. The new **TX LOCK** button beside it transmits hands-free: tap once to start (it then shows STOP), tap it or the big button to stop. This replaces sliding up while holding. The safeguards are unchanged (time limit, heartbeat, release on disconnect or when the page is hidden).
+- **Thinner, smaller transmit buttons on phones**, with labels that stay inside the buttons ("TRANSMITTING - TAP TO STOP" wraps instead of overflowing).
+
 ### What is new in 1.1.51
 
 - **The radio's own menu on a new Menu tab.** Every item the CAT manual lists, with search, groups, an editor that fits each item, "changed" marks with Undo, and **backup and restore** of the whole menu to a file (restore: administrators). FT-991A: all 153 items. FTDX10, FTDX101D/MP and FT-710: their menus (sections, groups, items) built from their CAT manuals. Items that could cut the link or change the keying (CAT and serial speed, PTT and port selection, ...) are shown read only; every change is in the audit log. **Tried only on a simulated radio so far: back up the menu first.** See `menu.md`.
