@@ -21,6 +21,7 @@ The older codec2 modes (1600, 700D, 700E) were removed from the program; a confi
 
 1. Open the **Digital** tab and choose **FreeDV** in its switch (on the all-in-one desktop layout it is the card under Levels and Audio). **Switch FreeDV on** starts it; if the radio is
    not in USB or LSB it puts it in USB (LSB below 10 MHz), which is the FreeDV convention. The same button switches it off.
+   The **Radio mode** box next to the FreeDV mode chooses the mode the radio is put in: **Automatic** (the default: LSB below 10 MHz, USB above, the FreeDV convention) or one of **USB, LSB, DATA-U, DATA-L, FM**, as on the other digital screens. It is remembered in this browser; picking a channel and the *Tune* buttons of the FreeDV Reporter list use it, and choosing it changes the radio's mode at once. Other stations are on USB/LSB: with a DATA mode or FM your signal may sit somewhere else in the audio than theirs (see the DATA mode section below), so keep Automatic unless you know why you want another.
 2. The tab shows the status (whether the modem is locked on a signal and its signal-to-noise ratio) and has the **preset channels**: one tap sets
    LSB or USB, the frequency and the FreeDV mode, and switches FreeDV on.
 3. Switch **Listen** on (speaker icon). When a FreeDV signal is locked you hear the decoded speech. Without a signal you hear nothing: the Pi

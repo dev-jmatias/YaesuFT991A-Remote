@@ -1,6 +1,6 @@
 import { api } from "../api.js";
 import { pct } from "../meter-cal.js";
-import { el, qrzUrl } from "../util.js";
+import { el, pref, qrzUrl } from "../util.js";
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 // FreeDV digital voice (RADE V1 and RADE V2, both from the optional RADE library). The Pi decodes the radio's modem tones into speech for every listener and encodes the operator's
@@ -15,9 +15,11 @@ export function createFreeDV(host, ctx) {
   const { S, send, toast, signal } = ctx;
   const admin = S.user.role === "admin";
   let info = { channels: [], modes: ["RADE"], tx_level_db: -3, data_mode: false };
-  // The radio mode FreeDV uses: plain USB/LSB, or (option "DATA", the FreeDV guide's way for the FT-991A) DATA-USB/DATA-LSB, which bypass the radio's microphone processing.
-  const radioModeFor = (hz) => ssbFor(hz);
-  const modeOk = (m) => ["USB", "LSB"].includes(m);
+  // The radio mode FreeDV uses: by default plain USB/LSB (LSB below 10 MHz, the FreeDV convention); the operator can choose one (USB, LSB, DATA-U, DATA-L, FM), remembered in this browser.
+  const RMODES = ["USB", "LSB", "DATA-U", "DATA-L", "FM"].filter((m) => (S.caps?.modes || []).includes(m));
+  const chosen = () => { const m = pref.get("freedvRadioMode", ""); return RMODES.includes(m) ? m : ""; };       // "" = automatic
+  const radioModeFor = (hz) => chosen() || ssbFor(hz);
+  const modeOk = (m) => (chosen() ? m === chosen() : ["USB", "LSB"].includes(m));
   const root = el(`<div class="fdv">
     <h2>FreeDV</h2>
     <div class="fdv-status" aria-live="polite"><i class="dot" id="fdv-dot"></i><span id="fdv-text">FreeDV is off</span></div>
@@ -36,6 +38,7 @@ export function createFreeDV(host, ctx) {
     <div class="row fdv-ctl">
       <button class="led" id="fdv-onoff">Switch FreeDV on</button>
       <label class="fdv-mode">Mode <select id="fdv-mode" aria-label="FreeDV mode"></select></label>
+      <label class="fdv-mode" title="The mode the radio is put in when you pick a channel or switch FreeDV on. Automatic is LSB below 10 MHz and USB above, which is what the other FreeDV stations use. A DATA mode or FM needs the radio set up for it (see the FreeDV help).">Radio mode <select id="fdv-rmode" aria-label="The radio's mode for FreeDV"></select></label>
     </div>
     <p class="dim fdv-note" id="fdv-note" hidden></p>
     <p class="fdv-widthwarn" id="fdv-alcwarn" hidden>The radio's <b>ALC</b> is above its mark while you transmit: the radio is compressing the FreeDV signal, and a compressed RADE signal cannot be decoded at the other station. Lower the <b>Transmit level of the modem tones</b> (or the radio's power) until the ALC just touches.</p>
@@ -82,6 +85,16 @@ export function createFreeDV(host, ctx) {
   host.append(root);
   const $ = (id) => root.querySelector("#" + id);
   const modeSel = $("fdv-mode");
+  const rmodeSel = $("fdv-rmode");
+  rmodeSel.innerHTML = `<option value="">Automatic (LSB / USB by band)</option>` + RMODES.map((m) => `<option value="${m}">${m}</option>`).join("");
+  rmodeSel.value = chosen();
+  rmodeSel.onchange = async () => {
+    pref.set("freedvRadioMode", rmodeSel.value);
+    paintChannels();                                                         // the channel buttons' tooltips name the radio mode
+    const canSet = S.user.role !== "viewer" && S.lease.holder?.conn === S.conn;
+    if (canSet && S.state.frequency) { try { await send("set_mode", { mode: radioModeFor(S.state.frequency) }); } catch (e) { toast(e.message); } }
+    update();
+  };
 
   const on = () => !!S.state.freedv_on;
   const hz = () => S.state.frequency || 0;
@@ -104,7 +117,7 @@ export function createFreeDV(host, ctx) {
   function paintChannels() {
     const box = $("fdv-ch");
     box.replaceChildren(...info.channels.map((c) => {
-      const b = el(`<button class="led fdv-c" title="${esc(c.name)}: ${fmtMHz(c.hz)} MHz ${ssbFor(c.hz)}, FreeDV ${modeName(c.mode)}">${esc(c.name)}<small>${fmtMHz(c.hz)} MHz · ${modeName(c.mode)}</small></button>`);
+      const b = el(`<button class="led fdv-c" title="${esc(c.name)}: ${fmtMHz(c.hz)} MHz ${radioModeFor(c.hz)}, FreeDV ${modeName(c.mode)}">${esc(c.name)}<small>${fmtMHz(c.hz)} MHz · ${modeName(c.mode)}</small></button>`);
       b.dataset.hz = c.hz; b.dataset.mode = c.mode;
       b.onclick = async () => {
         await send("set_mode", { mode: radioModeFor(c.hz) });
@@ -325,6 +338,9 @@ export function createFreeDV(host, ctx) {
     b.textContent = onNow ? "Switch FreeDV off" : "Switch FreeDV on";
     b.classList.toggle("active", onNow);
     if (onNow && document.activeElement !== modeSel && s.freedv_mode) modeSel.value = s.freedv_mode;
+    if (document.activeElement !== rmodeSel) rmodeSel.value = chosen();
+    rmodeSel.disabled = S.user.role === "viewer";
+    rmodeSel.parentElement.hidden = !RMODES.length;
     $("fdv-dot").className = "dot " + (!onNow ? "" : locked ? "ok" : "warn");
     const heard = onNow && s.freedv_heard ? s.freedv_heard : "";                  // the callsign in the end-of-over frame of the last over (RADE V1)
     $("fdv-heard").hidden = !heard;
@@ -332,7 +348,7 @@ export function createFreeDV(host, ctx) {
     const au = ctx.audio?.(), streaming = !!au && (au.hear || au.mic);          // the Pi only decodes while someone is listening
     $("fdv-text").textContent = !onNow ? "FreeDV is off"
       : !streaming ? `FreeDV ${modeName(s.freedv_mode)} is on. Tap the speaker icon (Listen) to hear and decode.`
-      : !modeOk(s.mode) ? `FreeDV ${modeName(s.freedv_mode)} is on, but the radio is in ${s.mode}: use USB (LSB below 10 MHz)`
+      : !modeOk(s.mode) ? `FreeDV ${modeName(s.freedv_mode)} is on, but the radio is in ${s.mode}: use ${chosen() || "USB (LSB below 10 MHz)"}`
       : locked ? `FreeDV ${modeName(s.freedv_mode)} locked on a signal (SNR ${(+s.freedv_snr || 0).toFixed(1)} dB)` : `FreeDV ${modeName(s.freedv_mode)} listening, no signal locked yet`;
     const w = +s.width || 0, rule = widthRule(), narrowNow = onNow && w > 0 && w < rule.need && !s.narrow && Number.isFinite(widest());          // the radio's filter is too narrow for RADE
     $("fdv-widthwarn").hidden = !narrowNow;

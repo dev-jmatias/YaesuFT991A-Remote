@@ -42,6 +42,10 @@ and goes back by itself if the new version does not start. Settings and accounts
 | `radio-remote-rade-linux-aarch64.tar.xz` | the optional RADE library (FreeDV neural modes V1 and V2) for a Raspberry Pi, installed with `install_rade.sh` (the PC build is `…-x86_64.tar.xz`) |
 | `SHA256SUMS` | checksums of all of the above |
 
+### What is new in 1.1.56
+
+- **FreeDV: choose the radio's mode.** A **Radio mode** box on the FreeDV screen, as on the other digital screens: Automatic (LSB below 10 MHz, USB above, the FreeDV convention, the default), USB, LSB, DATA-U, DATA-L or FM. It is used by the channel buttons and the FreeDV Reporter's Tune buttons, and changes the radio's mode at once. Other stations use USB/LSB: keep Automatic unless you know you need another (see `freedv.md`).
+
 ### What is new in 1.1.55
 
 - **JS8 on Debian 12 and other older systems.** JS8Call 3.0.3 needs glibc 2.38 (Debian 13, Ubuntu 24.04); on older systems the JS8Call program stopped as soon as it started. The Install JS8Call button now fetches version 3.0.2 there (same interface), and Prepare the system also installs `libopengl0`. If JS8 did not start on your PC, update, press **Prepare the system** and **Install JS8Call** once more (administrators).
