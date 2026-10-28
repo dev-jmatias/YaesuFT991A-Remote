@@ -42,6 +42,10 @@ and goes back by itself if the new version does not start. Settings and accounts
 | `radio-remote-rade-linux-aarch64.tar.xz` | the optional RADE library (FreeDV neural modes V1 and V2) for a Raspberry Pi, installed with `install_rade.sh` (the PC build is `…-x86_64.tar.xz`) |
 | `SHA256SUMS` | checksums of all of the above |
 
+### What is new in 1.1.58
+
+- **The transmit timer under PTT is hidden when you are not transmitting.** The bar and its "N s / 120 s limit" text used to stay on screen all the time and keep the last value after you let go of PTT; now they appear only while the radio transmits.
+
 ### What is new in 1.1.57
 
 - **Memory mode shows the channel name.** The badge under the frequency shows the name stored in the radio (for example *Portalegre*) instead of the channel number; the number stays as the fallback and in the tooltip.

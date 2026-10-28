@@ -202,6 +202,7 @@ button.icon { width: 34px; padding: 0; } button.icon.wide { width: auto; padding
 .ptt.keyed { background: linear-gradient(180deg, #ff5a75, var(--red)); border-color: #ff8da0; color: #fff; box-shadow: 0 0 0 4px rgba(244,63,94,.28), 0 0 22px rgba(244,63,94,.5); }
 .txtimer.warn { color: var(--red, #ff6b6b); font-weight: 700; }
 .txtimer { margin-top: 6px; display: grid; gap: 3px; font-size: .75rem; color: var(--dim); }
+.txtimer[hidden] { display: none; }
 .bar { height: 8px; background: var(--seg-off); border-radius: 4px; overflow: hidden; }
 .bar > i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--green), var(--yellow) 65%, var(--red)); }
 
