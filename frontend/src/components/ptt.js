@@ -28,7 +28,20 @@ export function createPtt(host, ctx) {
   root.querySelector(".pttrow").append(lockBtn);
   lockBtn.onclick = () => { ctx.setPttLock(!ctx.ui.pttLock); if (ctx.ui.pttLock) release(); };      // (release is hoisted below)
 
-  let hb = null, held = false, txStart = 0, tick = 0;
+  let hb = null, held = false, txStart = 0, tick = 0, beeped = -1, bctx = null;
+  // Time-out warning: the server un-keys at the TX time limit, so this device gives one steady tone of about 1.5 s when that many seconds are left (Admin > Config: on/off and how early).
+  // It only mirrors the limit; it enforces nothing.
+  const beep = () => {
+    try {
+      bctx = bctx || new AudioContext();
+      if (bctx.state === "suspended") bctx.resume();
+      const o = bctx.createOscillator(), g = bctx.createGain(), t = bctx.currentTime;
+      o.frequency.value = 1000; o.connect(g); g.connect(bctx.destination);
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.25, t + 0.02); g.gain.setValueAtTime(0.25, t + 1.4); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.5);
+      o.start(t); o.stop(t + 1.6);
+    } catch { /* no audio on this device: the bar still shows the time */ }
+  };
+  const warnAt = (left, lead) => { if (beeped < 0 && left <= lead) { beeped = 1; beep(); } };
   // hands-free latch (the TX LOCK button): everything the server enforces still applies (heartbeat while latched, time limit, un-key on disconnect);
   // a hidden page, the screen lock button or the end of the transmission also end it.
   const cue = root.querySelector(".pttcue");
@@ -135,13 +148,15 @@ export function createPtt(host, ctx) {
       lockBtn.title = locked ? "The screen is locked on this device (PTT, TUNE and every control). Tap to unlock." : "Lock the whole screen on this device so a stray touch changes nothing and cannot transmit";
       if (!blocked) btn.textContent = tx ? (s.tx_source === "radio" ? "TX (radio keyed)" : latched ? "TRANSMITTING - TAP TO STOP" : "TRANSMITTING") : locked ? "SCREEN LOCKED" : ctx.ui.levelTest && s.freedv_mode ? "HOLD FOR LEVEL TEST TONE" : "HOLD TO TRANSMIT";
       if (tx && !tick) {
-        txStart = performance.now();
+        txStart = performance.now(); beeped = -1;
         tick = setInterval(() => {
           const t = (performance.now() - txStart) / 1000, max = S.safety.tx_timeout_s || 120;
           tt.hidden = false; bar.style.width = Math.min(100, (t / max) * 100) + "%";
           lbl.textContent = `${t.toFixed(0)} s / ${max} s limit`;
+          const lead = S.safety.tx_warn_s || 10;
+          if (S.safety.tx_warn !== false && max > lead + 1) { warnAt(max - t, lead); tt.classList.toggle("warn", max - t <= lead); }
         }, 200);
-      } else if (!tx && tick) { clearInterval(tick); tick = 0; tt.hidden = true; }
+      } else if (!tx && tick) { clearInterval(tick); tick = 0; tt.hidden = true; tt.classList.remove("warn"); }
     },
     error: err,
   };

@@ -42,6 +42,12 @@ and goes back by itself if the new version does not start. Settings and accounts
 | `radio-remote-rade-linux-aarch64.tar.xz` | the optional RADE library (FreeDV neural modes V1 and V2) for a Raspberry Pi, installed with `install_rade.sh` (the PC build is `…-x86_64.tar.xz`) |
 | `SHA256SUMS` | checksums of all of the above |
 
+### What is new in 1.1.57
+
+- **Memory mode shows the channel name.** The badge under the frequency shows the name stored in the radio (for example *Portalegre*) instead of the channel number; the number stays as the fallback and in the tooltip.
+- **Up and down buttons for memory channels.** While memory mode is on, two buttons beside *Memories* step to the previous or next stored channel (empty channels are skipped, and it wraps round at the ends).
+- **Audible warning before the transmit time limit.** One steady beep (about 1.5 s) on the transmitting device a few seconds before the limit, and the timer under PTT turns red. In Admin > Config > Operation you can switch it on or off and choose how early it sounds (1-60 s, default 10); a restart applies the change.
+
 ### What is new in 1.1.56
 
 - **FreeDV: choose the radio's mode.** A **Radio mode** box on the FreeDV screen, as on the other digital screens: Automatic (LSB below 10 MHz, USB above, the FreeDV convention, the default), USB, LSB, DATA-U, DATA-L or FM. It is used by the channel buttons and the FreeDV Reporter's Tune buttons, and changes the radio's mode at once. Other stations use USB/LSB: keep Automatic unless you know you need another (see `freedv.md`).

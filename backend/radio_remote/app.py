@@ -78,6 +78,7 @@ class Hub:
         self.extra: dict = {}            # non-radio state (audio levels) included in snapshots
         self.audio = None
         self.ui: dict = {}
+        self.tx_warn: dict = {"on": True, "s": 10}
         self.reporter = None                     # FreeDV Reporter (set by create_app)
         self.ftx = None                          # the FT8/FT4 engine (set by create_app)
         self.sstv = None                         # the SSTV engine (set by create_app)
@@ -242,7 +243,7 @@ class Hub:
                       "rtty": {"available": bool(self.rtty and self.audio and self.audio.available), "on": bool(self.rtty and self.rtty.on)},
                       "js8": {"available": bool(self.js8 and self.audio and self.audio.available and (sys.platform.startswith("linux") or bool(os.environ.get("RADIO_REMOTE_TESTING")))), "on": bool(self.js8 and self.js8.on)}},
             "state": {**self.driver.state, **self.extra, "ptt_owner": self.guard.owner},
-            "safety": {"ptt_permitted": self.guard.permitted, "tx_timeout_s": self.guard.max_tx_s},
+            "safety": {"ptt_permitted": self.guard.permitted, "tx_timeout_s": self.guard.max_tx_s, "tx_warn": self.tx_warn["on"], "tx_warn_s": self.tx_warn["s"]},
         }
 
     def ftx_ok(self) -> bool:
@@ -1482,6 +1483,7 @@ def create_app(cfg: dict, driver: RadioDriver | None = None, auth: AuthStore | N
     app[K_HUB].ui = {"steps": cfg["ui"]["tuning_steps_hz"],
                      "meter": {"alc_full": cfg["ui"]["meter_alc_full"], "comp_full": cfg["ui"]["meter_comp_full"],
                                "swr_warn": cfg["ui"]["swr_warn"], "swr_raw_at_3": cfg["ui"]["swr_raw_at_3"]}}
+    app[K_HUB].tx_warn = {"on": cfg["safety"]["tx_warn"], "s": cfg["safety"]["tx_warn_s"]}
     app[K_STARTED] = time.monotonic()
     app[K_UPDATES] = updates.UpdateChecker(lambda: app[K_CFG]["updates"])        # reads the live config: Admin > Config applies at once
 

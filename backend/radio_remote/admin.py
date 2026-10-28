@@ -24,7 +24,7 @@ EDITABLE = {
     "radio": {"model", "serial_port", "baud", "hamlib_model"},
     "audio": {"enabled", "backend", "input_device", "output_device", "rx_gain_db", "tx_gain_db",
               "opus_bitrate", "max_peers"},
-    "safety": {"tx_timeout_s", "ptt_heartbeat_timeout_s", "control_request_timeout_s"},
+    "safety": {"tx_timeout_s", "tx_warn", "tx_warn_s", "ptt_heartbeat_timeout_s", "control_request_timeout_s"},
     "ui": {"tuning_steps_hz", "meter_alc_full", "meter_comp_full", "swr_warn", "swr_raw_at_3"},
     "logging": {"level"},
     "updates": {"check"},

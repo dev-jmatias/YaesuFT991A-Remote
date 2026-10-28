@@ -15,6 +15,16 @@ const SHIFTS = { simplex: "Simplex (no shift)", plus: "Plus shift (+)", minus: "
 const SHIFT_MARK = { simplex: "", plus: "+", minus: "-" };
 const TONES = { off: "Tone off", ctcss_enc: "CTCSS encode (TX tone)", ctcss_encdec: "CTCSS encode + decode (tone squelch)", dcs_enc: "DCS encode", dcs_encdec: "DCS encode + decode" };
 const TONE_MARK = { off: "", ctcss_enc: "T", ctcss_encdec: "TSQ", dcs_enc: "DCS", dcs_encdec: "DCS" };
+// The channel list kept for the whole page (names on the main screen, the up / down buttons): read once when memory mode is first used, and again whenever the sheet reads it.
+const store = { items: [], loaded: false, loading: false, subs: new Set() };
+const setStore = (items) => { store.items = items; store.loaded = true; store.subs.forEach((fn) => fn()); };
+export const memoryTag = (ch) => (store.items.find((m) => m.channel === ch)?.tag || "").trim();
+export const onMemoryList = (fn) => store.subs.add(fn);
+export async function ensureMemoryList() {
+  if (store.loaded || store.loading) return;
+  store.loading = true;
+  try { setStore((await api("/api/memories")).channels || []); } catch { /* the badge keeps showing the channel number */ } finally { store.loading = false; }
+}
 const csvCell = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
 
 // The radio's stored memory channels: a list to look at and tap, recalled with the MC command. Administrators of a radio that supports it (FT-991A) can also add and edit a channel
@@ -106,6 +116,7 @@ export function openMemories(ctx) {
     q("[data-refresh]").disabled = true;
     try {
       items = (await api("/api/memories" + (refresh ? "?refresh=1" : ""))).channels || [];
+      setStore(items);
       if (!items.length) q("[data-note]").textContent = "The radio has no stored memory channels (001-099).";
       paint();
     } catch (e) {
@@ -236,14 +247,27 @@ export function createMemoryButtons(host, ctx) {
   if (!ctx.S.caps.features.memories) return { update() {} };
   const mem = el(`<button class="led" data-mem title="The memory channels stored in the radio: look at them and recall one">Memories</button>`);
   const back = el(`<button class="led" data-tovfo hidden title="Leave memory mode and go back to the VFO">Back to VFO</button>`);
+  const dn = el(`<button class="led" data-mdn hidden aria-label="Previous memory channel" title="Previous stored channel">&#9660;</button>`);
+  const up = el(`<button class="led" data-mup hidden aria-label="Next memory channel" title="Next stored channel">&#9650;</button>`);
   mem.onclick = () => openMemories(ctx);
   back.onclick = () => ctx.send("memory_vfo");
-  host.append(mem, back);
+  // Up / down go to the next / previous STORED channel (empty channels are skipped), wrapping round at the ends.
+  const step = (dir) => {
+    const chs = store.items.map((m) => m.channel).sort((a, b) => a - b), cur = ctx.S.state.memory_channel;
+    if (!chs.length) return;
+    const next = dir > 0 ? chs.find((c) => c > cur) ?? chs[0] : [...chs].reverse().find((c) => c < cur) ?? chs[chs.length - 1];
+    if (next !== cur) ctx.send("memory_select", { channel: next });
+  };
+  up.onclick = () => step(1);
+  dn.onclick = () => step(-1);
+  host.append(mem, back, dn, up);
+  onMemoryList(() => { up.disabled = dn.disabled = store.items.length < 2; });
   return {
     update() {
       const inMem = ctx.S.state.vfo_memory === "memory";
       mem.classList.toggle("on", inMem);
-      back.hidden = !inMem;
+      back.hidden = dn.hidden = up.hidden = !inMem;
+      if (inMem) { ensureMemoryList(); up.disabled = dn.disabled = store.items.length < 2; }
     },
   };
 }

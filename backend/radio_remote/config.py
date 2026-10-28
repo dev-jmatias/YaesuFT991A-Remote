@@ -23,6 +23,8 @@ DEFAULTS: dict[str, dict[str, Any]] = {
     "safety": {
         "allow_ptt": False,
         "tx_timeout_s": 120,
+        "tx_warn": True,                     # beep on the operating device shortly before the transmit time limit
+        "tx_warn_s": 10,                     # ... this many seconds before it
         "ptt_heartbeat_timeout_s": 1.0,
         "control_request_timeout_s": 10,     # a request for control passes automatically after this long unanswered
     },
@@ -118,6 +120,10 @@ def validate(cfg: dict) -> dict:
         raise ConfigError("radio.baud must be a standard CAT rate")
     if not 5 <= cfg["safety"]["tx_timeout_s"] <= 600:
         raise ConfigError("safety.tx_timeout_s must be 5..600")
+    if not isinstance(cfg["safety"]["tx_warn"], bool):
+        raise ConfigError("safety.tx_warn must be true or false")
+    if not 1 <= cfg["safety"]["tx_warn_s"] <= 60:
+        raise ConfigError("safety.tx_warn_s must be 1..60")
     if not 0.3 <= cfg["safety"]["ptt_heartbeat_timeout_s"] <= 5:
         raise ConfigError("safety.ptt_heartbeat_timeout_s must be 0.3..5")
     if not 3 <= cfg["safety"]["control_request_timeout_s"] <= 120:

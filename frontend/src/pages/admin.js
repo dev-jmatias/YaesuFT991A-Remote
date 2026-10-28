@@ -104,6 +104,8 @@ export function openSheet(root, { user, tab, sock }) {
             <label>Max listeners<input name="audio.max_peers" type="number" min="1" max="8" value="${c.audio.max_peers}"></label></fieldset>
           <fieldset><legend>Operation</legend>
             <label>TX timeout (s)<input name="safety.tx_timeout_s" type="number" min="5" max="600" value="${c.safety.tx_timeout_s}"></label>
+            <label class="chk"><input name="safety.tx_warn" type="checkbox" ${c.safety.tx_warn ? "checked" : ""}> Beep before the TX timeout (on the operating device)</label>
+            <label>Warn this many seconds before (1-60)<input name="safety.tx_warn_s" type="number" min="1" max="60" value="${c.safety.tx_warn_s}"></label>
             <label>Control request timeout (s)<input name="safety.control_request_timeout_s" type="number" min="3" max="120" value="${c.safety.control_request_timeout_s}"></label>
             <label>PTT heartbeat timeout (s)<input name="safety.ptt_heartbeat_timeout_s" type="number" step="0.1" min="0.3" max="5" value="${c.safety.ptt_heartbeat_timeout_s}"></label>
             <label>Tuning steps (Hz, comma separated)<input name="ui.tuning_steps_hz" value="${c.ui.tuning_steps_hz.join(", ")}"></label>

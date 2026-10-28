@@ -2,6 +2,7 @@ import { el } from "../util.js";
 import { createFreqDisplay } from "./freq-display.js";
 import { createSMeter, createTxMeters } from "./meters.js";
 import { getLights } from "../prefs.js";
+import { ensureMemoryList, memoryTag, onMemoryList } from "./memories.js";
 const FDV_NAME = { RADE: "RADE V1", RADE2: "RADE V2" };
 
 // One VFO block: VFO A (main, receiving) with the signal meter and the TX meters, and VFO B as a smaller tab attached below.
@@ -109,6 +110,17 @@ export function createVfoPanels(host, ctx) {
   }
   au.subscribe(paintAudio);
   paintAudio();
+  // In memory mode the badge shows the channel's name (as stored in the radio); the number is the fallback and the tooltip.
+  const paintMem = () => {
+    const s = ctx.S.state, memb = q("[data-memb]"), inMem = s.vfo_memory === "memory";
+    memb.hidden = !inMem;
+    if (!inMem) return;
+    const num = String(s.memory_channel ?? "").padStart(3, "0"), tag = memoryTag(s.memory_channel);
+    memb.textContent = tag || `MEM ${num}`;
+    memb.title = `Memory channel ${num}${tag ? `: ${tag}` : ""}`;
+    ensureMemoryList();
+  };
+  onMemoryList(paintMem);
   const [panelA, panelB] = [q(".vfopanel.a"), q(".vfopanel.b")];
 
   return {
@@ -128,9 +140,7 @@ export function createVfoPanels(host, ctx) {
         fdv.classList.toggle("on", s.freedv_sync === 1);
         fdv.title = s.freedv_sync === 1 ? `FreeDV ${FDV_NAME[s.freedv_mode] || s.freedv_mode}: locked on a signal (SNR ${(+s.freedv_snr || 0).toFixed(1)} dB)` : `FreeDV ${FDV_NAME[s.freedv_mode] || s.freedv_mode}: on, no signal locked`;
       }
-      const memb = q("[data-memb]"), inMem = s.vfo_memory === "memory";
-      memb.hidden = !inMem;
-      if (inMem) memb.textContent = `MEM ${String(s.memory_channel ?? "").padStart(3, "0")}`;
+      paintMem();
       paintChips(s);
       q("[data-rx]").classList.toggle("on", dual ? rxMain : !aTx);
       q("[data-atx]").classList.toggle("on", aTx);
