@@ -129,6 +129,21 @@ async def test_changes_are_reported(site):
     await r.stop()
 
 
+async def test_a_heard_station_is_reported_with_the_snr(site):
+    r = make_reporter(site)
+    r.start()
+    r.set_active(True, "RADE")
+    await until(lambda: r.connected and len(site["received"]) >= 3)
+    site["received"].clear()
+    r.report_heard("ct2iok", 6.4)
+    r.report_heard("", 5.0)                                                          # nobody heard / no SNR: nothing is sent
+    r.report_heard("G4ABC", None)
+    await until(lambda: len(site["received"]) >= 1)
+    await asyncio.sleep(0.2)
+    assert site["received"] == [["rx_report", {"callsign": "CT2IOK", "mode": "RADEV1", "snr": 6}]]
+    await r.stop()
+
+
 @pytest.mark.parametrize("over,role", [({"announce": False}, "view"), ({"callsign": ""}, "view"), ({"watch": False}, "report_wo"),
                                        ({"announce": False, "watch": False}, "")])
 async def test_roles(site, over, role):

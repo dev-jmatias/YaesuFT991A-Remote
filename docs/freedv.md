@@ -182,7 +182,7 @@ Radio Remote can join it. **It is off by default.**
   and your message. **Your callsign and grid square are public on that site.** Nothing else is sent: no audio, no accounts, no settings.
 * **Who is on the air:** the FreeDV tab lists the stations the site reports, those within 5 kHz of your frequency first (shaded), stations that are transmitting marked **TX**. **Tune** moves your
   radio to that station (sideband, frequency and FreeDV mode) and switches FreeDV on. Stations in a mode this program cannot decode (for example the old 700D) have no Tune button.
-* **Limits:** with RADE V1 your callsign is also sent inside the signal (see *Your callsign in the transmission* above); say it by voice as usual anyway. Reports of the stations *you* hear (their callsign and SNR) are not sent yet. The site's protocol was taken from open-source clients, not from official documentation, so if the site changes,
+* **Limits:** with RADE V1 your callsign is also sent inside the signal (see *Your callsign in the transmission* above); say it by voice as usual anyway. While you are announced, every station whose callsign you read from the end of an over is reported to the site (their callsign, the mode and the SNR you received them at, the average over that over), so a contact on qso.freedv.org carries the SNR you heard them at. The site's protocol was taken from open-source clients, not from official documentation, so if the site changes,
   the link simply shows "cannot reach FreeDV Reporter" and everything else keeps working.
 * The settings are in the configuration under `[reporter]` (`enabled`, `announce`, `watch`, `callsign`, `grid_square`, `message`).
 

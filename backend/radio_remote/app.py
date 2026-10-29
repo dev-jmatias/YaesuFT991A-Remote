@@ -1492,6 +1492,7 @@ def create_app(cfg: dict, driver: RadioDriver | None = None, auth: AuthStore | N
     app[K_REPORTER] = reporter = FreeDVReporter(lambda: app[K_CFG], __version__, lambda: driver.state.get("frequency") or 0)
     audio.on_freedv_state = reporter.set_active
     audio.on_freedv_tx = reporter.set_transmitting
+    audio.on_freedv_heard = reporter.report_heard
     app[K_HUB].reporter = reporter
 
     from .sstv_engine import SstvEngine

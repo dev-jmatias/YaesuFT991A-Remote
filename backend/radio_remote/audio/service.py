@@ -180,6 +180,7 @@ class AudioService:
         self._fd_tx: freedv.TxChain | None = None
         self.on_freedv_state = None                    # callbacks (FreeDV Reporter): (on, mode) and (transmitting)
         self.on_freedv_tx = None
+        self.on_freedv_heard = None                    # (callsign, SNR dB): the reception report for the FreeDV Reporter
         self._fd_tx_reported = False
         self._rx_hold = 0                                # frames still to skip after a transmission before the FreeDV receiver restarts
         self.freedv_callsign = ""                       # sent in the end-of-over frame of every RADE V1 transmission (config: [freedv] callsign, else the reporter's)
@@ -592,6 +593,8 @@ class AudioService:
                                 self._heard_seq = ch.heard_seq
                                 self._levels.update(freedv_heard=ch.heard, freedv_heard_at=int(time.time()), freedv_heard_snr=ch.heard_snr)
                                 log.info("FreeDV: heard %s (SNR %s dB)", ch.heard, ch.heard_snr)
+                                if self.on_freedv_heard:
+                                    self.on_freedv_heard(ch.heard, ch.heard_snr)
                             if hasattr(ch, "afc"):                                   # the tuning aid (freedv_tune.py): spectrum, level, where the signal is, what was corrected
                                 self._levels.update(freedv_offset=int(round(ch.afc.offset)), freedv_afc=ch.tune_state())
                                 if ch.spec_fresh:

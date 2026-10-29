@@ -108,6 +108,12 @@ class FreeDVReporter:
             self.transmitting = on
             self._emit("tx_report", {"mode": self.mode, "transmitting": bool(on)})
 
+    def report_heard(self, callsign: str, snr) -> None:
+        """A reception report: the station whose callsign came in the end-of-over frame and the SNR (dB, whole number) we received it at. Only sent while this station is announced."""
+        if not callsign or not isinstance(snr, (int, float)) or isinstance(snr, bool):
+            return
+        self._emit("rx_report", {"callsign": callsign.upper()[:20], "mode": self.mode, "snr": int(round(snr))})
+
     def set_message(self) -> None:
         self._emit("message_update", {"message": self.settings()["message"]})
 
