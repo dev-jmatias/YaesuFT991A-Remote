@@ -41,6 +41,9 @@ export function createPtt(host, ctx) {
       o.start(t); o.stop(t + 1.6);
     } catch { /* no audio on this device: the bar still shows the time */ }
   };
+  // The warning is only for 2 m and 70 cm (any mode); on HF and 6 m it stays silent. The transmit VFO is B in split (or the SUB receiver).
+  const txHz = () => { const s = S.state, onB = s.split || s.tx_receiver === "sub"; return (onB ? s.frequency_b : s.frequency) || s.frequency || 0; };
+  const warnBand = (hz) => (hz >= 144e6 && hz <= 148e6) || (hz >= 420e6 && hz <= 450e6);
   const warnAt = (left, lead) => { if (beeped < 0 && left <= lead) { beeped = 1; beep(); } };
   // hands-free latch (the TX LOCK button): everything the server enforces still applies (heartbeat while latched, time limit, un-key on disconnect);
   // a hidden page, the screen lock button or the end of the transmission also end it.
@@ -154,7 +157,7 @@ export function createPtt(host, ctx) {
           tt.hidden = false; bar.style.width = Math.min(100, (t / max) * 100) + "%";
           lbl.textContent = `${t.toFixed(0)} s / ${max} s limit`;
           const lead = S.safety.tx_warn_s || 10;
-          if (S.safety.tx_warn !== false && max > lead + 1) { warnAt(max - t, lead); tt.classList.toggle("warn", max - t <= lead); }
+          if (S.safety.tx_warn !== false && warnBand(txHz()) && max > lead + 1) { warnAt(max - t, lead); tt.classList.toggle("warn", max - t <= lead); }
         }, 200);
       } else if (!tx && tick) { clearInterval(tick); tick = 0; tt.hidden = true; tt.classList.remove("warn"); }
     },

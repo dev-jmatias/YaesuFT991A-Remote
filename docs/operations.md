@@ -35,7 +35,7 @@ started by systemd) reboots the machine after about 3 seconds, and does nothing 
 | `radio.hamlib_model` | reserved (Hamlib backend is not implemented) | 0 |
 | `safety.allow_ptt` | must be `true` before a real radio can be keyed. Set it with the *Transmitting (PTT)* switch in Admin > Config (password required) or in the file | `false` |
 | `safety.tx_timeout_s` | server-enforced maximum continuous transmission | 120 |
-| `safety.tx_warn` | one steady beep (about 1.5 s) on the transmitting device shortly before the time limit; the timer under PTT also turns red | true |
+| `safety.tx_warn` | one steady beep (about 1.5 s) on the transmitting device shortly before the time limit, only when transmitting on 2 m or 70 cm (any mode); the timer under PTT also turns red | true |
 | `safety.tx_warn_s` | how many seconds before the limit the beep sounds (1-60) | 10 |
 | `safety.ptt_heartbeat_timeout_s` | un-key if the PTT holder is silent this long | 1.0 |
 | `safety.control_request_timeout_s` | an unanswered request for control passes after this long (trusted users skip the wait) | 10 |

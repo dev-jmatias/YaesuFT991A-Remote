@@ -109,6 +109,8 @@ class RxChain:
         self.shifter, self.afc, self.spec = FreqShifter(self.fd.modem_rate), Afc(mode), Spectrum(mode)     # software tuning (freedv_tune.py)
         self.spec_fresh = False
         self.heard, self.heard_seq = "", 0           # the callsign read from the end-of-over frame of the last over (RADE V1), and a counter that changes whenever one is read
+        self.heard_snr = None                        # the mean SNR (dB) of that over while the modem was locked: what the report of the contact says
+        self.over_snr, self.over_n, self.prev_sync = 0.0, 0, 0
         self.fifo: deque[bytes] = deque()
         self._rest = b""
         self._lk = threading.Lock()                  # process() runs in a worker thread (the decoder takes 60-100 ms on a small PC and must not stall the web server); close() and
@@ -137,10 +139,16 @@ class RxChain:
         good = self.fd.sync == 1 and self.fd.snr >= PARAMS[self.mode]["min_snr"]
         self.shifter.shift = self.afc.update(good, FRAME_SAMPLES / RATE)          # nothing locked: step the shift until the modem locks, then hold it
         speech = self.fd.rx(_to_i16(self.shifter.process(self.dec.process(x))))
+        if self.fd.sync == 1:                                                   # the mean SNR of this over: summed while locked, started afresh each time the modem locks
+            if not self.prev_sync:
+                self.over_snr, self.over_n = 0.0, 0
+            self.over_snr, self.over_n = self.over_snr + float(self.fd.snr), self.over_n + 1
+        self.prev_sync = self.fd.sync
         if hasattr(self.fd, "take_callsign"):
             call = self.fd.take_callsign()
             if call:
                 self.heard, self.heard_seq = call, self.heard_seq + 1
+                self.heard_snr = round(self.over_snr / self.over_n, 1) if self.over_n else round(float(self.fd.snr), 1)
         if len(speech):
             self._rest += _to_i16(self.up.process(speech.astype(np.float64))).tobytes()
             while len(self._rest) >= FRAME_BYTES:

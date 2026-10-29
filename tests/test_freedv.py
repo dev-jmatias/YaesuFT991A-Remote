@@ -678,10 +678,13 @@ def test_a_received_callsign_is_kept_by_the_receive_chain_and_a_chain_without_te
     from radio_remote.audio.freedv_tune import Afc, FreqShifter, Spectrum
     rx.shifter, rx.afc, rx.spec = FreqShifter(8000), Afc("RADE"), Spectrum("RADE")
     rx.spec_fresh, rx.heard, rx.heard_seq = False, "", 0
+    rx.heard_snr, rx.over_snr, rx.over_n, rx.prev_sync = None, 0.0, 0, 0
     rx.fifo, rx._rest = freedv.deque(), b""
+    rx.fd.sync, rx.fd.snr = 1, 6.0                                                    # locked at 6 dB while the overs end
     for _ in range(5):
         rx._process(bytes(FRAME_BYTES))
     assert rx.heard == "CT2IOK" and rx.heard_seq == 2                                  # two overs were read, the last one wins
+    assert rx.heard_snr == 6.0                                                         # with the mean SNR of the locked frames
 
     tx = freedv.TxChain.__new__(freedv.TxChain)                                       # a modem without a text channel (an older library, or V2)
     tx.fd = type("Old", (), {})()

@@ -42,6 +42,12 @@ and goes back by itself if the new version does not start. Settings and accounts
 | `radio-remote-rade-linux-aarch64.tar.xz` | the optional RADE library (FreeDV neural modes V1 and V2) for a Raspberry Pi, installed with `install_rade.sh` (the PC build is `…-x86_64.tar.xz`) |
 | `SHA256SUMS` | checksums of all of the above |
 
+### What is new in 1.1.59
+
+- **The transmit-time warning beep is only for 2 m and 70 cm** (any mode, on the transmit VFO). On HF and 6 m it stays silent; the server's time limit itself is unchanged.
+- **FreeDV: the received SNR with the callsign.** "Last heard: CALLSIGN" now also shows the signal-to-noise ratio of that over (the average while the modem was locked), for example *SNR +6.0 dB*.
+- **Memory arrows the other way round.** ▲ now goes to the previous (lower) stored channel and ▼ to the next (higher) one, with ▲ on the left.
+
 ### What is new in 1.1.58
 
 - **The transmit timer under PTT is hidden when you are not transmitting.** The bar and its "N s / 120 s limit" text used to stay on screen all the time and keep the last value after you let go of PTT; now they appear only while the radio transmits.

@@ -135,7 +135,7 @@ At the end of every RADE V1 transmission the Pi sends your callsign inside the s
 * **Set it** (administrators): *FreeDV tab > FreeDV Reporter settings > Callsign sent with every transmission*. Up to 8 letters, digits or `/`. Left empty, the **Callsign** of the Reporter settings is used
   (its first 8 characters). The configuration key is `[freedv] callsign`.
 * **Needs the RADE library of 1.1.36 or later.** An older one sends no callsign; the RADE line on the FreeDV tab then says so, and *Reinstall RADE* fixes it.
-* **What you see:** when a received over ends with a callsign, **Last heard: CALLSIGN (time)** appears under the FreeDV status line. It is read from the end-of-over frame only, so it appears after the over, and
+* **What you see:** when a received over ends with a callsign, **Last heard: CALLSIGN, SNR +6.0 dB (time)** appears (the SNR is the average over the received over) under the FreeDV status line. It is read from the end-of-over frame only, so it appears after the over, and
   not at all if the signal was too weak for the error correction to recover it (the speech may still have been readable).
 * RADE V2 has no such text channel here: it sends and shows nothing.
 

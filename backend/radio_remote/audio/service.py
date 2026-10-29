@@ -172,7 +172,7 @@ class AudioService:
         self._levels = {"audio_rx_level": 0, "audio_tx_level": 0, "audio_tx_frames": 0, "audio_tx_error": "",
                         "freedv_on": False, "freedv_mode": "", "freedv_sync": 0, "freedv_snr": 0.0,
                         "freedv_spec": [], "freedv_offset": 0, "freedv_hint": None, "freedv_afc": "", "freedv_level": -120, "freedv_clip": False,
-                        "freedv_heard": "", "freedv_heard_at": 0}
+                        "freedv_heard": "", "freedv_heard_at": 0, "freedv_heard_snr": None}
         # FreeDV (see freedv.py): decode the radio's modem tones to speech for the listeners, encode the operator's speech to modem tones
         self.freedv_ok, self.freedv_reason = freedv.available()
         self._fd_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="freedv-rx")     # one worker: frames are decoded strictly in order
@@ -427,7 +427,7 @@ class AudioService:
         self.rx_ms_avg = self.rx_ms_max = self.rx_work_avg = self.rx_work_max = 0.0
         self.rx_slow = 0
         self._levels.update(freedv_on=on, freedv_mode=self.freedv_mode if on else "", freedv_sync=0, freedv_snr=0.0, freedv_spec=[], freedv_offset=0,
-                            freedv_hint=None, freedv_afc="", freedv_level=-120, freedv_clip=False, freedv_heard="", freedv_heard_at=0)
+                            freedv_hint=None, freedv_afc="", freedv_level=-120, freedv_clip=False, freedv_heard="", freedv_heard_at=0, freedv_heard_snr=None)
         self._heard_seq = 0
         self._last_emit = 0.0
         self._level("freedv_on", on)
@@ -590,8 +590,8 @@ class AudioService:
                             self._levels.update(freedv_sync=ch.sync, freedv_snr=round(ch.snr, 1))
                             if getattr(ch, "heard_seq", 0) != self._heard_seq:                      # the end-of-over frame of an over carried a callsign (RADE V1)
                                 self._heard_seq = ch.heard_seq
-                                self._levels.update(freedv_heard=ch.heard, freedv_heard_at=int(time.time()))
-                                log.info("FreeDV: heard %s", ch.heard)
+                                self._levels.update(freedv_heard=ch.heard, freedv_heard_at=int(time.time()), freedv_heard_snr=ch.heard_snr)
+                                log.info("FreeDV: heard %s (SNR %s dB)", ch.heard, ch.heard_snr)
                             if hasattr(ch, "afc"):                                   # the tuning aid (freedv_tune.py): spectrum, level, where the signal is, what was corrected
                                 self._levels.update(freedv_offset=int(round(ch.afc.offset)), freedv_afc=ch.tune_state())
                                 if ch.spec_fresh:

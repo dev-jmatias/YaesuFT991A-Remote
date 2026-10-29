@@ -344,7 +344,7 @@ export function createFreeDV(host, ctx) {
     $("fdv-dot").className = "dot " + (!onNow ? "" : locked ? "ok" : "warn");
     const heard = onNow && s.freedv_heard ? s.freedv_heard : "";                  // the callsign in the end-of-over frame of the last over (RADE V1)
     $("fdv-heard").hidden = !heard;
-    if (heard) $("fdv-heard").innerHTML = `Last heard: ${callLink(heard)}` + (s.freedv_heard_at ? ` (${new Date(s.freedv_heard_at * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })})` : "");
+    if (heard) $("fdv-heard").innerHTML = `Last heard: ${callLink(heard)}` + (s.freedv_heard_snr != null ? `, SNR ${s.freedv_heard_snr > 0 ? "+" : ""}${(+s.freedv_heard_snr).toFixed(1)} dB` : "") + (s.freedv_heard_at ? ` (${new Date(s.freedv_heard_at * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })})` : "");
     const au = ctx.audio?.(), streaming = !!au && (au.hear || au.mic);          // the Pi only decodes while someone is listening
     $("fdv-text").textContent = !onNow ? "FreeDV is off"
       : !streaming ? `FreeDV ${modeName(s.freedv_mode)} is on. Tap the speaker icon (Listen) to hear and decode.`

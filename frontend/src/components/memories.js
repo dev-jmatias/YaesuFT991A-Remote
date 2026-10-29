@@ -247,20 +247,20 @@ export function createMemoryButtons(host, ctx) {
   if (!ctx.S.caps.features.memories) return { update() {} };
   const mem = el(`<button class="led" data-mem title="The memory channels stored in the radio: look at them and recall one">Memories</button>`);
   const back = el(`<button class="led" data-tovfo hidden title="Leave memory mode and go back to the VFO">Back to VFO</button>`);
-  const dn = el(`<button class="led" data-mdn hidden aria-label="Previous memory channel" title="Previous stored channel">&#9660;</button>`);
-  const up = el(`<button class="led" data-mup hidden aria-label="Next memory channel" title="Next stored channel">&#9650;</button>`);
+  const dn = el(`<button class="led" data-mdn hidden aria-label="Next memory channel" title="Next stored channel (higher number)">&#9660;</button>`);
+  const up = el(`<button class="led" data-mup hidden aria-label="Previous memory channel" title="Previous stored channel (lower number)">&#9650;</button>`);
   mem.onclick = () => openMemories(ctx);
   back.onclick = () => ctx.send("memory_vfo");
-  // Up / down go to the next / previous STORED channel (empty channels are skipped), wrapping round at the ends.
+  // ▲ / ▼ go to the previous (lower number) / next (higher number) STORED channel (empty channels are skipped), wrapping round at the ends.
   const step = (dir) => {
     const chs = store.items.map((m) => m.channel).sort((a, b) => a - b), cur = ctx.S.state.memory_channel;
     if (!chs.length) return;
     const next = dir > 0 ? chs.find((c) => c > cur) ?? chs[0] : [...chs].reverse().find((c) => c < cur) ?? chs[chs.length - 1];
     if (next !== cur) ctx.send("memory_select", { channel: next });
   };
-  up.onclick = () => step(1);
-  dn.onclick = () => step(-1);
-  host.append(mem, back, dn, up);
+  up.onclick = () => step(-1);                       // ▲ goes up the list (lower number), ▼ down it
+  dn.onclick = () => step(1);
+  host.append(mem, back, up, dn);
   onMemoryList(() => { up.disabled = dn.disabled = store.items.length < 2; });
   return {
     update() {
