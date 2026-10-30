@@ -47,7 +47,7 @@ MAX_WS_CLIENTS = 24
 CMD_RATE, CMD_BURST, MAX_STRIKES = 40.0, 80, 200
 LEASE_OPS = {"request_control", "respond_control", "release_control", "force_control"}
 MAX_EQ_PRESETS = 20
-SCAN_KEEPS = {"scan_range", "scan_range_stop", "set_level", "set_control", "freedv", "ftx", "ftx_tx", "ftx_halt", "sstv", "sstv_halt", "cw", "cw_set", "cw_clear", "cw_send", "cw_halt", "cw_keyer", "rtty", "rtty_set", "rtty_clear", "rtty_send", "rtty_halt", "menu_set", "js8", "js8_send", "js8_halt", "js8_set", "js8_clear", "set_eq", "set_dyn", "eq_preset_save", "eq_preset_delete", "rec"}     # commands that leave a running range scan alone
+SCAN_KEEPS = {"scan_range", "scan_range_stop", "scan_channels", "scan_list_set", "set_level", "set_control", "freedv", "ftx", "ftx_tx", "ftx_halt", "sstv", "sstv_halt", "cw", "cw_set", "cw_clear", "cw_send", "cw_halt", "cw_keyer", "rtty", "rtty_set", "rtty_clear", "rtty_send", "rtty_halt", "menu_set", "js8", "js8_send", "js8_halt", "js8_set", "js8_clear", "set_eq", "set_dyn", "eq_preset_save", "eq_preset_delete", "rec"}     # commands that leave a running range scan alone
 
 
 def _int(v, lo=None, hi=None) -> int:
@@ -90,6 +90,7 @@ class Hub:
         self.auto_width = lambda: True           # freedv.auto_width (set by create_app): widen a narrow radio filter when FreeDV is on
         self._widen_task: asyncio.Task | None = None
         self.eq_presets: dict[str, dict] = {}    # the equalizer sets saved by the operators (name -> {bands, cut}), shared like the equalizer itself
+        self.scan_list_path: Path | None = None     # the memory channels chosen for the list scan (scan_list.json in the data folder)
         self.eq_path: Path | None = None         # where the equalizer settings are kept (eq.json in the data folder)
         self._last_freq = driver.state.get("frequency") or 0
         self.mic_reset_delay_s = 15.0            # how long the radio stays on REAR after the last operator left (a reload or a network blip is not "left")
@@ -297,6 +298,22 @@ class Hub:
             self.auth.audit("scan_range", session.username, f"{vals[0]}-{vals[1]} step {vals[2]}")
         elif typ == "scan_range_stop":
             await self.scanner.stop("stopped by the operator")
+        elif typ == "scan_list_set":
+            chans = msg.get("channels")
+            if not (isinstance(chans, list) and all(isinstance(c, int) and not isinstance(c, bool) and 1 <= c <= 99 for c in chans)):
+                raise CommandError("the scan list must hold memory channels 1..99")
+            self.set_scan_list(chans)
+        elif typ == "scan_channels":
+            if not caps.has("memories"):
+                raise CommandError("memory channels are not available for this radio")
+            level, hold = _int(msg.get("level"), 0, 255), msg.get("hold_s", 2)
+            if isinstance(hold, bool) or not isinstance(hold, (int, float)):
+                raise CommandError("hold_s must be a number")
+            try:
+                await self.scanner.start_list(conn_id, list(self.extra.get("scan_list") or []), level, float(hold), bool(msg.get("stop_on_signal", False)))
+            except ScanError as e:
+                raise CommandError(str(e)) from None
+            self.auth.audit("scan_channels", session.username, f"{len(self.extra.get('scan_list') or [])} channels")
         elif typ == "rec":
             rec = self.audio.recorder if self.audio else None
             if rec is None:
@@ -738,6 +755,25 @@ class Hub:
             self.audio.arm_playback(None)
         self._broadcast({"t": "patch", "d": {"ptt_owner": self.guard.owner}})
         log.info("the recording has been sent; PTT released")
+
+    def set_scan_list(self, chans: list[int]) -> None:
+        """The memory channels chosen for the list scan: shared by every operator and kept over restarts."""
+        chans = sorted(set(chans))
+        self.push({"scan_list": chans})
+        if self.scan_list_path is not None:
+            try:
+                tmp = self.scan_list_path.with_suffix(".tmp")
+                tmp.write_text(json.dumps(chans), encoding="utf-8")
+                tmp.replace(self.scan_list_path)
+            except OSError:
+                log.warning("could not save the scan list", exc_info=True)
+
+    def load_scan_list(self) -> None:
+        try:
+            chans = json.loads(self.scan_list_path.read_text(encoding="utf-8")) if self.scan_list_path is not None else []
+            self.extra["scan_list"] = sorted({c for c in chans if isinstance(c, int) and not isinstance(c, bool) and 1 <= c <= 99})
+        except (OSError, ValueError, TypeError):
+            self.extra["scan_list"] = []
 
     def _save_eq(self) -> None:
         if self.eq_path is None or self.audio is None:
@@ -1475,6 +1511,8 @@ def create_app(cfg: dict, driver: RadioDriver | None = None, auth: AuthStore | N
     app[K_HUB].auto_width = lambda: bool(app[K_CFG]["freedv"].get("auto_width", True))
     app[K_HUB].eq_path = Path(cfg["storage"]["data_dir"]) / "eq.json"
     app[K_HUB].load_eq()
+    app[K_HUB].scan_list_path = Path(cfg["storage"]["data_dir"]) / "scan_list.json"
+    app[K_HUB].load_scan_list()
     from .audio.recorder import Recorder
     audio.recorder = Recorder(Path(cfg["storage"]["data_dir"]) / "recordings", on_change=app[K_HUB].push)    # the last five clips of received audio
     audio.on_playback_done = app[K_HUB]._playback_done

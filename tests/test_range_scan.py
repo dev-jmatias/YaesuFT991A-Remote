@@ -104,3 +104,51 @@ async def test_a_radio_error_ends_the_scan_without_crashing():
     await s.start("c1", 145_000_000, 145_000_300, 100, 100, 0, False)
     await until(lambda: not s.running)
     assert h.pushed[-1]["range_scan"] is None
+
+
+class ListDriver(FakeDriver):
+    def __init__(self, signals=None, empty=()):
+        super().__init__(signals)
+        self.chans, self.empty = [], set(empty)
+
+    async def memory_select(self, ch):
+        from radio_remote.radio.base import RadioError
+        if ch in self.empty:
+            raise RadioError("that memory channel is empty")
+        self.chans.append(ch)
+        self.state["frequency"] = ch
+
+
+async def test_list_scan_visits_only_the_chosen_channels_and_loops():
+    d = ListDriver(); h = FakeHub(d); s = RangeScanner(h)
+    await s.start_list("c1", [3, 7, 20], 100, 0, False)
+    await until(lambda: len(d.chans) >= 7)
+    assert d.chans[:7] == [3, 7, 20, 3, 7, 20, 3]
+    assert h.pushed[0]["range_scan"]["channels"] == [3, 7, 20]
+    await s.stop()
+
+
+async def test_list_scan_parks_on_a_signal_and_can_stop_there():
+    d = ListDriver({7: 200}); h = FakeHub(d); s = RangeScanner(h)
+    await s.start_list("c1", [3, 7, 20], 100, 1, True)
+    await until(lambda: not s.running)
+    assert d.chans[-1] == 7 and h.pushed[-1]["range_scan"] is None
+
+
+async def test_list_scan_skips_a_channel_emptied_in_the_radio_and_ends_if_none_work():
+    d = ListDriver(empty={7}); h = FakeHub(d); s = RangeScanner(h)
+    await s.start_list("c1", [3, 7, 20], 100, 0, False)
+    await until(lambda: len(d.chans) >= 4)
+    assert 7 not in d.chans
+    await s.stop()
+    d2 = ListDriver(empty={3, 7}); h2 = FakeHub(d2); s2 = RangeScanner(h2)
+    await s2.start_list("c1", [3, 7], 100, 0, False)
+    await until(lambda: not s2.running)
+
+
+async def test_list_scan_refuses_a_bad_list():
+    d = ListDriver(); h = FakeHub(d); s = RangeScanner(h)
+    for chans in ([5], [5, 5], [0, 5], [5, 100], ["a", 5]):
+        with pytest.raises(ScanError):
+            await s.start_list("c1", chans, 100, 0, False)
+    assert not s.running

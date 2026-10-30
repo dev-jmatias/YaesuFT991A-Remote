@@ -38,6 +38,8 @@ export function openMemories(ctx) {
         <input type="search" data-q placeholder="Filter: name, frequency, mode" aria-label="Filter the memory channels">
         <button data-refresh title="Read the channels from the radio again (after you changed them on the radio)">Re-read</button>
         <button data-vfo title="Leave memory mode and go back to the VFO">Back to VFO</button>
+        <button data-selall title="Put every stored channel in the scan list">List all</button>
+        <button data-selnone title="Empty the scan list">List none</button>
         <button data-export title="Save the list as a CSV file (a backup, or to open in a spreadsheet)">Export</button>
         ${canEdit ? `<button data-add class="active" title="Store a new channel in the radio">Add</button>` : ""}
       </div>
@@ -68,6 +70,11 @@ export function openMemories(ctx) {
   const q = (s) => sheet.querySelector(s);
   const f = (n) => sheet.querySelector(`[data-f="${n}"]`);
   let items = [], busy = false;
+  const sel = new Set(ctx.S.state.scan_list || []);                       // the scan list: shared by every operator, kept by the server
+  const saveSel = async () => {
+    try { await ctx.sock.send("scan_list_set", { channels: [...sel].sort((a, b) => a - b) }); }
+    catch (e) { q("[data-note]").textContent = "The scan list was not saved: " + (e.message || e); }
+  };
 
   const close = () => { sheet.remove(); document.removeEventListener("keydown", onKey); };
   const onKey = (e) => { if (e.key === "Escape" && !busy) { if (!q('[data-view="edit"]').hidden) showList(); else close(); } };
@@ -99,15 +106,21 @@ export function openMemories(ctx) {
       b.querySelector(".mtag").textContent = m.tag || "-";               // the tag is text from the radio: never HTML
       b.title = `${SHIFTS[m.shift || "simplex"]}, ${TONES[m.tone_mode || "off"]}`;
       b.onclick = () => { ctx.send("memory_select", { channel: m.channel }); close(); };
+      const on = sel.has(m.channel);
+      const pick = el(`<button class="memsel${on ? " on" : ""}" aria-pressed="${on}" aria-label="Scan list: channel ${m.channel}" title="Put this channel in the scan list, or take it out">${on ? "&#10003;" : ""}</button>`);
+      pick.onclick = () => { if (sel.has(m.channel)) sel.delete(m.channel); else sel.add(m.channel); saveSel(); paint(); };
+      const wrap = el(`<div class="memitem"></div>`);
+      wrap.append(pick, b);
       if (canEdit) {
         const e = el(`<button class="memedit-btn" aria-label="Edit channel ${m.channel}" title="Edit this channel">Edit</button>`);
         e.onclick = () => showEdit(m);
-        const wrap = el(`<div class="memitem"></div>`);
-        wrap.append(b, e);
-        list.append(wrap);
-      } else list.append(b);
+        wrap.append(e);
+      }
+      list.append(wrap);
     }
-    q("[data-note]").textContent = items.length ? `${shown.length} of ${items.length} stored channels. Tap one to recall it.` : "";
+    q("[data-note]").textContent = items.length ? `${shown.length} of ${items.length} stored channels. Tap one to recall it. The boxes on the left make the scan list (${sel.size} chosen): Scan then offers to scan only those.` : "";
+    q("[data-selall]").disabled = !items.length;
+    q("[data-selnone]").disabled = !sel.size;
   }
 
   async function load(refresh) {
@@ -236,6 +249,8 @@ export function openMemories(ctx) {
   q("[data-refresh]").onclick = () => load(true);
   q("[data-vfo]").onclick = () => { ctx.send("memory_vfo"); close(); };
   q("[data-export]").onclick = exportCsv;
+  q("[data-selall]").onclick = () => { items.forEach((m) => sel.add(m.channel)); saveSel(); paint(); };
+  q("[data-selnone]").onclick = () => { sel.clear(); saveSel(); paint(); };
   if (canEdit) q("[data-add]").onclick = () => showEdit(null);
   load(false);
   return { close };

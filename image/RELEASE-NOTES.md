@@ -42,6 +42,10 @@ and goes back by itself if the new version does not start. Settings and accounts
 | `radio-remote-rade-linux-aarch64.tar.xz` | the optional RADE library (FreeDV neural modes V1 and V2) for a Raspberry Pi, installed with `install_rade.sh` (the PC build is `…-x86_64.tar.xz`) |
 | `SHA256SUMS` | checksums of all of the above |
 
+### What is new in 1.1.61
+
+- **A scan list for the memories.** In **Memories**, tick the box beside each channel you want (or **List all** / **List none**); the list is shared by everyone connected and kept across restarts. **Scan**, **Scan my list** then steps through only those channels, waits on a signal as set in the sheet, and starts again at the first. **Scan all the memories** still uses the radio's own scan. A channel emptied in the radio since is skipped. Receive only.
+
 ### What is new in 1.1.60
 
 - **FreeDV Reporter: the SNR you received a station at is sent to qso.freedv.org.** While you are announced on the site, each station whose callsign you read from the end of an over is reported with the mode and the SNR you received it at (the average while the modem was locked), so your reports of a contact state how well you heard the other station. Nothing is sent when you are not announced.

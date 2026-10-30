@@ -87,6 +87,7 @@ spacing, and goes back to the previous step when you leave the band.
 
 **Memories** (beside **Tune**; FT-991A and FTDX101D) lists the channels stored in the radio (001-099): number, name, frequency, mode. Type in the box to filter. Tap a
 channel to recall it. **Back to VFO** returns to the VFO. **Re-read** reads the list again after you changed memories on the radio.
+**Scan list.** The box at the left of each channel puts it in your scan list (**List all** and **List none** do the whole list). The list is shared by everyone connected and kept across restarts. Then **Scan**, **Scan my list** steps through only those channels in order, waits on a signal as set in the sheet, and starts again at the first one. **Scan all the memories** still uses the radio's own scan over every stored channel. A list needs at least two channels; a channel you emptied in the radio since is skipped.
 **Export** saves the list as a CSV file (a backup, or to open in a spreadsheet). The list is read in the background a few seconds after the
 radio connects, so it opens at once; it is read again whenever the radio reconnects.
 

@@ -11,6 +11,8 @@ import logging
 import time
 from typing import Any
 
+from .radio.base import RadioError
+
 log = logging.getLogger("radio_remote.scan")
 
 MIN_STEP_HZ = 10
@@ -64,6 +66,30 @@ class RangeScanner:
         self._publish()
         self._task = asyncio.create_task(self._run(), name="range-scan")
 
+    async def start_list(self, conn_id: str, channels: list[int], level: int, hold_s: float, stop_on_signal: bool) -> None:
+        """Scan only the chosen memory channels, in order, and start again at the first one. Receive only, like the range scan."""
+        d = self.hub.driver
+        if not d.state.get("connected"):
+            raise ScanError("the radio is not connected")
+        if self.hub.guard.keyed or d.state.get("tx") or d.state.get("tuning"):
+            raise ScanError("not while transmitting")
+        if not (isinstance(channels, list) and all(isinstance(c, int) and not isinstance(c, bool) and 1 <= c <= 99 for c in channels)) or len(set(channels)) != len(channels):
+            raise ScanError("the scan list must hold memory channels 1..99, each once")
+        if len(channels) < 2:
+            raise ScanError("choose at least two channels for the scan list")
+        if not 0 <= level <= 255:
+            raise ScanError("signal level must be 0..255")
+        if not 0 <= hold_s <= MAX_HOLD_S:
+            raise ScanError(f"wait must be 0..{MAX_HOLD_S:.0f} s")
+        await self.stop("restarted")
+        if d.state.get("scan") and d.caps.has("scan"):
+            await d.set_control("scan", False)
+        self.owner = conn_id
+        self.params = {"channels": list(channels), "level": level, "hold_s": hold_s, "stop_on_signal": stop_on_signal}
+        self._holding = False
+        self._publish()
+        self._task = asyncio.create_task(self._run(), name="range-scan")
+
     async def stop(self, reason: str = "stopped") -> None:
         t, self._task = self._task, None
         if t is not None and not t.done() and t is not asyncio.current_task():
@@ -93,23 +119,40 @@ class RangeScanner:
         d, p = self.hub.driver, self.params
         assert p is not None
         reason = "finished"
-        f = p["start"]
+        chans = p.get("channels")
+        f = p["start"] if chans is None else 0                       # a frequency, or the position in the channel list
+        failed = 0                                                   # channels in a row that could not be recalled (emptied in the radio since the list was made)
         try:
             while True:
                 why = self._must_stop()
                 if why:
                     reason = why
                     return
-                await d.set_frequency(f)
+                if chans is None:
+                    await d.set_frequency(f)
+                else:
+                    try:
+                        await d.memory_select(chans[f])
+                        failed = 0
+                    except RadioError as e:
+                        failed += 1
+                        if failed >= len(chans) or "transmitting" in str(e):
+                            reason = f"error: {e}"
+                            return
+                        f = (f + 1) % len(chans)
+                        continue
                 level = await d.read_signal(SETTLE_S)
                 if level is not None and level >= p["level"]:
                     if p["stop_on_signal"]:
-                        reason = f"signal found at {f} Hz"
+                        reason = f"signal found at {f} Hz" if chans is None else f"signal found on channel {chans[f]}"
                         return
                     why = await self._wait_out_signal(p)
                     if why:
                         reason = why
                         return
+                if chans is not None:
+                    f = (f + 1) % len(chans)                         # the loop: back to the first channel
+                    continue
                 f += p["step"]
                 if f > p["stop"]:
                     f = p["start"]                                   # the loop: back to the start

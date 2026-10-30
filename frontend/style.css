@@ -586,7 +586,9 @@ button.lockbtn.on { background: var(--yellow); color: #1a1100; border-color: tra
 .memrow .mmode { color: var(--cyan); text-align: right; font-size: .85rem; }
 .memrow.cur { border-color: var(--purple); background: linear-gradient(180deg, #2a2050, #1b1438); }
 @media (max-width: 699px) { .memrow { grid-template-columns: 2.8em minmax(0, 1fr) auto; } .memrow .mmode { display: none; } }
-.memitem { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px; }
+.memitem { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 4px; }
+.memsel { min-width: 38px; min-height: 38px; padding: 0; font-weight: 700; }
+.memsel.on { border-color: var(--green, #3ddc84); color: var(--green, #3ddc84); }
 .memedit-btn { min-height: 38px; padding: 4px 12px; }
 .memfields { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; margin: 8px 0; }
 .memfields label { display: flex; flex-direction: column; gap: 3px; font-size: .82rem; color: var(--dim); min-width: 0; }

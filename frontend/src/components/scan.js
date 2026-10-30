@@ -22,7 +22,9 @@ export function openScan(ctx) {
     <div class="sheethead"><h2>Scan</h2><button class="icon wide" data-x>Close</button></div>
     ${canMem ? `<section><h3>Memories</h3>
       <p class="dim">The radio steps through its stored channels and stops on a signal.</p>
-      <div class="row"><button class="active" data-mem>Scan the memories</button></div></section>` : ""}
+      <div class="row"><button class="active" data-mem>Scan all the memories</button></div>
+      <p class="dim" data-listnote></p>
+      <div class="row"><button class="active" data-list>Scan my list</button></div></section>` : ""}
     <section><h3>Between two frequencies</h3>
       <p class="dim">Steps from the start to the stop frequency, waits on a signal, then starts again at the start. Receive only; set the mode (FM, AM, SSB) first.</p>
       <div class="memfields">
@@ -48,6 +50,17 @@ export function openScan(ctx) {
   const hz = (name) => { const x = parseFloat(String(f(name).value).replace(",", ".")); return Number.isFinite(x) ? Math.round(x * 1e6) : NaN; };
 
   if (canMem) {
+    const chosen = (ctx.S.state.scan_list || []).length;
+    q("[data-listnote]").textContent = chosen ? `Your scan list holds ${chosen} channel${chosen === 1 ? "" : "s"} (chosen in Memories with the boxes on the left). Receive only; it waits on a signal as set below.`
+      : "Your scan list is empty: open Memories and tick the channels to scan.";
+    q("[data-list]").disabled = chosen < 2;
+    q("[data-list]").onclick = async () => {
+      const level = +f("level").value, hold = +f("hold").value, stopOn = f("stopOn").value === "1";
+      try {
+        await ctx.sock.send("scan_channels", { level: rawFor(level), hold_s: hold, stop_on_signal: stopOn });
+        close();
+      } catch (e) { note(e.message || "The scan could not be started."); }
+    };
     q("[data-mem]").onclick = async () => {
       const b = q("[data-mem]");
       b.disabled = true;
