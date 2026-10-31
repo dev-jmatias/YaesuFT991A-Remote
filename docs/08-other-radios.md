@@ -8,7 +8,7 @@ These four profiles were written from the Yaesu CAT manuals (FTDX10 2308-F, FTDX
 * **FTDX101MP**: same CAT commands as the D (one shared manual), so its profile is **enabled exactly like the D's**, with transmit power 5 to 200 W (the D: 5 to 100 W). No MP has been
   available here, so please report anything that differs; the first owner to try it should follow the checklist below.
 * **FTDX10**: tested on a real radio (2026-10-30/31, Raspberry Pi, USB, 38400); see *FTDX10: what was verified* below.
-* **FT-710**: still only on paper. Nothing there has been seen working on a real radio.
+* **FT-710**: connected to a real radio (2026-10-31): see *FT-710: what was verified* below. Still marked experimental until transmitting has been tried.
 
 ## FTDX10: what was verified on a real radio
 
@@ -23,6 +23,19 @@ What the manual does not say or gets wrong:
 * Meters: the power bar is linear (raw/255 of 100 W) and matched the radio's watts; the ALC bar needs a full scale of about 48 (the FT-991A's 160 read far too low), now the FTDX10 default. With the speech processor off the COMP value is not a compression reading (full scale), so the bar shows *off*.
 * Menus for the app: REAR SELECT must be USB (menus 01-01-14, 01-02-15, 01-03-14, 01-04-16) and the MOD SOURCE menus are 01-01-13, 01-02-13, 01-03-12, 01-04-15; the microphone button switches all four.
 * Not yet tried: the Tune button and transmitting audio over USB into a dummy load.
+
+## FT-710: what was verified on a real radio
+
+Connected over USB at 38400 (`ID0800;`): the power on and off CAT commands, frequency, mode and the receive controls work, and the Menu tab reads 283 of its 290 items.
+
+* **The USB audio is a C-Media "USB Audio Device"**, not a "USB Audio CODEC" like the FT-991A and FTDX10, so the audio auto-detect now accepts any card called "USB Audio" (still refusing when two match).
+* **The clarifier is the `CF` command**, not `RT`/`XT`/`RC`/`RU`/`RD` (those answer `?;`). `CF000;` answers `CF000` + RX CLAR + TX CLAR + `000`, and is written the same way (`CF00010000;` = RX CLAR on); `CF001;` answers `CF001` + sign + 4 digits (the offset). They act on the VFO the dial operates, and the IF answer (always VFO A) does not carry them, so the app reads `CF` instead. The radio calls them **CLAR RX** and **CLAR TX**, and the auto notch **DNF**; the app shows those names.
+* **The VFOs behave like the FTDX10:** `SV;` only toggles the operated VFO (`VS0;`/`VS1;`), it does not swap; `FA`/`IF` are VFO A and `FB`/`OI` VFO B. The A/B key, the A>B / B>A / A=B buttons and the main display follow the operated VFO as on the FTDX10.
+* Menu table corrections found on the radio: TONE FREQ answers three digits, HCUT FREQ runs 00 = OFF and 01 to 67 = 700 to 4000 Hz in 50 Hz steps. CW WEIGHT answers `05` where the table says 25 to 45, so it is shown read only.
+* The radio's own settings were already right for the app: MOD SOURCE = USB in SSB, AM, FM and DATA, CAT-1 RATE 38400, RPTT SELECT = OFF (the app keys the radio by CAT). The app preset therefore changes nothing.
+* **USB audio and CAT together (bench-found):** on one FT-710 the radio's USB audio chip reset (the kernel logged `reset full-speed USB device`) whenever receive and transmit audio ran together while a CAT serial port was open; either direction alone, or both without the serial port, was stable, on any Pi USB port. The radio's own microphone was unaffected. `audio.half_duplex = true` works around it: receive audio stops while PTT is held and the transmit audio opens only then (the first syllable may be clipped); see [operations](operations.md).
+* **Meters (calibrated with the radio's own microphone and MOX on a dummy load):** the ALC full scale is 240 (a normal voice read raw ALC 110 to 130 with the radio's own bar at the middle), and the power meter uses the fitted curve in `PO_CURVES`. The speech processor is `PR0` (0 off, 1 on) and `PL` (3 digits), checked on the radio.
+* Not yet tried: the Tune button and voice transmit from the app's microphone (see the USB audio note above).
 
 ## FTDX101D: what was verified on a real radio
 

@@ -93,7 +93,8 @@ def test_settings_are_checked_and_merged():
     d = dyn.TxDynamics()
     d.set({"leveler": {"on": True, "max_gain": 9}})
     d.set({"limiter": {"on": True}})
-    assert d.state() == {"gate": dyn.DEFAULT_GATE, "leveler": {"on": True, "max_gain": 9.0, "target": -18.0, "decay": 300.0}, "limiter": {"on": True, "ceiling": -3.0, "release": 100.0}}
+    assert d.state() == {"gate": dyn.DEFAULT_GATE, "compressor": dyn.DEFAULT["compressor"], "leveler": {"on": True, "max_gain": 9.0, "target": -18.0, "decay": 300.0},
+                         "limiter": {"on": True, "ceiling": -3.0, "release": 100.0}}
     for bad in ({"leveler": {"max_gain": 30}}, {"leveler": {"on": 1}}, {"limiter": {"ceiling": 3}}, {"limiter": {"release": 5}}, {"limiter": {"x": 1}},
                 {"mixer": {}}, {"leveler": []}, [], None, {"leveler": {"decay": float("nan")}}, {"leveler": {"target": True}}):
         with pytest.raises(ValueError):
@@ -143,6 +144,49 @@ async def test_the_transmit_path_applies_the_leveler_and_limiter_only_when_they_
     audio.set_dyn({"leveler": {"on": False, "max_gain": 3}})
     hub.load_eq()
     assert audio.tx_dyn.cfg["leveler"]["on"] is True and audio.tx_dyn.cfg["leveler"]["max_gain"] == 9.0
+    await ws.close()
+
+
+async def test_the_compressor_is_in_the_transmit_path_the_meter_the_websocket_command_and_the_saved_settings(make_app, tmp_path):
+    import copy
+    import json
+    import types
+    from test_phase8 import admin_user
+    from test_web import recv_until
+    from radio_remote import config
+    from radio_remote.audio.service import AudioService
+    from radio_remote.common import K_AUDIO, K_HUB
+    svc = AudioService(copy.deepcopy(config.DEFAULTS)["audio"], is_mock=True, tx_gate=lambda cid: cid == "c1", on_levels=lambda d: None)
+    peer = types.SimpleNamespace(conn_id="c1")
+    loud = tone(-10, seconds=0.2)[:N].tobytes()
+    svc._mic_frame(peer, loud)
+    plain = np.abs(np.frombuffer(svc._tx_q[-1], "<i2")).max()               # the compressor off: the old path
+    svc.set_dyn({"compressor": {"on": True, "threshold": -35, "ratio": 8, "attack": 1}})
+    svc._tx_gate_open = False
+    for _ in range(40):
+        svc._mic_frame(peer, loud)
+    squeezed = np.abs(np.frombuffer(svc._tx_q[-1], "<i2")).max()
+    assert squeezed < plain * 0.5 and svc.tx_dyn.comp_db > 10
+    assert svc._levels["tx_comp_db"] > 10                                   # the reduction goes to the meter (the other readouts use the same path)
+    lim = svc.dyn_state()["limits"]
+    assert lim["comp_threshold"] == [-40.0, 0.0] and lim["comp_ratio"] == [1.5, 10.0] and lim["comp_makeup"] == [0.0, 24.0]
+
+    client = await make_app()
+    root = await admin_user(client)
+    audio, hub = client.server.app[K_AUDIO], client.server.app[K_HUB]
+    hub.eq_path = tmp_path / "eq.json"
+    ws, hello = await root.ws()
+    assert hello["state"]["dyn"]["compressor"]["on"] is False
+    await ws.send_json({"id": 1, "type": "set_dyn", "compressor": {"on": True, "ratio": 5, "makeup": 4}})
+    assert (await recv_until(ws, lambda m: m["t"] == "ack" and m["id"] == 1))["ok"] is True
+    patch = await recv_until(ws, lambda m: m["t"] == "patch" and "dyn" in m["d"])
+    assert patch["d"]["dyn"]["compressor"]["ratio"] == 5.0 and patch["d"]["dyn"]["compressor"]["on"] is True
+    assert json.loads(hub.eq_path.read_text())["dyn"]["compressor"]["makeup"] == 4.0
+    await ws.send_json({"id": 2, "type": "set_dyn", "compressor": {"ratio": 50}})
+    assert (await recv_until(ws, lambda m: m["t"] == "ack" and m["id"] == 2))["ok"] is False
+    audio.set_dyn({"compressor": {"on": False, "makeup": 0}})
+    hub.load_eq()
+    assert audio.tx_dyn.cfg["compressor"]["on"] is True and audio.tx_dyn.cfg["compressor"]["makeup"] == 4.0
     await ws.close()
 
 
@@ -214,3 +258,63 @@ def test_the_transmit_gate_comes_before_the_leveler_so_the_leveler_does_not_rais
     pause = slice(int(48000 * 1.2), int(48000 * 1.38))
     assert rms_db(y[pause]) < rms_db(x[pause].astype(float)) - 20                    # the room noise is not boosted by the leveler
     assert d.meters()["gate"] >= 0
+
+
+# ------------------------------------------------------------------ the transmit compressor (between the gate and the leveler)
+def comp(**kw):
+    d = dyn.TxDynamics()
+    d.set({"compressor": {"on": True, **kw}})
+    return d
+
+
+def settled(d, db, seconds=1.0):
+    y = run(d, tone(db, seconds=seconds))
+    return rms_db(y[len(y) // 2:])                                      # the second half: after the attack has finished
+
+
+def test_the_compressor_turns_a_loud_signal_down_by_the_ratio_over_the_threshold():
+    out = settled(comp(threshold=-30, ratio=4, attack=1, release=50), -10)
+    assert out == pytest.approx(-30 + 20 / 4, abs=1.0)                  # 20 dB over the threshold becomes 5 dB over it
+
+
+def test_a_signal_under_the_threshold_is_not_touched_and_makeup_adds_to_everything():
+    assert settled(comp(threshold=-30, ratio=4), -45) == pytest.approx(-45, abs=0.3)
+    assert settled(comp(threshold=-30, ratio=4, makeup=6), -45) == pytest.approx(-39, abs=0.3)
+    assert settled(comp(threshold=-30, ratio=4, attack=1, release=50, makeup=6), -10) == pytest.approx(-30 + 5 + 6, abs=1.0)
+
+
+def test_the_compressor_attacks_over_its_attack_time_and_lets_go_over_its_release_time():
+    d = comp(threshold=-30, ratio=6, attack=40, release=200)
+    run(d, tone(-10, seconds=0.02))
+    first = d.comp_db
+    run(d, tone(-10, seconds=0.5))
+    assert d.comp_db > first + 5 and d.comp_db > 12                      # it keeps coming down over the attack time
+    run(d, tone(-60, seconds=0.05))
+    assert d.comp_db > 3                                                 # and does not let go at once
+    run(d, tone(-60, seconds=1.5))
+    assert d.comp_db < 0.5 and d.meters()["comp"] == round(d.comp_db, 1)
+
+
+def test_the_compressor_works_before_the_leveler_so_the_leveler_sees_the_compressed_voice():
+    both = dyn.TxDynamics()
+    both.set({"compressor": {"on": True, "threshold": -30, "ratio": 10, "attack": 1, "release": 50}, "leveler": {"on": True, "max_gain": 12, "target": -18, "decay": 300}})
+    assert settled(both, -10, seconds=1.5) == pytest.approx(-18, abs=1.5)  # compressed to about -28, then brought up to the target
+    only = dyn.TxDynamics()
+    only.set({"leveler": {"on": True, "max_gain": 12, "target": -18, "decay": 300}})
+    assert settled(only, -10, seconds=1.5) == pytest.approx(-10, abs=0.5)  # without it the leveler adds nothing to a voice already over the target
+
+
+def test_the_compressor_is_off_by_default_and_its_settings_are_checked():
+    d = dyn.TxDynamics()
+    assert d.cfg["compressor"]["on"] is False and not d.active
+    x = tone(-10)
+    assert np.array_equal(run(d, x).astype("<i2"), x[:len(x) // N * N])
+    for bad in ({"compressor": {"ratio": 1.0}}, {"compressor": {"ratio": 20}}, {"compressor": {"threshold": 3}}, {"compressor": {"threshold": -60}}, {"compressor": {"attack": 0}},
+                {"compressor": {"release": 5000}}, {"compressor": {"makeup": 30}}, {"compressor": {"on": 1}}, {"compressor": {"x": 1}}):
+        with pytest.raises(ValueError):
+            d.set(bad)
+    d.set({"compressor": {"on": True, "ratio": 5}})
+    d.set({"compressor": {"makeup": 3}})
+    assert d.cfg["compressor"] == {"on": True, "threshold": -20.0, "ratio": 5.0, "attack": 10.0, "release": 200.0, "makeup": 3.0} and d.active
+    d.reset()
+    assert d.comp_db == 0.0 and d.comp_gain_db == 0.0

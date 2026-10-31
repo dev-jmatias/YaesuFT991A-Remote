@@ -327,6 +327,8 @@ class YaesuCatDriver(RadioDriver):
             fields["band_b"] = band_for(fields["frequency_b"])
         if fields.get("tx") is False:
             fields.update(po_raw=0, swr_raw=0, alc=0, comp=0)
+            if "rf_power_out" in self.state:                                    # a radio whose power is converted to watts (FT-710) must not keep the last transmission's reading
+                fields["rf_power_out"] = 0
         old_mode = self.state.get("mode")
         old_mode_b = self.state.get("mode_b")
         self._update(**fields)
@@ -557,14 +559,17 @@ class YaesuCatDriver(RadioDriver):
         if key not in self.proto.ENCODE:
             raise RadioError(f"control {name} is not available on the {self.proto.NAME}")
         read, encode = self.proto.ENCODE[key]
-        cmds = encode(value)
+        cf = name in ("rit", "xit", "clarifier_hz") and hasattr(self.proto, "clar_cmds") and not self.proto.m.has_rt       # FT-710: the clarifier is the CF command
+        cmds = self.proto.clar_cmds(name, value, self.state) if cf else encode(value)
         turned_on = False
-        if name == "clarifier_hz" and value and not (self.state.get("rit") or self.state.get("xit")):
+        if not cf and name == "clarifier_hz" and value and not (self.state.get("rit") or self.state.get("xit")):
             cmds.insert(1, self.proto.CLARIFIER_ON)                  # RU/RD move the clarifier knob: with no clarifier on they would have no audible effect
             turned_on = True
         for cmd in cmds:
             await self._guard_cat(c.send(cmd))
         await self._guard_cat(c.request(read))
+        if cf:
+            await self._guard_cat(c.request("CF001;" if read == "CF000;" else "CF000;"))
         if name == "mic_select":
             for extra in getattr(self.proto, "EXTRA_MIC_READS", ()):
                 await self._guard_cat(c.request(extra))

@@ -135,13 +135,35 @@ async def test_a_heard_station_is_reported_with_the_snr(site):
     r.set_active(True, "RADE")
     await until(lambda: r.connected and len(site["received"]) >= 3)
     site["received"].clear()
-    r.report_heard("ct2iok", 6.4)
-    r.report_heard("", 5.0)                                                          # nobody heard / no SNR: nothing is sent
-    r.report_heard("G4ABC", None)
+    assert r.report_heard("ct2iok", 6.4) == ""                                       # "" = sent
+    assert "no callsign" in r.report_heard("", 5.0)                                  # nobody heard / no SNR: nothing is sent, and it says why
+    assert "no callsign" in r.report_heard("G4ABC", None)
+    assert "no callsign" in r.report_heard("G4ABC", float("nan")) and "no callsign" in r.report_heard("G4ABC", float("inf"))      # not a number: no report, no crash
     await until(lambda: len(site["received"]) >= 1)
     await asyncio.sleep(0.2)
     assert site["received"] == [["rx_report", {"callsign": "CT2IOK", "mode": "RADEV1", "snr": 6}]]
     await r.stop()
+
+
+async def test_a_report_that_cannot_be_sent_says_why(site):
+    r = make_reporter(site, announce=False)                                          # a viewer only: it sees the list but is not announced
+    r.start()
+    r.set_active(True, "RADE")
+    await until(lambda: r.connected)
+    assert "not announced" in r.report_heard("G4ABC", 5.0)
+    await r.stop()
+    down = make_reporter(site)                                                       # announced in the settings, but never connected
+    assert "not connected" in down.report_heard("G4ABC", 5.0)
+    down.cfg["reporter"]["enabled"] = False
+    assert "switched off" in down.report_heard("G4ABC", 5.0)
+
+
+async def test_the_service_keeps_whether_the_report_was_sent(make_app):
+    import copy
+    from radio_remote import config
+    from radio_remote.audio.service import AudioService
+    svc = AudioService(copy.deepcopy(config.DEFAULTS)["audio"], is_mock=True, tx_gate=lambda c: False, on_levels=lambda d: None)
+    assert svc._levels["freedv_heard_report"] == ""
 
 
 @pytest.mark.parametrize("over,role", [({"announce": False}, "view"), ({"callsign": ""}, "view"), ({"watch": False}, "report_wo"),

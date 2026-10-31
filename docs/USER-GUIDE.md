@@ -179,16 +179,19 @@ Set **Thresh.** just above the noise in the pauses and below your quiet words, t
 
 **My sets…** (beside Reset) saves the current bands (frequency, gain and Q) and the low-cut and high-cut under a name; **Use** puts a saved set on the Receive or the Transmit equalizer, and **Delete** removes it. Your sets also appear in the **Preset** list under *My sets*. Up to 20 sets are kept; they are shared by Receive and Transmit and by everyone connected, and kept across restarts.
 
-#### Transmit leveler and limiter
+#### Transmit compressor, leveler and limiter
 
-Under the Transmit graph, two more stages for your voice, after the noise gate (they are shared and kept like the equalizer, and they work on the speech only: a FreeDV signal is made from the leveled speech, and a recording sent with *Send* is not touched):
+Under the Transmit graph, three more stages for your voice, after the noise gate (they are shared and kept like the equalizer, and they work on the speech only: a FreeDV signal is made from the leveled speech, and a recording sent with *Send* is not touched):
 
+* **Compressor** (first of the three, right after the noise gate) turns your voice down by the **Ratio** once it is over the **Thresh.** (defaults -20 dB and 3:1, with a soft knee), starts to act over the **Attack** time (default 10 ms), lets go over the **Rel.**(ease) time (default 200 ms), and
+  **Makeup** (default 0 dB) then brings the whole signal back up. The readout beside it shows how many dB it is taking off while you transmit. It comes after the gate so the room noise of the pauses is not compressed, and before the leveler, which then works on a more even voice. Makeup also raises the pauses, so keep the noise gate on when you use it.
+  The radio's own speech processor works on top of this: for voice use one of them, not both at full strength.
 * **Leveler** brings your voice toward a **Target** level (default -18 dB). It only adds gain, up to **Max** (default 12 dB), follows a louder voice at once and a quieter one slowly (**Decay**, default 300 ms), and holds its gain in pauses instead of boosting the room noise.
   It evens out a voice that moves around the microphone, so the average power is higher for the same peaks. The readout beside it shows the gain it is adding while you transmit.
 * **Limiter** keeps the peaks under a **Ceiling** (default -3 dB) and lets go with the **Rel.**(ease) time (default 100 ms); the readout shows how many dB it is reducing. Together with the leveler it is the ALC of a good SSB transmitter: set the radio's own
   speech processor to **off**, watch the radio's **ALC** and the power on a dummy load, and lower the Target or the Ceiling if the ALC goes over its mark.
 
-Both are off until you tick them. Start with the leveler's defaults and the limiter at about -3 dB.
+All three are off until you tick them. Start with the compressor at its defaults, the leveler's defaults and the limiter at about -3 dB.
 
 ### Recorder (REC, Play, Send, Recordings)
 

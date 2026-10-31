@@ -14,6 +14,7 @@ K_CFG, K_AUTH, K_DRIVER, K_GUARD, K_HUB, K_AUDIO = (
 K_UPDATES = web.AppKey("updates", object)
 K_RIGCTL = web.AppKey("rigctl", object)
 K_REPORTER = web.AppKey("reporter", object)
+K_PSK = web.AppKey("psk", object)
 K_FTX = web.AppKey("ftx", object)
 K_SSTV = web.AppKey("sstv", object)
 K_CW = web.AppKey("cw", object)

@@ -42,6 +42,8 @@ TEST_TONE_PEAK = 19000.0        # its peak at a transmit level of 0 dB: what the
 TEST_TONE_MAX_S = 15.0          # the tone stops by itself after this long
 SLOW_FRAME_MS = 20.0             # a FreeDV receive step that takes longer than one frame (20 ms) can make the capture fall behind on a slow PC
 LEVEL_INTERVAL_S = 0.1
+HALF_POLL_S = 0.02              # half-duplex audio: how often a paused receive or transmit side looks to see whether the radio is keyed
+HALF_TAIL_S = 0.2               # ... and how long after the last transmit frame the output stays open (the radio's USB audio codec empties its own buffer)
 GATE_IDLE_S = 0.5               # seconds without a microphone frame after which the transmit state ends by itself (over WebSocket the page sends nothing once PTT is released)
 RX_HOLD_FRAMES = 15              # frames (300 ms) of silence after a transmission before the FreeDV receiver restarts: the radio is still switching back to receive
 
@@ -116,8 +118,12 @@ class AudioService:
     def __init__(self, cfg: dict, *, is_mock: bool, tx_gate: Callable[[str], bool],
                  on_levels: Callable[[dict], None] | None = None,
                  source_factory: Callable[[], Source] | None = None,
-                 sink_factory: Callable[[], Sink] | None = None):
+                 sink_factory: Callable[[], Sink] | None = None,
+                 keyed: Callable[[], bool] | None = None):
         self.cfg, self.is_mock, self.tx_gate = cfg, is_mock, tx_gate
+        self._keyed = keyed or (lambda: False)           # is the radio keyed (PTT or tune)? only used by half-duplex audio
+        self._half = bool(cfg.get("half_duplex"))
+        self._cap_open = self._sink_open = False         # half-duplex: is the receive source / the transmit output really open right now? (each side waits for the other to be closed)
         self.on_levels = on_levels or (lambda d: None)
         self._source_factory, self._sink_factory = source_factory, sink_factory
         self.available = False
@@ -172,7 +178,7 @@ class AudioService:
         self._levels = {"audio_rx_level": 0, "audio_tx_level": 0, "audio_tx_frames": 0, "audio_tx_error": "",
                         "freedv_on": False, "freedv_mode": "", "freedv_sync": 0, "freedv_snr": 0.0,
                         "freedv_spec": [], "freedv_offset": 0, "freedv_hint": None, "freedv_afc": "", "freedv_level": -120, "freedv_clip": False,
-                        "freedv_heard": "", "freedv_heard_at": 0, "freedv_heard_snr": None}
+                        "freedv_heard": "", "freedv_heard_at": 0, "freedv_heard_snr": None, "freedv_heard_report": ""}
         # FreeDV (see freedv.py): decode the radio's modem tones to speech for the listeners, encode the operator's speech to modem tones
         self.freedv_ok, self.freedv_reason = freedv.available()
         self._fd_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="freedv-rx")     # one worker: frames are decoded strictly in order
@@ -279,10 +285,10 @@ class AudioService:
         self.eq_tx.set(on=tx_on, bands=tx, cut=tx_cut)
 
     def set_dyn(self, value) -> None:
-        """Noise gate / leveler / limiter settings for the transmit side, e.g. {"leveler": {"on": True, "max_gain": 12}}, and "rx_gate" for the receive noise gate; what is not mentioned
+        """Noise gate / compressor / leveler / limiter settings for the transmit side, e.g. {"leveler": {"on": True, "max_gain": 12}}, and "rx_gate" for the receive noise gate; what is not mentioned
         stays. Raises ValueError (and changes nothing)."""
         if not isinstance(value, dict):
-            raise ValueError("expected {gate, leveler, limiter, rx_gate}")
+            raise ValueError("expected {gate, compressor, leveler, limiter, rx_gate}")
         value = dict(value)
         rx = value.pop("rx_gate", None)
         if rx is not None:
@@ -298,7 +304,9 @@ class AudioService:
     def dyn_state(self) -> dict:
         return {**self.dyn_save(), "limits": {"max_gain": list(dynmod.MAX_GAIN), "target": list(dynmod.TARGET), "decay": list(dynmod.DECAY),
                                               "ceiling": list(dynmod.CEILING), "release": list(dynmod.RELEASE), "threshold": list(dynmod.GATE_THRESHOLD),
-                                              "range": list(dynmod.GATE_RANGE), "hold": list(dynmod.GATE_HOLD), "gate_release": list(dynmod.GATE_RELEASE)}}
+                                              "range": list(dynmod.GATE_RANGE), "hold": list(dynmod.GATE_HOLD), "gate_release": list(dynmod.GATE_RELEASE),
+                                              "comp_threshold": list(dynmod.COMP_THRESHOLD), "comp_ratio": list(dynmod.COMP_RATIO), "comp_attack": list(dynmod.COMP_ATTACK),
+                                              "comp_release": list(dynmod.COMP_RELEASE), "comp_makeup": list(dynmod.COMP_MAKEUP)}}
 
     def eq_state(self) -> dict:
         return {"rx": self.eq_rx.state(), "tx": self.eq_tx.state(), "layouts": eqmod.LAYOUTS,
@@ -428,7 +436,7 @@ class AudioService:
         self.rx_ms_avg = self.rx_ms_max = self.rx_work_avg = self.rx_work_max = 0.0
         self.rx_slow = 0
         self._levels.update(freedv_on=on, freedv_mode=self.freedv_mode if on else "", freedv_sync=0, freedv_snr=0.0, freedv_spec=[], freedv_offset=0,
-                            freedv_hint=None, freedv_afc="", freedv_level=-120, freedv_clip=False, freedv_heard="", freedv_heard_at=0, freedv_heard_snr=None)
+                            freedv_hint=None, freedv_afc="", freedv_level=-120, freedv_clip=False, freedv_heard="", freedv_heard_at=0, freedv_heard_snr=None, freedv_heard_report="")
         self._heard_seq = 0
         self._last_emit = 0.0
         self._level("freedv_on", on)
@@ -512,11 +520,18 @@ class AudioService:
     async def _capture_loop(self) -> None:
         backoff = 0.5
         while True:
+            while self._half and (self._keyed() or self._sink_open):         # half-duplex: no receive audio while the transmit audio is open
+                await asyncio.sleep(HALF_POLL_S)
             src = self._source_factory()
+            paused = False
+            self._cap_open = True
             try:
                 await src.start()
                 self.capture_error, backoff = None, 0.5
                 while True:
+                    if self._half and self._keyed():
+                        paused = True
+                        break
                     if self._tx_gate_open and time.monotonic() - self._gate_seen > GATE_IDLE_S:
                         # BENCH-FOUND on a friend's PC (WebSocket audio): the page sends no microphone frames once PTT is released, so nothing ever told the
                         # server the transmission had ended; the receiver stayed muted and the tuning scope frozen until FreeDV was switched off and on.
@@ -594,7 +609,8 @@ class AudioService:
                                 self._levels.update(freedv_heard=ch.heard, freedv_heard_at=int(time.time()), freedv_heard_snr=ch.heard_snr)
                                 log.info("FreeDV: heard %s (SNR %s dB)", ch.heard, ch.heard_snr)
                                 if self.on_freedv_heard:
-                                    self.on_freedv_heard(ch.heard, ch.heard_snr)
+                                    why = self.on_freedv_heard(ch.heard, ch.heard_snr)
+                                    self._levels.update(freedv_heard_report=("sent" if why == "" else why) if isinstance(why, str) else "")      # "sent" = reported to the site, else why it was not
                             if hasattr(ch, "afc"):                                   # the tuning aid (freedv_tune.py): spectrum, level, where the signal is, what was corrected
                                 self._levels.update(freedv_offset=int(round(ch.afc.offset)), freedv_afc=ch.tune_state())
                                 if ch.spec_fresh:
@@ -617,6 +633,9 @@ class AudioService:
                 log.warning("RX capture: %s (retry in %.1fs)", e, backoff)
             finally:
                 await asyncio.shield(src.stop())
+                self._cap_open = False
+            if paused:
+                continue
             await asyncio.sleep(backoff)
             backoff = min(backoff * 2, 5.0)
 
@@ -640,14 +659,27 @@ class AudioService:
         silence = bytes(FRAME_BYTES)
         backoff = 0.5
         while True:
+            while self._half and (self._cap_open or not (self._keyed() or self._tx_gate_open)):   # half-duplex: the output opens only for a transmission, once receive has let go
+                await asyncio.sleep(HALF_POLL_S)
             sink = self._sink_factory()
+            paused = False
+            self._sink_open = True
             try:
                 await sink.start()
                 self.playback_error, backoff = None, 0.5
                 self._level("audio_tx_error", "")
                 nxt = loop.time()
                 was_fd = False
+                idle_since = None
                 while True:
+                    if self._half:
+                        if self._keyed() or self._tx_gate_open or self._tx_q:
+                            idle_since = None
+                        elif idle_since is None:
+                            idle_since = loop.time()
+                        elif loop.time() - idle_since > TX_TAIL_S + HALF_TAIL_S:     # the transmission is over and its tail has played: close the output so receive can open
+                            paused = True
+                            break
                     fd = self._fd_tx is not None and self._tx_gate_open
                     if was_fd and not fd:
                         self._over_finished()
@@ -683,6 +715,9 @@ class AudioService:
                 log.warning("TX playback: %s (retry in %.1fs)", e, backoff)
             finally:
                 await asyncio.shield(sink.stop())
+                self._sink_open = False
+            if paused:
+                continue
             await asyncio.sleep(backoff)
             backoff = min(backoff * 2, 5.0)
 
@@ -784,6 +819,7 @@ class AudioService:
                     t0 = time.perf_counter()
                     tones = self._fd_tx.process(self.tx_dyn.process(apply_gain(pcm, self.tx_gain)) if dyn_on else apply_gain(pcm, self.tx_gain))
                     if dyn_on:
+                        self._level("tx_comp_db", round(self.tx_dyn.comp_db, 1))
                         self._level("tx_lev_db", self.tx_dyn.lev_db)
                         self._level("tx_lim_db", self.tx_dyn.lim_db)
                         self._level("tx_gate_db", round(self.tx_dyn.gate.reduction_db, 1))
@@ -801,6 +837,7 @@ class AudioService:
                 return
             if dyn_on:
                 pcm = apply_gain(self.tx_dyn.process(apply_gain(pcm, self.tx_gain)), 1.0, limit=True)
+                self._level("tx_comp_db", round(self.tx_dyn.comp_db, 1))
                 self._level("tx_lev_db", self.tx_dyn.lev_db)
                 self._level("tx_lim_db", self.tx_dyn.lim_db)
                 self._level("tx_gate_db", round(self.tx_dyn.gate.reduction_db, 1))

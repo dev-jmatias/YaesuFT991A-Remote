@@ -32,6 +32,9 @@ DEFAULTS: dict[str, dict[str, Any]] = {
     "audio": {
         "enabled": True, "backend": "auto", "input_device": "", "output_device": "",
         "rx_gain_db": 0.0, "tx_gain_db": 0.0, "opus_bitrate": 32000, "max_peers": 3,
+        # true = never run the radio's receive and transmit audio at the same moment: receive stops while PTT is held, and the transmit audio opens only then.
+        # BENCH-FOUND on an FT-710: its USB audio chip resets when receive and transmit audio run together with the CAT port open. Leave false on other radios.
+        "half_duplex": False,
     },
     "ui": {
         "tuning_steps_hz": [10, 100, 500, 1000, 5000, 10000],
@@ -63,7 +66,8 @@ DEFAULTS: dict[str, dict[str, Any]] = {
         "10m|28330000|RADE", "10m (2)|28720000|RADE"]},
     # FreeDV Reporter (qso.freedv.org): announce this station while FreeDV is on and show who else is on the air (see freedv_reporter.py, docs/freedv.md).
     # Off by default. callsign and grid square are shown publicly on that site. host/tls are for tests and file editing only.
-    "reporter": {"enabled": False, "announce": True, "watch": True, "callsign": "", "grid_square": "", "message": "", "host": "qso.freedv.org", "tls": True},
+    "reporter": {"enabled": False, "announce": True, "watch": True, "callsign": "", "grid_square": "", "message": "", "host": "qso.freedv.org", "tls": True,
+                 "psk": False},          # psk: also send the stations heard to PSK Reporter (see pskreporter.py); needs the callsign and grid square above
     # FT8 / FT4 (the FT8/FT4 tab; see ftx_engine.py and audio/ftx.py). callsign / grid_square are sent in the messages (callsign empty = the FreeDV Reporter callsign);
     # tx_freq_hz = the audio frequency of our transmissions; tx_level_db = level of the tones sent to the radio (keep the ALC at zero); max_tx_repeats = how many times the
     # same message is repeated unanswered before transmitting stops by itself; cq_only = list only CQ calls; clock_check = warn when the Pi's clock is not synchronised.
@@ -145,6 +149,8 @@ def validate(cfg: dict) -> dict:
         raise ConfigError("audio.opus_bitrate must be 6000..128000")
     if not 1 <= a["max_peers"] <= 8:
         raise ConfigError("audio.max_peers must be 1..8")
+    if not isinstance(a["half_duplex"], bool):
+        raise ConfigError("audio.half_duplex must be true or false")
     for k in ("rx_gain_db", "tx_gain_db"):
         if not -30 <= a[k] <= 30:
             raise ConfigError(f"audio.{k} must be -30..30")
@@ -162,6 +168,8 @@ def validate(cfg: dict) -> dict:
         raise ConfigError("reporter.callsign: 3 to 15 letters, digits or /")
     if rp["grid_square"] and not re.fullmatch(r"[A-Ra-r]{2}[0-9]{2}([A-Xa-x]{2}([0-9]{2})?)?", rp["grid_square"]):
         raise ConfigError("reporter.grid_square must be a Maidenhead locator such as IO91 or IO91wm")
+    if not isinstance(rp.get("psk"), bool):
+        raise ConfigError("reporter.psk must be true or false")
     if len(rp["message"]) > 100 or any(ord(ch) < 32 for ch in rp["message"]):
         raise ConfigError("reporter.message: at most 100 characters, no control characters")
     if not re.fullmatch(r"[A-Za-z0-9.-]{1,100}(:\d{1,5})?", rp["host"]):
@@ -223,7 +231,7 @@ def validate(cfg: dict) -> dict:
 
 
 # Radios whose ALC meter does not use the FT-991A's full scale of 160 (what the config default is). Applies only when the file does not set it.
-ALC_FULL_BY_MODEL = {"ftdx10": 48}              # real FTDX10: a normal SSB voice sat just under the 50 % mark of the radio's ALC zone
+ALC_FULL_BY_MODEL = {"ftdx10": 48, "ft710": 240}              # real FTDX10: a normal SSB voice sat just under the 50 % mark of the radio's ALC zone; real FT-710: voice into the radio's mic read raw ALC 110-130 with the radio's bar at the middle
 
 
 def load(path: str | os.PathLike | None) -> dict:

@@ -67,6 +67,8 @@ export function createFreeDV(host, ctx) {
       <label class="chk"><input type="checkbox" id="rp-enabled"> Switch the link to FreeDV Reporter on</label>
       <label class="chk"><input type="checkbox" id="rp-announce"> Announce this station</label>
       <label class="chk"><input type="checkbox" id="rp-watch"> Show who is on the air</label>
+      <label class="chk" title="Every station whose callsign you read from the end of an over is also sent to pskreporter.info (callsign, frequency, SNR, FreeDV), at most once an hour per station, in one batch every five minutes. Needs the callsign and grid square below."><input type="checkbox" id="rp-psk"> Also send the stations I hear to <b>PSK Reporter</b></label>
+      <p class="dim" id="rp-pskinfo"></p>
       <div class="row fdv-rpf"><label>Callsign <input id="rp-call" maxlength="15" autocapitalize="characters" size="10"></label>
         <label>Grid square <input id="rp-grid" maxlength="8" size="8" placeholder="IO91wm"></label>
         <label>Message <input id="rp-msg" maxlength="100" size="24" placeholder="optional, e.g. CQ FreeDV"></label>
@@ -242,6 +244,9 @@ export function createFreeDV(host, ctx) {
       : rep.connected ? `Connected to qso.freedv.org${mine ? " as an announced station" : " (viewing only)"}. ${rep.total} stations listed${rep.near ? `, ${rep.near} within 5 kHz of your frequency` : ""}.`
       : rep.error ? `Cannot reach FreeDV Reporter: ${rep.error}` : "Connecting to FreeDV Reporter…";
     if (rep.needs_callsign) line.textContent += " To be listed yourself, set a callsign and grid square in the settings.";
+    const ps = rep.psk, pl = $("rp-pskinfo");
+    if (pl) pl.textContent = !ps || !ps.enabled ? "" : !ps.ready ? `PSK Reporter: ${ps.reason}.`
+      : `PSK Reporter: ${ps.sent} spot${ps.sent === 1 ? "" : "s"} sent${ps.last_at ? ` (last at ${new Date(ps.last_at * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })})` : ""}, ${ps.queued} waiting for the next batch${ps.error ? `. Last problem: ${ps.error}` : ""}.`;
     box.replaceChildren(...rep.stations.map((st) => {
       const r = el(`<div class="fdv-rep-row${st.near ? " near" : ""}">${callLink(st.callsign)} <span class="dim">${esc(st.grid)}</span>
         <span class="fdv-rf">${(st.freq / 1e6).toFixed(4)} MHz</span> <span class="fdv-rm">${esc(modeName(st.mode))}</span>${st.tx ? `<span class="fdv-txb">TX</span>` : ""}${st.listening ? `<span class="dim"> (listening)</span>` : ""}
@@ -260,7 +265,7 @@ export function createFreeDV(host, ctx) {
     $("fdv-repset").hidden = false;
     $("rp-save").onclick = async () => {
       const g = $("rp-grid").value.trim();
-      const v = { enabled: $("rp-enabled").checked, announce: $("rp-announce").checked, watch: $("rp-watch").checked,
+      const v = { enabled: $("rp-enabled").checked, announce: $("rp-announce").checked, watch: $("rp-watch").checked, psk: $("rp-psk").checked,
                   callsign: $("rp-call").value.trim().toUpperCase(), grid_square: g.slice(0, 2).toUpperCase() + g.slice(2, 4) + g.slice(4, 6).toLowerCase() + g.slice(6),
                   message: $("rp-msg").value.trim() };
       try { await api("/api/config", "PUT", { reporter: v, freedv: { callsign: $("rp-txcall").value.trim().toUpperCase() } }); toast("FreeDV settings applied."); } catch (e) { toast(e.message); }
@@ -268,7 +273,7 @@ export function createFreeDV(host, ctx) {
     };
     api("/api/config").then((c) => {
       const r = c.config.reporter || {};
-      $("rp-enabled").checked = !!r.enabled; $("rp-announce").checked = r.announce !== false; $("rp-watch").checked = r.watch !== false;
+      $("rp-enabled").checked = !!r.enabled; $("rp-announce").checked = r.announce !== false; $("rp-watch").checked = r.watch !== false; $("rp-psk").checked = !!r.psk;
       $("rp-call").value = r.callsign || ""; $("rp-grid").value = r.grid_square || ""; $("rp-msg").value = r.message || "";
       $("rp-txcall").value = (c.config.freedv || {}).callsign || "";
     }).catch(() => {});
@@ -344,7 +349,8 @@ export function createFreeDV(host, ctx) {
     $("fdv-dot").className = "dot " + (!onNow ? "" : locked ? "ok" : "warn");
     const heard = onNow && s.freedv_heard ? s.freedv_heard : "";                  // the callsign in the end-of-over frame of the last over (RADE V1)
     $("fdv-heard").hidden = !heard;
-    if (heard) $("fdv-heard").innerHTML = `Last heard: ${callLink(heard)}` + (s.freedv_heard_snr != null ? `, SNR ${s.freedv_heard_snr > 0 ? "+" : ""}${(+s.freedv_heard_snr).toFixed(1)} dB` : "") + (s.freedv_heard_at ? ` (${new Date(s.freedv_heard_at * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })})` : "");
+    if (heard) $("fdv-heard").innerHTML = `Last heard: ${callLink(heard)}` + (s.freedv_heard_snr != null ? `, SNR ${s.freedv_heard_snr > 0 ? "+" : ""}${(+s.freedv_heard_snr).toFixed(1)} dB` : "") + (s.freedv_heard_at ? ` (${new Date(s.freedv_heard_at * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })})` : "")
+      + (s.freedv_heard_report === "sent" ? " · reported to FreeDV Reporter" : s.freedv_heard_report ? ` · not reported: ${esc(s.freedv_heard_report)}` : "");
     const au = ctx.audio?.(), streaming = !!au && (au.hear || au.mic);          // the Pi only decodes while someone is listening
     $("fdv-text").textContent = !onNow ? "FreeDV is off"
       : !streaming ? `FreeDV ${modeName(s.freedv_mode)} is on. Tap the speaker icon (Listen) to hear and decode.`

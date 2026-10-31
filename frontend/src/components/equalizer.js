@@ -86,7 +86,14 @@ export function createEqualizer(host, ctx) {
           <label><small>Hold (ms)</small><input type="number" data-gthold step="10" inputmode="numeric"></label>
           <label><small>Rel. (ms)</small><input type="number" data-gtrel step="50" inputmode="numeric"></label>
           <span class="dim dynmeter" data-gtmeter></span></div>
-        ${dir === "tx" ? `<div class="dynrow"><label class="chk"><input type="checkbox" data-lvon> Leveler</label>
+        ${dir === "tx" ? `<div class="dynrow comp"><label class="chk"><input type="checkbox" data-cpon> Compressor</label>
+          <label><small>Thresh. (dB)</small><input type="number" data-cpthr step="1" inputmode="decimal"></label>
+          <label><small>Ratio (n:1)</small><input type="number" data-cpratio step="0.5" inputmode="decimal"></label>
+          <label><small>Attack (ms)</small><input type="number" data-cpatk step="1" inputmode="numeric"></label>
+          <label><small>Rel. (ms)</small><input type="number" data-cprel step="10" inputmode="numeric"></label>
+          <label><small>Makeup (dB)</small><input type="number" data-cpmk step="1" inputmode="decimal"></label>
+          <span class="dim dynmeter" data-cpmeter></span></div>
+        <div class="dynrow"><label class="chk"><input type="checkbox" data-lvon> Leveler</label>
           <label><small>Max (dB)</small><input type="number" data-lvmax step="1" inputmode="decimal"></label>
           <label><small>Target (dB)</small><input type="number" data-lvtarget step="1" inputmode="decimal"></label>
           <label><small>Decay (ms)</small><input type="number" data-lvdecay step="50" inputmode="numeric"></label>
@@ -222,18 +229,20 @@ export function createEqualizer(host, ctx) {
       const dl = S.state.dyn.limits, gk = dir === "tx" ? "gate" : "rx_gate", isTx = dir === "tx";
       const q = (x) => b.querySelector(x);
       const lim2 = { "[data-gtthr]": dl.threshold, "[data-gtrange]": dl.range, "[data-gthold]": dl.hold, "[data-gtrel]": dl.gate_release };
+      if (isTx) Object.assign(lim2, { "[data-cpthr]": dl.comp_threshold, "[data-cpratio]": dl.comp_ratio, "[data-cpatk]": dl.comp_attack, "[data-cprel]": dl.comp_release, "[data-cpmk]": dl.comp_makeup });
       if (isTx) Object.assign(lim2, { "[data-lvmax]": dl.max_gain, "[data-lvtarget]": dl.target, "[data-lvdecay]": dl.decay, "[data-lmceil]": dl.ceiling, "[data-lmrel]": dl.release });
       for (const [sel, [lo, hi]] of Object.entries(lim2)) { q(sel).min = lo; q(sel).max = hi; }
       const sendDyn = () => {
         const msg = { [gk]: { on: q("[data-gton]").checked, threshold: +q("[data-gtthr]").value, range: +q("[data-gtrange]").value, hold: +q("[data-gthold]").value, release: +q("[data-gtrel]").value } };
         if (isTx) {
+          msg.compressor = { on: q("[data-cpon]").checked, threshold: +q("[data-cpthr]").value, ratio: +q("[data-cpratio]").value, attack: +q("[data-cpatk]").value, release: +q("[data-cprel]").value, makeup: +q("[data-cpmk]").value };
           msg.leveler = { on: q("[data-lvon]").checked, max_gain: +q("[data-lvmax]").value, target: +q("[data-lvtarget]").value, decay: +q("[data-lvdecay]").value };
           msg.limiter = { on: q("[data-lmon]").checked, ceiling: +q("[data-lmceil]").value, release: +q("[data-lmrel]").value };
         }
         send("set_dyn", msg);
       };
       const fields = ["[data-gton]", "[data-gtthr]", "[data-gtrange]", "[data-gthold]", "[data-gtrel]"];
-      if (isTx) fields.push("[data-lvon]", "[data-lvmax]", "[data-lvtarget]", "[data-lvdecay]", "[data-lmon]", "[data-lmceil]", "[data-lmrel]");
+      if (isTx) fields.push("[data-cpon]", "[data-cpthr]", "[data-cpratio]", "[data-cpatk]", "[data-cprel]", "[data-cpmk]", "[data-lvon]", "[data-lvmax]", "[data-lvtarget]", "[data-lvdecay]", "[data-lmon]", "[data-lmceil]", "[data-lmrel]");
       for (const sel of fields) { q(sel).disabled = !canEdit; q(sel).onchange = sendDyn; }
       st.paintDyn = () => {
         const d = S.state.dyn;
@@ -245,6 +254,9 @@ export function createEqualizer(host, ctx) {
         const tx = !!S.state.tx, gr = +(S.state[isTx ? "tx_gate_db" : "rx_gate_db"] || 0);
         q("[data-gtmeter]").textContent = g.on && (isTx ? tx : true) && gr > 0.5 ? `gate closed: -${gr.toFixed(0)} dB` : "";
         if (isTx) {
+          q("[data-cpon]").checked = d.compressor.on;
+          set("[data-cpthr]", d.compressor.threshold); set("[data-cpratio]", d.compressor.ratio); set("[data-cpatk]", d.compressor.attack); set("[data-cprel]", d.compressor.release); set("[data-cpmk]", d.compressor.makeup);
+          q("[data-cpmeter]").textContent = d.compressor.on && tx ? `-${(S.state.tx_comp_db || 0).toFixed(1)} dB` : "";
           q("[data-lvon]").checked = d.leveler.on; q("[data-lmon]").checked = d.limiter.on;
           set("[data-lvmax]", d.leveler.max_gain); set("[data-lvtarget]", d.leveler.target); set("[data-lvdecay]", d.leveler.decay);
           set("[data-lmceil]", d.limiter.ceiling); set("[data-lmrel]", d.limiter.release);

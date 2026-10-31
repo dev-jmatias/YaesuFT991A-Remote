@@ -43,6 +43,7 @@ started by systemd) reboots the machine after about 3 seconds, and does nothing 
 | `audio.input_device` / `output_device` | ALSA devices (`plughw:CARD=...,DEV=0`) | auto-detect |
 | `audio.rx_gain_db` / `tx_gain_db` | -30..30 dB; a limiter always follows TX gain | 0 |
 | `audio.opus_bitrate` / `max_peers` | codec rate; simultaneous listeners | 32000 / 3 |
+| `audio.half_duplex` | `true` = receive audio stops while PTT is held and the transmit audio opens only then, so the radio's USB audio never runs both ways at once (an FT-710 whose audio chip resets otherwise; the first syllable may be clipped) | false |
 | `ui.tuning_steps_hz` | step choices in the UI | 10..10000 |
 | `ui.meter_alc_full` / `meter_comp_full` | raw ALC / COMP value at which the radio's own meter is full (provisional calibration) | 160 (48 on the FTDX10 unless set here) / 255 |
 | `radio.app_preset` | when an operator connects, set the radio menu items the app needs (see [the Menu tab](menu.md)) | false |

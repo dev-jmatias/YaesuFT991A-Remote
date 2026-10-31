@@ -30,7 +30,7 @@ EDITABLE = {
     "updates": {"check"},
     "rigctl": {"enabled", "port", "allow", "set"},
     "freedv": {"mode", "tx_level_db", "channels", "data_mode", "auto_width", "callsign"},
-    "reporter": {"enabled", "announce", "watch", "callsign", "grid_square", "message"},
+    "reporter": {"enabled", "announce", "watch", "callsign", "grid_square", "message", "psk"},
     "ftx": {"mode", "callsign", "grid_square", "tx_freq_hz", "tx_level_db", "max_tx_repeats", "cq_only", "clock_check"},
     "sstv": {"tx_level_db", "keep"},
     "cw": {"keyer_slot", "chunk_chars"},
@@ -42,7 +42,7 @@ SECRET_KEYS = {("upload", "qrz_key"), ("upload", "eqsl_password"), ("upload", "c
 MASK = "********"
 LOCKED = ["safety.allow_ptt", "server.host", "server.port", "server.allowed_origins", "storage.data_dir", "updates.repo"]
 LIVE = {("logging", "level"), ("audio", "rx_gain_db"), ("audio", "tx_gain_db"), ("updates", "check"), ("rigctl", "enabled"), ("rigctl", "port"), ("rigctl", "allow"), ("rigctl", "set"), ("freedv", "mode"), ("freedv", "tx_level_db"), ("freedv", "auto_width"), ("freedv", "channels"), ("freedv", "data_mode"), ("reporter", "enabled"), ("reporter", "announce"), ("reporter", "watch"), ("reporter", "callsign"),
-        ("reporter", "grid_square"), ("reporter", "message")} | {("ftx", k) for k in EDITABLE["ftx"]} | {("upload", k) for k in EDITABLE["upload"]} | {("sstv", k) for k in EDITABLE["sstv"]} | {("cw", k) for k in EDITABLE["cw"]} | {("rtty", k) for k in EDITABLE["rtty"]} | {("js8", k) for k in EDITABLE["js8"]}
+        ("reporter", "grid_square"), ("reporter", "message"), ("reporter", "psk")} | {("ftx", k) for k in EDITABLE["ftx"]} | {("upload", k) for k in EDITABLE["upload"]} | {("sstv", k) for k in EDITABLE["sstv"]} | {("cw", k) for k in EDITABLE["cw"]} | {("rtty", k) for k in EDITABLE["rtty"]} | {("js8", k) for k in EDITABLE["js8"]}
 
 
 async def _run(fn, *a):

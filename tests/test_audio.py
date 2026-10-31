@@ -325,6 +325,54 @@ async def test_capture_device_loss_is_retried():
     await s.stop()
 
 
+async def test_half_duplex_never_has_receive_and_transmit_audio_open_together():
+    """BENCH-FOUND on an FT-710: its USB audio chip resets when capture and playback run together with the CAT port open."""
+    cfg = copy.deepcopy(config.DEFAULTS)["audio"]
+    cfg["half_duplex"] = True
+    keyed = {"on": False}
+    open_ = {"src": 0, "sink": 0}
+    overlap = {"n": 0}
+    seen = {"src": 0, "sink": 0}
+
+    class Src(ToneSource):
+        async def start(self):
+            await super().start()
+            open_["src"] += 1; seen["src"] += 1
+            overlap["n"] += open_["sink"] > 0
+        async def stop(self):
+            open_["src"] -= 1
+            await super().stop()
+
+    class Snk(RecordingSink):
+        async def start(self):
+            await super().start()
+            open_["sink"] += 1; seen["sink"] += 1
+            overlap["n"] += open_["src"] > 0
+        async def stop(self):
+            open_["sink"] -= 1
+            await super().stop()
+
+    s = AudioService(cfg, is_mock=True, tx_gate=lambda c: False, source_factory=Src, sink_factory=Snk, keyed=lambda: keyed["on"])
+    await s.start()
+    await s._ensure_capture(); await s._ensure_tx_sink()
+    await until(lambda: open_["src"] == 1 and open_["sink"] == 0)          # receiving: the output is not open
+    keyed["on"] = True
+    await until(lambda: open_["src"] == 0 and open_["sink"] == 1)          # transmitting: the receive side let go first
+    keyed["on"] = False
+    await until(lambda: open_["src"] == 1 and open_["sink"] == 0, timeout=5)
+    assert overlap["n"] == 0 and seen["src"] >= 2 and seen["sink"] == 1
+    await s._stop_capture(); await s._stop_tx_sink()
+    await s.stop()
+
+
+def test_half_duplex_config_must_be_a_boolean():
+    cfg = copy.deepcopy(config.DEFAULTS)
+    assert cfg["audio"]["half_duplex"] is False
+    cfg["audio"]["half_duplex"] = "yes"
+    with pytest.raises(config.ConfigError):
+        config.validate(cfg)
+
+
 # ---------------------------------------------------------------- HTTP/WS
 async def test_offer_endpoint_rules(client):
     from radio_remote.app import K_AUDIO
@@ -427,3 +475,8 @@ async def test_a_failing_tx_sound_card_is_reported_to_the_ui(svc):
     await svc._ensure_tx_sink()
     await until(lambda: any(l.get("audio_tx_error") for l in svc.levels))
     assert "Unknown PCM 6" in [l for l in svc.levels if l.get("audio_tx_error")][-1]["audio_tx_error"]
+
+
+def test_autopick_finds_the_ft710s_cmedia_usb_audio_device():
+    devs = devices.parse_alsa_list("card 1: Headphones [bcm2835 Headphones], device 0: bcm2835 Headphones [bcm2835 Headphones]\ncard 4: Device [USB Audio Device], device 0: USB Audio [USB Audio]\n")
+    assert devices.auto_pick(devs) == ("plughw:CARD=Device,DEV=0", "")

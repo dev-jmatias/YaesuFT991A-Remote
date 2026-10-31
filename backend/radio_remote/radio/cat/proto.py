@@ -78,6 +78,21 @@ HF_MODES = {                                    # MD P2 / IF P6 (FTDX10 p.15-16;
 HF_MODE_CODES = {v: k for k, v in HF_MODES.items()}
 HF_RM_NAMES = {"1": "smeter", "3": "comp", "4": "alc", "5": "po_raw", "6": "swr_raw"}     # RM P1 (FTDX10 p.20); 7 IDD, 8 VDD not shown
 AGC_CODES, AGC_NAMES = fc.AGC_CODES, fc.AGC_NAMES                                     # GT set P2 0..4; answer P3 0..6 (FTDX10 p.13)
+# Power meter (RM5 raw 0..255) -> watts, where the raw value is not a straight line. FT-710, from a real radio on a dummy load: the app's old straight line (raw/255 of 100 W) read 21 W at 10,
+# 38 at 20, 50 at 40, 58 at 50, 67 at 70, 71 at 80 and 79 at 100 W (read off the bar, so about +-3 W), i.e. raw about 53, 96, 127, 149, 170, 181 and 202 at those powers.
+PO_CURVES = {"ft710": [(0, 0.0), (53, 10.0), (96, 20.0), (127, 40.0), (149, 50.0), (170, 70.0), (181, 80.0), (202, 100.0)]}
+
+
+def po_watts(curve: list, raw: int, top: int) -> int:
+    """Watts for a raw power value on a measured curve (straight lines between the points, nothing above the radio's top power)."""
+    if raw <= curve[0][0]:
+        return 0
+    for (r0, w0), (r1, w1) in zip(curve, curve[1:]):
+        if raw <= r1:
+            return int(round(w0 + (w1 - w0) * (raw - r0) / (r1 - r0)))
+    return int(top)
+
+
 ATT_CHOICES = ["OFF", "6 dB", "12 dB", "18 dB"]                                         # RA P2 0..3 (FTDX10 p.19)
 
 # SH width tables (Table 3), code -> Hz. Code 00 is the radio's default and is not listed.
@@ -174,8 +189,21 @@ class HfProto:
     # ------------------------------------------------------------------ building commands
     @property
     def sv_swaps(self) -> bool:
-        """False where SV; does not swap the two VFOs. BENCH-FOUND on a real FTDX10: SV; only switches the VFO the dial operates (VS0 / VS1) and leaves FA and FB as they are."""
-        return self.m.key != "ftdx10"
+        """False where SV; does not swap the two VFOs. BENCH-FOUND on a real FTDX10 and a real FT-710: SV; only switches the VFO the dial operates (VS0 / VS1) and leaves FA and FB as they are."""
+        return self.m.key not in ("ftdx10", "ft710")
+
+    def clar_cmds(self, name: str, value, state: dict) -> list[str]:
+        """FT-710 (CF): the commands that set RIT / XIT / the clarifier offset of the operated VFO. CF000 carries both flags, so the other one is kept from the state;
+        an offset with no clarifier on switches RX CLAR on, like the other radios do."""
+        rx, tx = bool(state.get("rit")), bool(state.get("xit"))
+        if name == "rit":
+            return [f"CF000{int(bool(value))}{int(tx)}000;"]
+        if name == "xit":
+            return [f"CF000{int(rx)}{int(bool(value))}000;"]
+        cmds = [f"CF001{'+' if value >= 0 else '-'}{abs(int(value)):04d};"]
+        if value and not (rx or tx):
+            cmds.insert(0, "CF00010000;")
+        return cmds
 
     def freq_set(self, hz: int, vfo: str = "A") -> str:
         if not 30_000 <= hz <= 75_000_000:
@@ -256,6 +284,8 @@ class HfProto:
             out.append(self.SPLIT_READ)
         if caps.has("vfo_select"):
             out.append("VS;")
+        if caps.has("rit") and not self.m.has_rt:
+            out += ["CF000;", "CF001;"]
         if caps.has("dual_receiver"):
             out += ["FR;", "FT;", "VS;", "AG1;"]
         if "squelch" in caps.data.get("levels", {}):
@@ -270,6 +300,8 @@ class HfProto:
             out.append(self.SPLIT_READ)
         if caps.has("vfo_select"):
             out.append("VS;")
+        if caps.has("rit") and not self.m.has_rt:
+            out += ["CF000;", "CF001;"]
         if caps.has("dual_receiver"):
             out += ["FR;", "FT;", "VS;"]
         return out
@@ -294,6 +326,8 @@ class HfProto:
             out.append(self.SPLIT_READ)
         if caps.has("vfo_select"):
             out.append("VS;")
+        if caps.has("rit") and not self.m.has_rt:
+            out += ["CF000;", "CF001;"]
         return out + ["MD0;"]
 
     # ------------------------------------------------------------------ controls: name -> (read, encode(value) -> [commands])
@@ -339,6 +373,8 @@ class HfProto:
             enc["audio_in_level"] = ("EX010113;", lambda v: [f"EX{g}{v:03d};" for g in ("010113", "010214", "010313")])     # SSB / AM / FM RPORT GAIN
             enc["rear_select"] = ("EX010112;", lambda v: [f"EX{g}{1 if v == 'USB' else 0};" for g in ("010112", "010213", "010312", "010414")])   # REAR SELECT: SSB / AM / FM / DATA
             enc.update({f"{k}_sub": v for k, v in self._rx_encoders("1").items()})                                           # the same controls for the SUB receiver
+        if not m.has_rt:
+            enc.update({"rit": ("CF000;", lambda v: []), "xit": ("CF000;", lambda v: []), "clarifier_hz": ("CF001;", lambda v: [])})      # written by clar_cmds (the other flag is needed)
         if m.has_rt:
             enc.update({
                 "rit": ("RT;", lambda v: [f"RT{_b(v)};"]),
@@ -363,6 +399,12 @@ class HfProto:
             if len(p) != 2 or p[1] not in HF_MODES:
                 raise FrameError("bad MD")
             return {"mode": HF_MODES[p[1]]} if p[0] == "0" else {}              # P1 1 = SUB band (FTDX101): not used
+        if cmd == "CF":                                                            # FT-710 CLAR SETTING, BENCH-FOUND: CF000 -> CF000 RX TX 000 (flags), CF001 -> CF001 +/-nnnn (offset); both of the operated VFO
+            if len(p) == 8 and p[:3] == "000" and p[3] in "01" and p[4] in "01":
+                return {"rit": p[3] == "1", "xit": p[4] == "1"}
+            if len(p) == 8 and p[:3] == "001" and p[3] in "+-" and p[4:].isdigit():
+                return {"clarifier_hz": _int(p[4:]) * (-1 if p[3] == "-" else 1)}
+            return {}
         if cmd == "TX":
             if p not in ("0", "1", "2"):
                 raise FrameError("bad TX")
@@ -378,8 +420,10 @@ class HfProto:
             if p[12] not in "+-":
                 raise FrameError("bad IF clarifier sign")
             offset = _int(p[13:17]) * (-1 if p[12] == "-" else 1)
-            return {"frequency": _int(p[3:12]), "mode": HF_MODES[p[19]], "rit": p[17] == "1", "xit": p[18] == "1",
-                    "clarifier_hz": offset, "vfo_memory": {"0": "vfo", "1": "memory"}.get(p[20], "other"), "memory_channel": _int(p[:3])}
+            out = {"frequency": _int(p[3:12]), "mode": HF_MODES[p[19]], "vfo_memory": {"0": "vfo", "1": "memory"}.get(p[20], "other"), "memory_channel": _int(p[:3])}
+            if self.m.has_rt:                                                      # the FT-710 reports the clarifier of the operated VFO through CF, not through IF (which is always VFO A)
+                out.update(rit=p[17] == "1", xit=p[18] == "1", clarifier_hz=offset)
+            return out
         if cmd in ("AG", "RG", "SM"):
             if len(p) != 4:
                 raise FrameError(f"{cmd} needs P1 + 3 digits")
@@ -402,7 +446,12 @@ class HfProto:
             if len(p) != 7:
                 raise FrameError("RM needs P1 + 3 + 3 digits")
             name = HF_RM_NAMES.get(p[0])
-            return {name: _int(p[1:4])} if name else {}
+            if not name:
+                return {}
+            out = {name: _int(p[1:4])}
+            if name == "po_raw" and self.m.key in PO_CURVES:                       # a radio whose power meter is not a straight line reports watts
+                out["rf_power_out"] = po_watts(PO_CURVES[self.m.key], out[name], self.m.power_max)
+            return out
         if cmd == "ST":
             if p not in ("0", "1", "2"):
                 raise FrameError("bad ST")
@@ -414,7 +463,7 @@ class HfProto:
         if cmd == "VS":
             if p not in ("0", "1"):
                 raise FrameError("bad VS")
-            if self.model == "ftdx10":                                              # one receiver, two VFOs: VS tells which one the dial operates
+            if self.model in ("ftdx10", "ft710"):                                    # one receiver, two VFOs: VS tells which one the dial operates
                 return {"active_vfo": "a" if p == "0" else "b"}
             return {"active_receiver": "main" if p == "0" else "sub"}
         if cmd == "FT":

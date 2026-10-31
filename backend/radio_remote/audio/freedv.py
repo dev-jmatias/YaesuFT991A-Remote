@@ -10,6 +10,8 @@ import logging
 import threading
 from collections import deque
 
+import math
+
 import numpy as np
 
 from .freedv_tune import PARAMS, Afc, FreqShifter, Spectrum
@@ -142,13 +144,15 @@ class RxChain:
         if self.fd.sync == 1:                                                   # the mean SNR of this over: summed while locked, started afresh each time the modem locks
             if not self.prev_sync:
                 self.over_snr, self.over_n = 0.0, 0
-            self.over_snr, self.over_n = self.over_snr + float(self.fd.snr), self.over_n + 1
+            if math.isfinite(float(self.fd.snr)):                               # a modem that says "not a number" for a moment must not spoil the mean of the whole over
+                self.over_snr, self.over_n = self.over_snr + float(self.fd.snr), self.over_n + 1
         self.prev_sync = self.fd.sync
         if hasattr(self.fd, "take_callsign"):
             call = self.fd.take_callsign()
             if call:
                 self.heard, self.heard_seq = call, self.heard_seq + 1
-                self.heard_snr = round(self.over_snr / self.over_n, 1) if self.over_n else round(float(self.fd.snr), 1)
+                now = float(self.fd.snr)
+                self.heard_snr = round(self.over_snr / self.over_n, 1) if self.over_n else (round(now, 1) if math.isfinite(now) else None)
         if len(speech):
             self._rest += _to_i16(self.up.process(speech.astype(np.float64))).tobytes()
             while len(self._rest) >= FRAME_BYTES:

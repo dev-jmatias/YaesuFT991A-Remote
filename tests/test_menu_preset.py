@@ -90,5 +90,7 @@ def test_ftdx10_has_its_own_alc_full_scale(tmp_path):
     assert config.load(p)["ui"]["meter_alc_full"] == 48
     p.write_text('[radio]\nmodel = "ftdx10"\n[ui]\nmeter_alc_full = 100\n')
     assert config.load(p)["ui"]["meter_alc_full"] == 100
+    p.write_text('[radio]\nmodel = "ft710"\n')
+    assert config.load(p)["ui"]["meter_alc_full"] == 240           # real FT-710: voice into the radio's mic read raw ALC 110-130 with its own bar at the middle
     p.write_text('[radio]\nmodel = "ft991a"\n')
     assert config.load(p)["ui"]["meter_alc_full"] == 160

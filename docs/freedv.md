@@ -184,7 +184,17 @@ Radio Remote can join it. **It is off by default.**
   radio to that station (sideband, frequency and FreeDV mode) and switches FreeDV on. Stations in a mode this program cannot decode (for example the old 700D) have no Tune button.
 * **Limits:** with RADE V1 your callsign is also sent inside the signal (see *Your callsign in the transmission* above); say it by voice as usual anyway. While you are announced, every station whose callsign you read from the end of an over is reported to the site (their callsign, the mode and the SNR you received them at, the average over that over), so a contact on qso.freedv.org carries the SNR you heard them at. The site's protocol was taken from open-source clients, not from official documentation, so if the site changes,
   the link simply shows "cannot reach FreeDV Reporter" and everything else keeps working.
-* The settings are in the configuration under `[reporter]` (`enabled`, `announce`, `watch`, `callsign`, `grid_square`, `message`).
+* **Why a contact may carry no SNR.** A report is sent only when a **callsign is read from the end of an over** (RADE V1), which needs a reasonably strong signal (reliable from about 12 dB SNR in 3 kHz) and the other station sending its callsign; RADE V2 stations and weak overs give no report. You must also be announced (*Announce* on, a callsign and a grid square set) and connected. The line under the FreeDV status now says it: **Last heard: CALL, SNR +6.0 dB (time) · reported to FreeDV Reporter**, or **· not reported:** and the reason; the Pi's log has the same (`FreeDV Reporter: reported ...` / `... not reported: ...`). These reports go to the FreeDV Reporter site; PSK Reporter has its own switch (see *PSK Reporter* below).
+* The settings are in the configuration under `[reporter]` (`enabled`, `announce`, `watch`, `callsign`, `grid_square`, `message`, `psk`).
+
+### PSK Reporter
+
+Tick **Also send the stations I hear to PSK Reporter** (FreeDV tab > FreeDV Reporter settings, administrators). Every station whose callsign you read from the end of an over (RADE V1) is then sent to [pskreporter.info](https://pskreporter.info) as a spot: its callsign, the dial frequency, the SNR you received it at (the average over that over), the mode *FREEDV*, and your own callsign and grid square as the receiver. It needs the **callsign and grid square** of the settings above, and it works even if the FreeDV Reporter link is off. It is **off by default**, and a spot makes your callsign and locator public on that site.
+
+* The site's rules are kept: a station is reported **at most once an hour** (again at once if its frequency moved by more than 2 kHz), the spots go out in **one batch about every five minutes** (sooner only when 80 are waiting), from one UDP socket, and nothing is sent when nothing was heard.
+* The line under the switch shows how many spots were sent, when the last one went, how many wait for the next batch, and the last problem (for example no network). The Pi's log has a line for every batch (`PSK Reporter: sent ...`).
+* Only RADE V1 overs can be spotted, for the same reason as the FreeDV Reporter reports: the callsign comes from the end of the over, so a station that is too weak, or on RADE V2, is not reported. FT8 and the other modes are not sent.
+* It was written from the site's published description of the protocol (UDP port 4739, a simplified IPFIX); the frequency is the radio's dial frequency, not the exact frequency of the signal.
 
 ## The channels
 

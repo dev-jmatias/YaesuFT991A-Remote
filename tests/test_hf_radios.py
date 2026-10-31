@@ -26,10 +26,10 @@ def test_profile_loads_and_is_marked_experimental_unless_tested(model):
     assert pub["experimental"] is (model == "ft710") and pub["mock"] is False        # the FTDX101D and the FTDX10 were tested on real radios and the MP has the D's commands: no banner
     assert pub["model"]["id"] == model
     assert "tuner_tune" not in {c["name"] for c in pub["controls"]}
-    assert pub["features"]["tuner_tune"] is (model.startswith("ftdx101") or model == "ftdx10")      # TX-keying: the FTDX101 D / MP (same commands) and the FTDX10, each enabled at its operator's request
+    assert pub["features"]["tuner_tune"] is True      # TX-keying: the FTDX101 D / MP (same commands), the FTDX10 and the FT-710, each enabled at its operator's request
     names = {c["name"] for c in pub["controls"]}
     assert {"agc", "att_level", "mic_select", "nr", "nb", "notch", "contour", "if_shift", "width"} <= names
-    assert ("processor" in names) == (model.startswith("ftdx101") or model == "ftdx10")      # bench-verified on the FTDX101D (the MP uses the same commands) and the FTDX10
+    assert ("processor" in names) == (model.startswith("ftdx101") or model in ("ftdx10", "ft710"))      # bench-verified on the FTDX101D (the MP uses the same commands), the FTDX10 and the FT-710
     assert "apf" not in names and "dgid" not in names                                # unverified / hidden
     assert pub["bands"] == ["160m", "80m", "60m", "40m", "30m", "20m", "17m", "15m", "12m", "10m", "6m"]
     assert pub["features"]["vhf"] is False and pub["features"]["uhf"] is False
@@ -57,7 +57,7 @@ def test_dual_receiver_radios_vfo_b_and_split():
     f = Capabilities.load("ftdx10").public()["features"]
     assert f["vfo_b"] and f["split"] and not f["quick_split"]                       # FTDX10: quick split is not offered (its owner does not need it)
     f = Capabilities.load("ft710").public()["features"]
-    assert f["vfo_b"] and f["split"] and not f["quick_split"] and not f["rit"]        # no QS / RT / RU / RD / RC in the FT-710 manual
+    assert f["vfo_b"] and f["split"] and not f["quick_split"] and f["rit"] and f["xit"] and f["vfo_select"]        # no QS / RT / RU / RD / RC in the FT-710 manual; its clarifier is CF
 
 
 def test_power_limits_per_model():
@@ -84,13 +84,17 @@ def test_encoders_match_the_manual(name, value, cmds):
         assert enc[name][1](value) == cmds, (m, name)
 
 
-def test_clarifier_exists_on_ftdx_radios_only():
+def test_clarifier_commands_per_radio():
     for m in ("ftdx10", "ftdx101d", "ftdx101mp"):
         e = proto_for(m).ENCODE
         assert e["rit"][1](True) == ["RT1;"] and e["xit"][1](True) == ["XT1;"]
         assert e["clarifier_hz"][1](150) == ["RC;", "RU0150;"] and e["clarifier_hz"][1](-9990) == ["RC;", "RD9990;"]
     e = proto_for("ft710").ENCODE
-    assert "rit" not in e and "xit" not in e and "clarifier_hz" not in e
+    assert e["rit"][0] == "CF000;" and e["clarifier_hz"][0] == "CF001;"                                      # the FT-710 has CF, not RT / XT / RC / RU / RD
+    p = proto_for("ft710")
+    assert p.clar_cmds("rit", True, {}) == ["CF00010000;"] and p.clar_cmds("xit", True, {"rit": True}) == ["CF00011000;"]
+    assert p.clar_cmds("clarifier_hz", -300, {"xit": True}) == ["CF001-0300;"] and p.clar_cmds("clarifier_hz", 150, {}) == ["CF00010000;", "CF001+0150;"]
+    assert p.decode("CF00010000;") == {"rit": True, "xit": False} and p.decode("CF001-0300;") == {"clarifier_hz": -300}
 
 
 def test_mic_source_menu_per_radio():
@@ -533,16 +537,21 @@ async def test_ftdx10_has_no_sub_receiver():
         await r.sim.stop()
 
 
-async def test_ft710_has_no_clarifier_commands_and_its_own_tune_codes():
+async def test_ft710_clarifier_uses_cf_and_its_own_tune_codes():
     r, d = await connect("ft710")
     try:
         with pytest.raises(RadioError):
-            await d.set_control("clarifier_hz", 100)
-        with pytest.raises(RadioError):
             await d.vfo_op("quick_split")
-        await asyncio.sleep(0.3)
-        assert not any(c[:2] in ("RT", "RU", "RD", "RC", "QS") for c in r.sim.log)
-        d.caps.data["features"]["tuner_tune"] = True                                 # what an operator would do after a dummy-load test
+        await d.set_control("rit", True)                                              # CF000: RX CLAR flag, the TX one kept
+        await wait_for(lambda: d.state.get("rit") is True)
+        await d.set_control("xit", True)
+        await wait_for(lambda: d.state.get("xit") is True and d.state.get("rit") is True)
+        await d.set_control("clarifier_hz", -300)
+        await wait_for(lambda: d.state.get("clarifier_hz") == -300)
+        await d.set_control("rit", False)
+        await wait_for(lambda: d.state.get("rit") is False and d.state.get("xit") is True)
+        assert "CF00011000" in r.sim.log and "CF001-0300" in r.sim.log and "CF00001000" in r.sim.log
+        assert not any(c[:2] in ("RT", "XT", "RU", "RD", "RC", "QS") for c in r.sim.log)
         await d.tune_start()
         await wait_for(lambda: r.sim.tuning)
         assert "AC003" in r.sim.log and "AC002" not in r.sim.log
@@ -594,3 +603,40 @@ async def test_ftdx101_squelch_main_and_sub():
         finally:
             await d.stop()
     assert "squelch" not in Capabilities.load("ftdx10").public()["levels"]                                  # only the radios whose manual was checked
+
+
+async def test_ft710_vfos_behave_like_the_ftdx10():
+    """BENCH-FOUND on a real FT-710: SV; only toggles the operated VFO (VS0 / VS1); FA / IF are VFO A, FB / OI are VFO B."""
+    r, d = await connect("ft710")
+    try:
+        await d.set_mode("USB"); await d.set_frequency(14_200_000); await d.set_frequency_b(7_100_000)
+        r.sim.mode_b = "LSB"
+        await wait_for(lambda: d.state.get("frequency_b") == 7_100_000 and d.state.get("active_vfo") == "a")
+        r.sim.vs = 1
+        await wait_for(lambda: d.state.get("active_vfo") == "b" and d.state.get("frequency") == 7_100_000 and d.state.get("frequency_b") == 14_200_000)
+        await d.vfo_op("swap")
+        await wait_for(lambda: r.sim.freq == 7_100_000 and r.sim.freq_b == 14_200_000 and r.sim.vs == 1)
+        assert "SV" not in r.sim.log
+    finally:
+        await d.stop()
+        await r.sim.stop()
+
+
+def test_ft710_power_meter_is_turned_into_watts_on_its_measured_curve():
+    p = proto_for("ft710")
+    watts = lambda raw: p.decode(f"RM5{raw:03d}000;")["rf_power_out"]
+    assert [watts(r) for r in (0, 53, 96, 127, 149, 202, 255)] == [0, 10, 20, 40, 50, 100, 100]
+    assert 20 < watts(110) < 40 and watts(60) > 10
+    assert "rf_power_out" not in proto_for("ftdx10").decode("RM5100000;")             # the FTDX10 bar is a straight line and matched the radio
+
+
+async def test_ft710_watts_go_back_to_zero_when_the_transmission_ends():
+    r, d = await connect("ft710")
+    try:
+        d._on_frame("RM5149000;")
+        assert d.state.get("rf_power_out") == 50
+        d._on_frame("TX0;")
+        assert d.state.get("rf_power_out") == 0 and d.state.get("po_raw") == 0
+    finally:
+        await d.stop()
+        await r.sim.stop()

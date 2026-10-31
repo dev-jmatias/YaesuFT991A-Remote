@@ -654,6 +654,47 @@ async def test_the_callsign_reaches_the_transmit_chain_now_and_in_every_new_one(
     assert FakeTx.made[-1].callsign == "M0DHT"
 
 
+def _rx_with_calls(calls):
+    class Core:
+        speech_rate, modem_rate, n_speech = 16000, 8000, 160
+        sync, snr = 0, 0.0
+
+        def rx(self, modem):
+            import numpy as np
+            return np.empty(0, dtype="<i2")
+
+        def take_callsign(self):
+            return calls.pop(0) if calls else ""
+
+        def close(self):
+            pass
+
+    rx = freedv.RxChain.__new__(freedv.RxChain)
+    rx.mode, rx.fd = "RADE", Core()
+    rx.dec, rx.up = freedv.Decimator(6, 3600.0), freedv.Interpolator(6, 3600.0)
+    from radio_remote.audio.freedv_tune import Afc, FreqShifter, Spectrum
+    rx.shifter, rx.afc, rx.spec = FreqShifter(8000), Afc("RADE"), Spectrum("RADE")
+    rx.spec_fresh, rx.heard, rx.heard_seq = False, "", 0
+    rx.heard_snr, rx.over_snr, rx.over_n, rx.prev_sync = None, 0.0, 0, 0
+    rx.fifo, rx._rest = freedv.deque(), b""
+    return rx
+
+
+def test_a_modem_that_says_not_a_number_does_not_spoil_the_snr_of_the_over():
+    rx = _rx_with_calls(["", "", "", "", "G4ABC"])
+    rx.fd.sync = 1
+    for snr in (6.0, float("nan"), 8.0, float("inf")):                               # the odd values are left out of the mean
+        rx.fd.snr = snr
+        rx._process(bytes(FRAME_BYTES))
+    rx._process(bytes(FRAME_BYTES))
+    assert rx.heard == "G4ABC" and rx.heard_snr == 7.0
+    never = _rx_with_calls(["", "G4ABC"])
+    never.fd.sync, never.fd.snr = 0, float("nan")                                     # never locked and nothing usable now: no SNR at all, but still no failure
+    never._process(bytes(FRAME_BYTES))
+    never._process(bytes(FRAME_BYTES))
+    assert never.heard == "G4ABC" and never.heard_snr is None
+
+
 def test_a_received_callsign_is_kept_by_the_receive_chain_and_a_chain_without_text_is_fine():
     class Core:
         speech_rate, modem_rate, n_speech = 16000, 8000, 160

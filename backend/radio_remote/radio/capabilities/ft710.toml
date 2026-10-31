@@ -34,18 +34,19 @@ agc = true                            # GT: OFF / FAST / MID / SLOW / AUTO
 ipo = true                            # PA
 att = false
 att_levels = true                     # RA: OFF / 6 / 12 / 18 dB
-rit = "unverified"
-xit = "unverified"
-processor = "unverified"              # PR/PL: the manual says PR 1 = OFF / 2 = ON, which was wrong on the FT-991A: verify before enabling
+rit = true                           # CF000 (RX CLAR / TX CLAR flags) and CF001 (offset): bench-verified on a real FT-710 (RT/XT/RC/RU/RD answer ?;)
+xit = true
+processor = true                       # PR0 (0 off / 1 on) and PL (3 digits, level) bench-verified on a real FT-710: PR00 off, PR01 on, PL001 at level 1
 monitor = true                        # ML
 tuner = true                          # AC00x tuner on/off (does not transmit)
-tuner_tune = "unverified"             # KEYS the transmitter: enable only after a dummy-load test (p.4)
+tuner_tune = true                     # AC003 starts, AC000 stops the tuner (FT-710 p.4); KEYS the transmitter: enabled at the operator's request, not yet tried on a dummy load
 mic_select = true                     # EX SSB mod source menu
 dgid = false
 memories = "unverified"               # MC / MT exist in the manual; not implemented for this radio yet
 split = true                          # ST
-quick_split = "unverified"                    # QS
+quick_split = false                  # no QS in the FT-710 manual                    # QS
 vfo_b = true                          # FB / OI / AB / BA / SV
+vfo_select = true                     # VS0 / VS1 (the VFO the dial operates), bench-verified on a real FT-710: SV; only toggles it, like the FTDX10
 
 [frequency]
 ranges = [[30000, 75000000]]          # FA / FB (manual)
@@ -72,3 +73,9 @@ label = "TX Power"
 
 [bands]
 list = ["160m", "80m", "60m", "40m", "30m", "20m", "17m", "15m", "12m", "10m", "6m"]
+
+[labels]
+auto_notch = "DNF"
+notch = "NOTCH"
+rit = "CLAR RX"
+xit = "CLAR TX"

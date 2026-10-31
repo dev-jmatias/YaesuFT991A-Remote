@@ -108,11 +108,26 @@ class FreeDVReporter:
             self.transmitting = on
             self._emit("tx_report", {"mode": self.mode, "transmitting": bool(on)})
 
-    def report_heard(self, callsign: str, snr) -> None:
-        """A reception report: the station whose callsign came in the end-of-over frame and the SNR (dB, whole number) we received it at. Only sent while this station is announced."""
-        if not callsign or not isinstance(snr, (int, float)) or isinstance(snr, bool):
-            return
+    def report_heard(self, callsign: str, snr) -> str:
+        """A reception report: the station whose callsign came in the end-of-over frame and the SNR (dB, whole number) we received it at. Only sent while this station is announced.
+        Returns "" when it was sent, otherwise the reason it was not (shown beside "Last heard" and logged, so an operator can see why a contact carries no SNR)."""
+        if not callsign or not isinstance(snr, (int, float)) or isinstance(snr, bool) or snr != snr or snr in (float("inf"), float("-inf")):
+            return "no callsign or SNR to report"
+        c = self.settings()
+        if not c["enabled"]:
+            why = "FreeDV Reporter is switched off in the settings"
+        elif not (c["announce"] and c["callsign"] and c["grid_square"]):
+            why = "this station is not announced (needs Announce, a callsign and a grid square)"
+        elif not self.connected or self._ws is None or self.role not in ("report", "report_wo"):
+            why = "not connected to the FreeDV Reporter site"
+        else:
+            why = ""
+        if why:
+            log.info("FreeDV Reporter: %s (SNR %s dB) not reported: %s", callsign.upper(), int(round(snr)), why)
+            return why
         self._emit("rx_report", {"callsign": callsign.upper()[:20], "mode": self.mode, "snr": int(round(snr))})
+        log.info("FreeDV Reporter: reported %s, SNR %s dB, %s, %s Hz", callsign.upper(), int(round(snr)), self.mode, self.freq)
+        return ""
 
     def set_message(self) -> None:
         self._emit("message_update", {"message": self.settings()["message"]})

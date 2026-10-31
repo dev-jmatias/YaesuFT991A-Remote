@@ -23,8 +23,8 @@ def parse_alsa_list(text: str) -> list[dict]:
         out.append({
             "card": int(idx), "id": cid, "name": name, "device": int(dev), "dev_name": dev_name,
             "hw": f"hw:CARD={cid},DEV={dev}", "plughw": f"plughw:CARD={cid},DEV={dev}",
-            # The radios present a generic "USB Audio CODEC"; this is a hint only, never proof.
-            "likely_radio": any(k in (name + " " + dev_name).lower() for k in ("codec", "yaesu")),
+            # The radios present a generic "USB Audio CODEC" (the FT-710 a C-Media "USB Audio Device"); this is a hint only, never proof: two matches are refused.
+            "likely_radio": any(k in (name + " " + dev_name).lower() for k in ("codec", "yaesu", "usb audio")),
         })
     return out
 

@@ -91,7 +91,7 @@ class SimulatedYaesuHf(SimulatedFT991A):
         if name == "ID" and not p:
             self.log.append(c)
             return await self._send(f"ID{self.m.radio_id};")
-        if self.model == "ftdx10":                                       # BENCH-FOUND on the real radio: SV; only switches the operating VFO (VS0 / VS1), it does not swap A and B
+        if self.model in ("ftdx10", "ft710"):                           # BENCH-FOUND on the real radios: SV; only switches the operating VFO (VS0 / VS1), it does not swap A and B
             if name == "SV" and not p:
                 self.log.append(c)
                 self.vs ^= 1
@@ -158,6 +158,19 @@ class SimulatedYaesuHf(SimulatedFT991A):
             if p in ("2", "3"):
                 self.ft_rx = int(p) - 2
                 return
+            return await self._send("?;")
+        if name == "CF" and self.model == "ft710":                       # BENCH-FOUND: CF000 flags (RX, TX), CF001 offset; a write is echoed
+            self.log.append(c)
+            if p == "000":
+                return await self._send(f"CF000{self.reg.get('RT', '0')}{self.reg.get('XT', '0')}000;")
+            if p == "001":
+                return await self._send(f"CF001{'-' if self.clar < 0 else '+'}{abs(self.clar):04d};")
+            if len(p) == 8 and p[:3] == "000" and p[3] in "01" and p[4] in "01":
+                self.reg["RT"], self.reg["XT"] = p[3], p[4]
+                return await self._send(f"CF{p};")
+            if len(p) == 8 and p[:3] == "001" and p[3] in "+-" and p[4:].isdigit():
+                self.clar = int(p[4:]) * (-1 if p[3] == "-" else 1)
+                return await self._send(f"CF{p};")
             return await self._send("?;")
         if name == "FT" or (name == "QS" and self.model == "ft710") or (name in ("RT", "RU", "RD", "RC") and not self.m.has_rt):
             self.log.append(c)

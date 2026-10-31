@@ -211,7 +211,7 @@
    "name": "HCUT FREQ",
    "group": "Radio Setting: Mode SSB",
    "digits": 2,
-   "doc": "00: OFF     01: 700 Hz - 67: 4000 Hz (50 Hz steps)",
+   "doc": "00: OFF, 01: 700 Hz - 67: 4000 Hz (50 Hz steps)",
    "kind": "enum",
    "options": [
     {
@@ -1000,7 +1000,7 @@
    "name": "HCUT FREQ",
    "group": "Radio Setting: Mode AM",
    "digits": 2,
-   "doc": "00: OFF     01: 700 Hz - 67: 4000 Hz (50 Hz steps)",
+   "doc": "00: OFF, 01: 700 Hz - 67: 4000 Hz (50 Hz steps)",
    "kind": "enum",
    "options": [
     {
@@ -1661,7 +1661,7 @@
    "name": "HCUT FREQ",
    "group": "Radio Setting: Mode FM",
    "digits": 2,
-   "doc": "00: OFF     01: 700 Hz - 67: 4000 Hz (50 Hz steps)",
+   "doc": "00: OFF, 01: 700 Hz - 67: 4000 Hz (50 Hz steps)",
    "kind": "enum",
    "options": [
     {
@@ -2164,8 +2164,8 @@
    "num": "01-03-21",
    "name": "TONE FREQ",
    "group": "Radio Setting: Mode FM",
-   "digits": 2,
-   "doc": "00: 67.0 - 49: 254.1Hz",
+   "digits": 3,
+   "doc": "000: 67.0 - 049: 254.1 Hz",
    "kind": "enum",
    "options": [
     {
@@ -2579,7 +2579,7 @@
    "name": "HCUT FREQ",
    "group": "Radio Setting: Mode Psk/data",
    "digits": 2,
-   "doc": "00: OFF     01: 700 Hz - 67: 4000 Hz (50 Hz steps)",
+   "doc": "00: OFF, 01: 700 Hz - 67: 4000 Hz (50 Hz steps)",
    "kind": "enum",
    "options": [
     {
@@ -3375,7 +3375,7 @@
    "name": "HCUT FREQ",
    "group": "Radio Setting: Mode RTTY",
    "digits": 2,
-   "doc": "00: OFF     01: 700 Hz - 67: 4000 Hz (50 Hz steps)",
+   "doc": "00: OFF, 01: 700 Hz - 67: 4000 Hz (50 Hz steps)",
    "kind": "enum",
    "options": [
     {
@@ -4107,7 +4107,7 @@
    "name": "HCUT FREQ",
    "group": "CW Setting: Mode CW",
    "digits": 2,
-   "doc": "00: OFF     01: 700 Hz - 67: 4000 Hz (50 Hz steps)",
+   "doc": "00: OFF, 01: 700 Hz - 67: 4000 Hz (50 Hz steps)",
    "kind": "enum",
    "options": [
     {
@@ -8163,7 +8163,7 @@
    "name": "HCUT FREQ",
    "group": "Extension Setting: Preset1",
    "digits": 2,
-   "doc": "00: OFF     01:700Hz - 67:4000Hz (50 Hz steps)",
+   "doc": "00: OFF, 01: 700 Hz - 67: 4000 Hz (50 Hz steps)",
    "kind": "enum",
    "options": [
     {
@@ -8172,11 +8172,271 @@
     },
     {
      "v": 1,
-     "label": "700Hz -"
+     "label": "700 Hz"
+    },
+    {
+     "v": 2,
+     "label": "750 Hz"
+    },
+    {
+     "v": 3,
+     "label": "800 Hz"
+    },
+    {
+     "v": 4,
+     "label": "850 Hz"
+    },
+    {
+     "v": 5,
+     "label": "900 Hz"
+    },
+    {
+     "v": 6,
+     "label": "950 Hz"
+    },
+    {
+     "v": 7,
+     "label": "1000 Hz"
+    },
+    {
+     "v": 8,
+     "label": "1050 Hz"
+    },
+    {
+     "v": 9,
+     "label": "1100 Hz"
+    },
+    {
+     "v": 10,
+     "label": "1150 Hz"
+    },
+    {
+     "v": 11,
+     "label": "1200 Hz"
+    },
+    {
+     "v": 12,
+     "label": "1250 Hz"
+    },
+    {
+     "v": 13,
+     "label": "1300 Hz"
+    },
+    {
+     "v": 14,
+     "label": "1350 Hz"
+    },
+    {
+     "v": 15,
+     "label": "1400 Hz"
+    },
+    {
+     "v": 16,
+     "label": "1450 Hz"
+    },
+    {
+     "v": 17,
+     "label": "1500 Hz"
+    },
+    {
+     "v": 18,
+     "label": "1550 Hz"
+    },
+    {
+     "v": 19,
+     "label": "1600 Hz"
+    },
+    {
+     "v": 20,
+     "label": "1650 Hz"
+    },
+    {
+     "v": 21,
+     "label": "1700 Hz"
+    },
+    {
+     "v": 22,
+     "label": "1750 Hz"
+    },
+    {
+     "v": 23,
+     "label": "1800 Hz"
+    },
+    {
+     "v": 24,
+     "label": "1850 Hz"
+    },
+    {
+     "v": 25,
+     "label": "1900 Hz"
+    },
+    {
+     "v": 26,
+     "label": "1950 Hz"
+    },
+    {
+     "v": 27,
+     "label": "2000 Hz"
+    },
+    {
+     "v": 28,
+     "label": "2050 Hz"
+    },
+    {
+     "v": 29,
+     "label": "2100 Hz"
+    },
+    {
+     "v": 30,
+     "label": "2150 Hz"
+    },
+    {
+     "v": 31,
+     "label": "2200 Hz"
+    },
+    {
+     "v": 32,
+     "label": "2250 Hz"
+    },
+    {
+     "v": 33,
+     "label": "2300 Hz"
+    },
+    {
+     "v": 34,
+     "label": "2350 Hz"
+    },
+    {
+     "v": 35,
+     "label": "2400 Hz"
+    },
+    {
+     "v": 36,
+     "label": "2450 Hz"
+    },
+    {
+     "v": 37,
+     "label": "2500 Hz"
+    },
+    {
+     "v": 38,
+     "label": "2550 Hz"
+    },
+    {
+     "v": 39,
+     "label": "2600 Hz"
+    },
+    {
+     "v": 40,
+     "label": "2650 Hz"
+    },
+    {
+     "v": 41,
+     "label": "2700 Hz"
+    },
+    {
+     "v": 42,
+     "label": "2750 Hz"
+    },
+    {
+     "v": 43,
+     "label": "2800 Hz"
+    },
+    {
+     "v": 44,
+     "label": "2850 Hz"
+    },
+    {
+     "v": 45,
+     "label": "2900 Hz"
+    },
+    {
+     "v": 46,
+     "label": "2950 Hz"
+    },
+    {
+     "v": 47,
+     "label": "3000 Hz"
+    },
+    {
+     "v": 48,
+     "label": "3050 Hz"
+    },
+    {
+     "v": 49,
+     "label": "3100 Hz"
+    },
+    {
+     "v": 50,
+     "label": "3150 Hz"
+    },
+    {
+     "v": 51,
+     "label": "3200 Hz"
+    },
+    {
+     "v": 52,
+     "label": "3250 Hz"
+    },
+    {
+     "v": 53,
+     "label": "3300 Hz"
+    },
+    {
+     "v": 54,
+     "label": "3350 Hz"
+    },
+    {
+     "v": 55,
+     "label": "3400 Hz"
+    },
+    {
+     "v": 56,
+     "label": "3450 Hz"
+    },
+    {
+     "v": 57,
+     "label": "3500 Hz"
+    },
+    {
+     "v": 58,
+     "label": "3550 Hz"
+    },
+    {
+     "v": 59,
+     "label": "3600 Hz"
+    },
+    {
+     "v": 60,
+     "label": "3650 Hz"
+    },
+    {
+     "v": 61,
+     "label": "3700 Hz"
+    },
+    {
+     "v": 62,
+     "label": "3750 Hz"
+    },
+    {
+     "v": 63,
+     "label": "3800 Hz"
+    },
+    {
+     "v": 64,
+     "label": "3850 Hz"
+    },
+    {
+     "v": 65,
+     "label": "3900 Hz"
+    },
+    {
+     "v": 66,
+     "label": "3950 Hz"
     },
     {
      "v": 67,
-     "label": "4000Hz (50 Hz steps)"
+     "label": "4000 Hz"
     }
    ]
   },
@@ -8187,7 +8447,7 @@
    "name": "HCUT FREQ",
    "group": "Extension Setting: Preset2",
    "digits": 2,
-   "doc": "00: OFF     01:700Hz - 67:4000Hz (50 Hz steps)",
+   "doc": "00: OFF, 01: 700 Hz - 67: 4000 Hz (50 Hz steps)",
    "kind": "enum",
    "options": [
     {
@@ -8196,11 +8456,271 @@
     },
     {
      "v": 1,
-     "label": "700Hz -"
+     "label": "700 Hz"
+    },
+    {
+     "v": 2,
+     "label": "750 Hz"
+    },
+    {
+     "v": 3,
+     "label": "800 Hz"
+    },
+    {
+     "v": 4,
+     "label": "850 Hz"
+    },
+    {
+     "v": 5,
+     "label": "900 Hz"
+    },
+    {
+     "v": 6,
+     "label": "950 Hz"
+    },
+    {
+     "v": 7,
+     "label": "1000 Hz"
+    },
+    {
+     "v": 8,
+     "label": "1050 Hz"
+    },
+    {
+     "v": 9,
+     "label": "1100 Hz"
+    },
+    {
+     "v": 10,
+     "label": "1150 Hz"
+    },
+    {
+     "v": 11,
+     "label": "1200 Hz"
+    },
+    {
+     "v": 12,
+     "label": "1250 Hz"
+    },
+    {
+     "v": 13,
+     "label": "1300 Hz"
+    },
+    {
+     "v": 14,
+     "label": "1350 Hz"
+    },
+    {
+     "v": 15,
+     "label": "1400 Hz"
+    },
+    {
+     "v": 16,
+     "label": "1450 Hz"
+    },
+    {
+     "v": 17,
+     "label": "1500 Hz"
+    },
+    {
+     "v": 18,
+     "label": "1550 Hz"
+    },
+    {
+     "v": 19,
+     "label": "1600 Hz"
+    },
+    {
+     "v": 20,
+     "label": "1650 Hz"
+    },
+    {
+     "v": 21,
+     "label": "1700 Hz"
+    },
+    {
+     "v": 22,
+     "label": "1750 Hz"
+    },
+    {
+     "v": 23,
+     "label": "1800 Hz"
+    },
+    {
+     "v": 24,
+     "label": "1850 Hz"
+    },
+    {
+     "v": 25,
+     "label": "1900 Hz"
+    },
+    {
+     "v": 26,
+     "label": "1950 Hz"
+    },
+    {
+     "v": 27,
+     "label": "2000 Hz"
+    },
+    {
+     "v": 28,
+     "label": "2050 Hz"
+    },
+    {
+     "v": 29,
+     "label": "2100 Hz"
+    },
+    {
+     "v": 30,
+     "label": "2150 Hz"
+    },
+    {
+     "v": 31,
+     "label": "2200 Hz"
+    },
+    {
+     "v": 32,
+     "label": "2250 Hz"
+    },
+    {
+     "v": 33,
+     "label": "2300 Hz"
+    },
+    {
+     "v": 34,
+     "label": "2350 Hz"
+    },
+    {
+     "v": 35,
+     "label": "2400 Hz"
+    },
+    {
+     "v": 36,
+     "label": "2450 Hz"
+    },
+    {
+     "v": 37,
+     "label": "2500 Hz"
+    },
+    {
+     "v": 38,
+     "label": "2550 Hz"
+    },
+    {
+     "v": 39,
+     "label": "2600 Hz"
+    },
+    {
+     "v": 40,
+     "label": "2650 Hz"
+    },
+    {
+     "v": 41,
+     "label": "2700 Hz"
+    },
+    {
+     "v": 42,
+     "label": "2750 Hz"
+    },
+    {
+     "v": 43,
+     "label": "2800 Hz"
+    },
+    {
+     "v": 44,
+     "label": "2850 Hz"
+    },
+    {
+     "v": 45,
+     "label": "2900 Hz"
+    },
+    {
+     "v": 46,
+     "label": "2950 Hz"
+    },
+    {
+     "v": 47,
+     "label": "3000 Hz"
+    },
+    {
+     "v": 48,
+     "label": "3050 Hz"
+    },
+    {
+     "v": 49,
+     "label": "3100 Hz"
+    },
+    {
+     "v": 50,
+     "label": "3150 Hz"
+    },
+    {
+     "v": 51,
+     "label": "3200 Hz"
+    },
+    {
+     "v": 52,
+     "label": "3250 Hz"
+    },
+    {
+     "v": 53,
+     "label": "3300 Hz"
+    },
+    {
+     "v": 54,
+     "label": "3350 Hz"
+    },
+    {
+     "v": 55,
+     "label": "3400 Hz"
+    },
+    {
+     "v": 56,
+     "label": "3450 Hz"
+    },
+    {
+     "v": 57,
+     "label": "3500 Hz"
+    },
+    {
+     "v": 58,
+     "label": "3550 Hz"
+    },
+    {
+     "v": 59,
+     "label": "3600 Hz"
+    },
+    {
+     "v": 60,
+     "label": "3650 Hz"
+    },
+    {
+     "v": 61,
+     "label": "3700 Hz"
+    },
+    {
+     "v": 62,
+     "label": "3750 Hz"
+    },
+    {
+     "v": 63,
+     "label": "3800 Hz"
+    },
+    {
+     "v": 64,
+     "label": "3850 Hz"
+    },
+    {
+     "v": 65,
+     "label": "3900 Hz"
+    },
+    {
+     "v": 66,
+     "label": "3950 Hz"
     },
     {
      "v": 67,
-     "label": "4000Hz (50 Hz steps)"
+     "label": "4000 Hz"
     }
    ]
   },
@@ -8211,7 +8731,7 @@
    "name": "HCUT FREQ",
    "group": "Extension Setting: Preset3",
    "digits": 2,
-   "doc": "00: OFF     01:700Hz - 67:4000Hz (50 Hz steps)",
+   "doc": "00: OFF, 01: 700 Hz - 67: 4000 Hz (50 Hz steps)",
    "kind": "enum",
    "options": [
     {
@@ -8220,11 +8740,271 @@
     },
     {
      "v": 1,
-     "label": "700Hz -"
+     "label": "700 Hz"
+    },
+    {
+     "v": 2,
+     "label": "750 Hz"
+    },
+    {
+     "v": 3,
+     "label": "800 Hz"
+    },
+    {
+     "v": 4,
+     "label": "850 Hz"
+    },
+    {
+     "v": 5,
+     "label": "900 Hz"
+    },
+    {
+     "v": 6,
+     "label": "950 Hz"
+    },
+    {
+     "v": 7,
+     "label": "1000 Hz"
+    },
+    {
+     "v": 8,
+     "label": "1050 Hz"
+    },
+    {
+     "v": 9,
+     "label": "1100 Hz"
+    },
+    {
+     "v": 10,
+     "label": "1150 Hz"
+    },
+    {
+     "v": 11,
+     "label": "1200 Hz"
+    },
+    {
+     "v": 12,
+     "label": "1250 Hz"
+    },
+    {
+     "v": 13,
+     "label": "1300 Hz"
+    },
+    {
+     "v": 14,
+     "label": "1350 Hz"
+    },
+    {
+     "v": 15,
+     "label": "1400 Hz"
+    },
+    {
+     "v": 16,
+     "label": "1450 Hz"
+    },
+    {
+     "v": 17,
+     "label": "1500 Hz"
+    },
+    {
+     "v": 18,
+     "label": "1550 Hz"
+    },
+    {
+     "v": 19,
+     "label": "1600 Hz"
+    },
+    {
+     "v": 20,
+     "label": "1650 Hz"
+    },
+    {
+     "v": 21,
+     "label": "1700 Hz"
+    },
+    {
+     "v": 22,
+     "label": "1750 Hz"
+    },
+    {
+     "v": 23,
+     "label": "1800 Hz"
+    },
+    {
+     "v": 24,
+     "label": "1850 Hz"
+    },
+    {
+     "v": 25,
+     "label": "1900 Hz"
+    },
+    {
+     "v": 26,
+     "label": "1950 Hz"
+    },
+    {
+     "v": 27,
+     "label": "2000 Hz"
+    },
+    {
+     "v": 28,
+     "label": "2050 Hz"
+    },
+    {
+     "v": 29,
+     "label": "2100 Hz"
+    },
+    {
+     "v": 30,
+     "label": "2150 Hz"
+    },
+    {
+     "v": 31,
+     "label": "2200 Hz"
+    },
+    {
+     "v": 32,
+     "label": "2250 Hz"
+    },
+    {
+     "v": 33,
+     "label": "2300 Hz"
+    },
+    {
+     "v": 34,
+     "label": "2350 Hz"
+    },
+    {
+     "v": 35,
+     "label": "2400 Hz"
+    },
+    {
+     "v": 36,
+     "label": "2450 Hz"
+    },
+    {
+     "v": 37,
+     "label": "2500 Hz"
+    },
+    {
+     "v": 38,
+     "label": "2550 Hz"
+    },
+    {
+     "v": 39,
+     "label": "2600 Hz"
+    },
+    {
+     "v": 40,
+     "label": "2650 Hz"
+    },
+    {
+     "v": 41,
+     "label": "2700 Hz"
+    },
+    {
+     "v": 42,
+     "label": "2750 Hz"
+    },
+    {
+     "v": 43,
+     "label": "2800 Hz"
+    },
+    {
+     "v": 44,
+     "label": "2850 Hz"
+    },
+    {
+     "v": 45,
+     "label": "2900 Hz"
+    },
+    {
+     "v": 46,
+     "label": "2950 Hz"
+    },
+    {
+     "v": 47,
+     "label": "3000 Hz"
+    },
+    {
+     "v": 48,
+     "label": "3050 Hz"
+    },
+    {
+     "v": 49,
+     "label": "3100 Hz"
+    },
+    {
+     "v": 50,
+     "label": "3150 Hz"
+    },
+    {
+     "v": 51,
+     "label": "3200 Hz"
+    },
+    {
+     "v": 52,
+     "label": "3250 Hz"
+    },
+    {
+     "v": 53,
+     "label": "3300 Hz"
+    },
+    {
+     "v": 54,
+     "label": "3350 Hz"
+    },
+    {
+     "v": 55,
+     "label": "3400 Hz"
+    },
+    {
+     "v": 56,
+     "label": "3450 Hz"
+    },
+    {
+     "v": 57,
+     "label": "3500 Hz"
+    },
+    {
+     "v": 58,
+     "label": "3550 Hz"
+    },
+    {
+     "v": 59,
+     "label": "3600 Hz"
+    },
+    {
+     "v": 60,
+     "label": "3650 Hz"
+    },
+    {
+     "v": 61,
+     "label": "3700 Hz"
+    },
+    {
+     "v": 62,
+     "label": "3750 Hz"
+    },
+    {
+     "v": 63,
+     "label": "3800 Hz"
+    },
+    {
+     "v": 64,
+     "label": "3850 Hz"
+    },
+    {
+     "v": 65,
+     "label": "3900 Hz"
+    },
+    {
+     "v": 66,
+     "label": "3950 Hz"
     },
     {
      "v": 67,
-     "label": "4000Hz (50 Hz steps)"
+     "label": "4000 Hz"
     }
    ]
   },
@@ -8235,7 +9015,7 @@
    "name": "HCUT FREQ",
    "group": "Extension Setting: Preset4",
    "digits": 2,
-   "doc": "00: OFF     01:700Hz - 67:4000Hz (50 Hz steps)",
+   "doc": "00: OFF, 01: 700 Hz - 67: 4000 Hz (50 Hz steps)",
    "kind": "enum",
    "options": [
     {
@@ -8244,11 +9024,271 @@
     },
     {
      "v": 1,
-     "label": "700Hz -"
+     "label": "700 Hz"
+    },
+    {
+     "v": 2,
+     "label": "750 Hz"
+    },
+    {
+     "v": 3,
+     "label": "800 Hz"
+    },
+    {
+     "v": 4,
+     "label": "850 Hz"
+    },
+    {
+     "v": 5,
+     "label": "900 Hz"
+    },
+    {
+     "v": 6,
+     "label": "950 Hz"
+    },
+    {
+     "v": 7,
+     "label": "1000 Hz"
+    },
+    {
+     "v": 8,
+     "label": "1050 Hz"
+    },
+    {
+     "v": 9,
+     "label": "1100 Hz"
+    },
+    {
+     "v": 10,
+     "label": "1150 Hz"
+    },
+    {
+     "v": 11,
+     "label": "1200 Hz"
+    },
+    {
+     "v": 12,
+     "label": "1250 Hz"
+    },
+    {
+     "v": 13,
+     "label": "1300 Hz"
+    },
+    {
+     "v": 14,
+     "label": "1350 Hz"
+    },
+    {
+     "v": 15,
+     "label": "1400 Hz"
+    },
+    {
+     "v": 16,
+     "label": "1450 Hz"
+    },
+    {
+     "v": 17,
+     "label": "1500 Hz"
+    },
+    {
+     "v": 18,
+     "label": "1550 Hz"
+    },
+    {
+     "v": 19,
+     "label": "1600 Hz"
+    },
+    {
+     "v": 20,
+     "label": "1650 Hz"
+    },
+    {
+     "v": 21,
+     "label": "1700 Hz"
+    },
+    {
+     "v": 22,
+     "label": "1750 Hz"
+    },
+    {
+     "v": 23,
+     "label": "1800 Hz"
+    },
+    {
+     "v": 24,
+     "label": "1850 Hz"
+    },
+    {
+     "v": 25,
+     "label": "1900 Hz"
+    },
+    {
+     "v": 26,
+     "label": "1950 Hz"
+    },
+    {
+     "v": 27,
+     "label": "2000 Hz"
+    },
+    {
+     "v": 28,
+     "label": "2050 Hz"
+    },
+    {
+     "v": 29,
+     "label": "2100 Hz"
+    },
+    {
+     "v": 30,
+     "label": "2150 Hz"
+    },
+    {
+     "v": 31,
+     "label": "2200 Hz"
+    },
+    {
+     "v": 32,
+     "label": "2250 Hz"
+    },
+    {
+     "v": 33,
+     "label": "2300 Hz"
+    },
+    {
+     "v": 34,
+     "label": "2350 Hz"
+    },
+    {
+     "v": 35,
+     "label": "2400 Hz"
+    },
+    {
+     "v": 36,
+     "label": "2450 Hz"
+    },
+    {
+     "v": 37,
+     "label": "2500 Hz"
+    },
+    {
+     "v": 38,
+     "label": "2550 Hz"
+    },
+    {
+     "v": 39,
+     "label": "2600 Hz"
+    },
+    {
+     "v": 40,
+     "label": "2650 Hz"
+    },
+    {
+     "v": 41,
+     "label": "2700 Hz"
+    },
+    {
+     "v": 42,
+     "label": "2750 Hz"
+    },
+    {
+     "v": 43,
+     "label": "2800 Hz"
+    },
+    {
+     "v": 44,
+     "label": "2850 Hz"
+    },
+    {
+     "v": 45,
+     "label": "2900 Hz"
+    },
+    {
+     "v": 46,
+     "label": "2950 Hz"
+    },
+    {
+     "v": 47,
+     "label": "3000 Hz"
+    },
+    {
+     "v": 48,
+     "label": "3050 Hz"
+    },
+    {
+     "v": 49,
+     "label": "3100 Hz"
+    },
+    {
+     "v": 50,
+     "label": "3150 Hz"
+    },
+    {
+     "v": 51,
+     "label": "3200 Hz"
+    },
+    {
+     "v": 52,
+     "label": "3250 Hz"
+    },
+    {
+     "v": 53,
+     "label": "3300 Hz"
+    },
+    {
+     "v": 54,
+     "label": "3350 Hz"
+    },
+    {
+     "v": 55,
+     "label": "3400 Hz"
+    },
+    {
+     "v": 56,
+     "label": "3450 Hz"
+    },
+    {
+     "v": 57,
+     "label": "3500 Hz"
+    },
+    {
+     "v": 58,
+     "label": "3550 Hz"
+    },
+    {
+     "v": 59,
+     "label": "3600 Hz"
+    },
+    {
+     "v": 60,
+     "label": "3650 Hz"
+    },
+    {
+     "v": 61,
+     "label": "3700 Hz"
+    },
+    {
+     "v": 62,
+     "label": "3750 Hz"
+    },
+    {
+     "v": 63,
+     "label": "3800 Hz"
+    },
+    {
+     "v": 64,
+     "label": "3850 Hz"
+    },
+    {
+     "v": 65,
+     "label": "3900 Hz"
+    },
+    {
+     "v": 66,
+     "label": "3950 Hz"
     },
     {
      "v": 67,
-     "label": "4000Hz (50 Hz steps)"
+     "label": "4000 Hz"
     }
    ]
   },
@@ -8259,7 +9299,7 @@
    "name": "HCUT FREQ",
    "group": "Extension Setting: Preset5",
    "digits": 2,
-   "doc": "00: OFF     01:700Hz - 67:4000Hz (50 Hz steps)",
+   "doc": "00: OFF, 01: 700 Hz - 67: 4000 Hz (50 Hz steps)",
    "kind": "enum",
    "options": [
     {
@@ -8268,11 +9308,271 @@
     },
     {
      "v": 1,
-     "label": "700Hz -"
+     "label": "700 Hz"
+    },
+    {
+     "v": 2,
+     "label": "750 Hz"
+    },
+    {
+     "v": 3,
+     "label": "800 Hz"
+    },
+    {
+     "v": 4,
+     "label": "850 Hz"
+    },
+    {
+     "v": 5,
+     "label": "900 Hz"
+    },
+    {
+     "v": 6,
+     "label": "950 Hz"
+    },
+    {
+     "v": 7,
+     "label": "1000 Hz"
+    },
+    {
+     "v": 8,
+     "label": "1050 Hz"
+    },
+    {
+     "v": 9,
+     "label": "1100 Hz"
+    },
+    {
+     "v": 10,
+     "label": "1150 Hz"
+    },
+    {
+     "v": 11,
+     "label": "1200 Hz"
+    },
+    {
+     "v": 12,
+     "label": "1250 Hz"
+    },
+    {
+     "v": 13,
+     "label": "1300 Hz"
+    },
+    {
+     "v": 14,
+     "label": "1350 Hz"
+    },
+    {
+     "v": 15,
+     "label": "1400 Hz"
+    },
+    {
+     "v": 16,
+     "label": "1450 Hz"
+    },
+    {
+     "v": 17,
+     "label": "1500 Hz"
+    },
+    {
+     "v": 18,
+     "label": "1550 Hz"
+    },
+    {
+     "v": 19,
+     "label": "1600 Hz"
+    },
+    {
+     "v": 20,
+     "label": "1650 Hz"
+    },
+    {
+     "v": 21,
+     "label": "1700 Hz"
+    },
+    {
+     "v": 22,
+     "label": "1750 Hz"
+    },
+    {
+     "v": 23,
+     "label": "1800 Hz"
+    },
+    {
+     "v": 24,
+     "label": "1850 Hz"
+    },
+    {
+     "v": 25,
+     "label": "1900 Hz"
+    },
+    {
+     "v": 26,
+     "label": "1950 Hz"
+    },
+    {
+     "v": 27,
+     "label": "2000 Hz"
+    },
+    {
+     "v": 28,
+     "label": "2050 Hz"
+    },
+    {
+     "v": 29,
+     "label": "2100 Hz"
+    },
+    {
+     "v": 30,
+     "label": "2150 Hz"
+    },
+    {
+     "v": 31,
+     "label": "2200 Hz"
+    },
+    {
+     "v": 32,
+     "label": "2250 Hz"
+    },
+    {
+     "v": 33,
+     "label": "2300 Hz"
+    },
+    {
+     "v": 34,
+     "label": "2350 Hz"
+    },
+    {
+     "v": 35,
+     "label": "2400 Hz"
+    },
+    {
+     "v": 36,
+     "label": "2450 Hz"
+    },
+    {
+     "v": 37,
+     "label": "2500 Hz"
+    },
+    {
+     "v": 38,
+     "label": "2550 Hz"
+    },
+    {
+     "v": 39,
+     "label": "2600 Hz"
+    },
+    {
+     "v": 40,
+     "label": "2650 Hz"
+    },
+    {
+     "v": 41,
+     "label": "2700 Hz"
+    },
+    {
+     "v": 42,
+     "label": "2750 Hz"
+    },
+    {
+     "v": 43,
+     "label": "2800 Hz"
+    },
+    {
+     "v": 44,
+     "label": "2850 Hz"
+    },
+    {
+     "v": 45,
+     "label": "2900 Hz"
+    },
+    {
+     "v": 46,
+     "label": "2950 Hz"
+    },
+    {
+     "v": 47,
+     "label": "3000 Hz"
+    },
+    {
+     "v": 48,
+     "label": "3050 Hz"
+    },
+    {
+     "v": 49,
+     "label": "3100 Hz"
+    },
+    {
+     "v": 50,
+     "label": "3150 Hz"
+    },
+    {
+     "v": 51,
+     "label": "3200 Hz"
+    },
+    {
+     "v": 52,
+     "label": "3250 Hz"
+    },
+    {
+     "v": 53,
+     "label": "3300 Hz"
+    },
+    {
+     "v": 54,
+     "label": "3350 Hz"
+    },
+    {
+     "v": 55,
+     "label": "3400 Hz"
+    },
+    {
+     "v": 56,
+     "label": "3450 Hz"
+    },
+    {
+     "v": 57,
+     "label": "3500 Hz"
+    },
+    {
+     "v": 58,
+     "label": "3550 Hz"
+    },
+    {
+     "v": 59,
+     "label": "3600 Hz"
+    },
+    {
+     "v": 60,
+     "label": "3650 Hz"
+    },
+    {
+     "v": 61,
+     "label": "3700 Hz"
+    },
+    {
+     "v": 62,
+     "label": "3750 Hz"
+    },
+    {
+     "v": 63,
+     "label": "3800 Hz"
+    },
+    {
+     "v": 64,
+     "label": "3850 Hz"
+    },
+    {
+     "v": 65,
+     "label": "3900 Hz"
+    },
+    {
+     "v": 66,
+     "label": "3950 Hz"
     },
     {
      "v": 67,
-     "label": "4000Hz (50 Hz steps)"
+     "label": "4000 Hz"
     }
    ]
   },

@@ -20,7 +20,7 @@ from aiohttp import WSMsgType, web
 from . import __version__, admin, logs, sdnotify, updates
 from .audio.service import AudioService, AudioUnavailable
 from .auth import AuthStore, Session
-from .common import (COOKIE, K_AUDIO, K_AUTH, K_CFG, K_CFGPATH, K_DRIVER, K_GUARD, K_HUB, K_FTX, K_QSOLOG, K_REPORTER, K_RESTART, K_SESSION, K_SSTV, K_CW, K_RTTY, K_MENU, K_JS8,
+from .common import (COOKIE, K_AUDIO, K_AUTH, K_CFG, K_CFGPATH, K_DRIVER, K_GUARD, K_HUB, K_FTX, K_QSOLOG, K_PSK, K_REPORTER, K_RESTART, K_SESSION, K_SSTV, K_CW, K_RTTY, K_MENU, K_JS8,
                      K_RIGCTL, K_STARTED, K_UPDATES, CommandError, client_ip, is_https, read_json)
 from .lease import ControlLease, LeaseError
 from .radio import controls
@@ -30,6 +30,7 @@ from . import config
 from .config import FREEDV_MODES, freedv_callsign
 from .ratelimit import TokenBucket
 from .freedv_reporter import FreeDVReporter
+from .pskreporter import PskReporter
 from .rigctl import RigctlServer
 from .safety import TxGuard, TxRefused
 from .scan import RangeScanner, ScanError
@@ -362,7 +363,7 @@ class Hub:
             if not self.audio:
                 raise CommandError("audio is not available")
             try:
-                self.audio.set_dyn({k: msg[k] for k in ("gate", "leveler", "limiter", "rx_gate") if k in msg})
+                self.audio.set_dyn({k: msg[k] for k in ("gate", "compressor", "leveler", "limiter", "rx_gate") if k in msg})
             except ValueError as e:
                 raise CommandError(str(e)) from None
             self.push({"dyn": self.audio.dyn_state()})
@@ -1113,7 +1114,7 @@ async def freedv_info(request):
 async def freedv_reporter_status(request):
     """FreeDV Reporter: the connection state and the stations it lists, those near our frequency first (any signed-in user)."""
     app = request.app
-    return web.json_response(app[K_REPORTER].status(near_hz=app[K_DRIVER].state.get("frequency") or 0))
+    return web.json_response({**app[K_REPORTER].status(near_hz=app[K_DRIVER].state.get("frequency") or 0), "psk": app[K_PSK].status()})
 
 
 async def js8_info(request):
@@ -1575,6 +1576,7 @@ def create_app(cfg: dict, driver: RadioDriver | None = None, auth: AuthStore | N
         cfg["audio"], is_mock=driver.is_mock,
         tx_gate=lambda cid: guard.keyed and not guard.tuning and guard.owner == cid,      # TUNE sends a carrier only: no microphone or modem tones
         on_levels=app[K_HUB].push,
+        keyed=lambda: guard.keyed,
     )
     app[K_AUDIO] = app[K_HUB].audio = audio
     app[K_HUB].auto_width = lambda: bool(app[K_CFG]["freedv"].get("auto_width", True))
@@ -1600,7 +1602,16 @@ def create_app(cfg: dict, driver: RadioDriver | None = None, auth: AuthStore | N
     app[K_REPORTER] = reporter = FreeDVReporter(lambda: app[K_CFG], __version__, lambda: driver.state.get("frequency") or 0)
     audio.on_freedv_state = reporter.set_active
     audio.on_freedv_tx = reporter.set_transmitting
-    audio.on_freedv_heard = reporter.report_heard
+    app[K_PSK] = psk = PskReporter(lambda: app[K_CFG], __version__)
+
+    def _heard(callsign, snr):
+        """A callsign was read from the end of an over: the FreeDV Reporter site gets a reception report, and PSK Reporter a spot (when switched on). Returns why the site report was not sent."""
+        why = reporter.report_heard(callsign, snr)
+        spot = psk.add(callsign, snr, driver.state.get("frequency") or 0)
+        if spot and app[K_CFG]["reporter"].get("psk"):
+            log.info("PSK Reporter: %s not queued: %s", (callsign or "").upper(), spot)
+        return why
+    audio.on_freedv_heard = _heard
     app[K_HUB].reporter = reporter
 
     from .sstv_engine import SstvEngine
@@ -1635,6 +1646,7 @@ def create_app(cfg: dict, driver: RadioDriver | None = None, auth: AuthStore | N
         watchdog.start()
         await rigctl.apply()
         reporter.start()
+        psk.start()
         if not driver.is_mock and not os.environ.get("RADIO_REMOTE_TESTING"):        # a simulated radio / the tests never phone home
             app[K_UPDATES].start()
 
@@ -1643,6 +1655,7 @@ def create_app(cfg: dict, driver: RadioDriver | None = None, auth: AuthStore | N
         app[K_HUB].cancel_mic_reset()
         await rigctl.stop()
         await reporter.stop()
+        await psk.stop()
         try:
             await ftx_engine.set_on(False)
         except Exception:

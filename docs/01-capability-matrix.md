@@ -25,8 +25,8 @@ How to read the table:
 | Microphone input (menu: MIC / REAR) | works | works | works | works | from the manual |
 | Monitor | works | works | works | works | from the manual |
 | PTT (hold to transmit) | works | works | works | works | from the manual |
-| Speech processor | works | works | works | works | not offered yet |
-| TUNE (start the tuner: transmits a carrier) | works | works | works | works | not offered yet |
+| Speech processor | works | works | works | works | from the manual |
+| TUNE (start the tuner: transmits a carrier) | works | works | works | works | from the manual |
 | **Meters** | | | | | |
 | ALC meter | works | works | works | works | from the manual |
 | Compression meter | works | works | works | works | from the manual |
@@ -44,12 +44,12 @@ How to read the table:
 | Manual notch | works | works | works | works | from the manual |
 | Noise blanker | works | works | works | works | from the manual |
 | Noise reduction (DNR) | works | works | works | works | from the manual |
-| RIT | works | works | works | works | not offered yet |
-| XIT | works | works | works | works | not offered yet |
+| RIT | works | works | works | works | from the manual |
+| XIT | works | works | works | works | from the manual |
 | **VFOs and memories** | | | | | |
 | Memory channels: add and edit (MT write) | works | - | - | - | - |
 | Memory channels: list and recall | works | not offered yet | works | works | not offered yet |
-| Quick split (QS) | from the manual, untested | - | not offered yet | not offered yet | not offered yet |
+| Quick split (QS) | from the manual, untested | - | not offered yet | not offered yet | - |
 | Split | works | works | not offered yet | not offered yet | from the manual |
 | VFO B (A=B, B=A, swap, set frequency) | works | works | works | works | from the manual |
 | **Radio** | | | | | |
@@ -69,7 +69,7 @@ How to read the table:
 | range_scan | works | - | - | - | - |
 | rear_select | - | - | works | works | - |
 | scan | works | - | - | - | - |
-| vfo_select | - | works | - | - | - |
+| vfo_select | - | works | - | - | from the manual |
 | WIRES DG-ID menu value | works | - | - | - | - |
 
 ## Modes, bands and frequency range

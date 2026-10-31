@@ -24,6 +24,7 @@ rx_gain_db = 0.0         # radio -> browser
 tx_gain_db = 0.0         # browser mic -> radio (a limiter always follows)
 opus_bitrate = 32000
 max_peers = 3            # simultaneous browser audio sessions (keep low on a Pi 3B+)
+half_duplex = false      # true = never run the radio's receive and transmit audio together (receive stops while PTT is held). Only for a radio whose USB audio resets otherwise (FT-710 seen)
 
 [ui]
 tuning_steps_hz = [10, 100, 500, 1000, 5000, 10000]
