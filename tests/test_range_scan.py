@@ -152,3 +152,11 @@ async def test_list_scan_refuses_a_bad_list():
         with pytest.raises(ScanError):
             await s.start_list("c1", chans, 100, 0, False)
     assert not s.running
+
+
+def test_a_capability_file_can_rename_controls_to_what_the_radio_calls_them():
+    from radio_remote.radio import controls
+    feats = {"auto_notch": True, "manual_notch": True, "rit": True, "xit": True}
+    plain = {c["name"]: c["label"] for c in controls.available(feats)}
+    named = {c["name"]: c["label"] for c in controls.available(feats, {"auto_notch": "DNF", "rit": "CLAR RX"})}
+    assert plain["auto_notch"] == "Auto notch" and named["auto_notch"] == "DNF" and named["rit"] == "CLAR RX" and named["xit"] == "XIT"

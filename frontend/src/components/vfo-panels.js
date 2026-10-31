@@ -14,6 +14,7 @@ const ICON_MIC = SVG(`<rect x="9" y="3" width="6" height="11" rx="3" fill="curre
 
 export function createVfoPanels(host, ctx) {
   const hasB = !!ctx.S.caps.features.vfo_b;
+  const vsel = !!ctx.S.caps.features.vfo_select;             // FTDX10: the radio says which VFO its dial operates (A or B)
   const dual = !!ctx.S.caps.features.dual_receiver;           // FTDX101: VFO-A is the MAIN receiver, "VFO-B" is the SUB receiver
   const LA = dual ? "MAIN" : "VFO-A", LB = dual ? "SUB" : "VFO-B";
   const root = el(`<div class="vfopanels">
@@ -146,6 +147,14 @@ export function createVfoPanels(host, ctx) {
       q("[data-atx]").classList.toggle("on", aTx);
       if (dual) q("[data-atx]").classList.toggle("sel", txRx === "main");        // "sel" = the transmit receiver (outline); "on" = keyed (red)
       panelA.classList.toggle("keyed", aTx);
+      if (vsel) {
+        // Like the radio's own screen, the VFO its dial operates is the MAIN one here (the server presents it that way): its letter is bold and coloured, the other VFO is the small tab.
+        const mainL = s.active_vfo === "b" ? "VFO-B" : "VFO-A", otherL = s.active_vfo === "b" ? "VFO-A" : "VFO-B";
+        const lblA = panelA.querySelector("header .vl"), lblA2 = panelA.querySelector(".vl2");
+        if (lblA.textContent !== mainL) { lblA.textContent = mainL; if (lblA2) lblA2.textContent = mainL; }
+        lblA.classList.add("act");
+        if (hasB) { const lb = panelB.querySelector("header .vl"); if (lb.textContent !== otherL) lb.textContent = otherL; }
+      }
       if (dual) { panelA.classList.toggle("operating", s.active_receiver !== "sub"); if (hasB) panelB.classList.toggle("operating", s.active_receiver === "sub"); }   // the receiver the radio's own dial and keys act on
       if (hasB) {
         q("[data-bb]").textContent = s.band_b || "";

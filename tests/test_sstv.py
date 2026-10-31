@@ -166,3 +166,29 @@ def test_a_radio_tuned_a_little_off_gives_the_same_picture(key):
         d = done(receive(_shifted(a, hz)))
         assert d and d[0]["complete"], hz
         assert psnr(img, d[0]["rgb"]) > base - 2.0, (hz, psnr(img, d[0]["rgb"]), base)
+
+
+@pytest.mark.parametrize("key,snr", [("robot36", 8), ("martin2", 8)])
+def test_a_weak_signal_still_starts_and_finishes(key, snr):
+    """The header is found, and the picture followed to its end, at 8 dB signal to noise in 3 kHz (noise pulls the measured tones toward the band centre: the header calibrates that out)."""
+    rng = np.random.default_rng(3)
+    m = sstv.MODES[key]
+    img = picture(m.w, m.h)
+    a = sstv.encode(img, m, FS, 0.5)
+    sigma = np.sqrt(np.mean(a ** 2) / 10 ** (snr / 10) * (24000 / 3000))
+    d = done(receive(a + rng.normal(0, sigma, len(a))))
+    assert d and d[0]["complete"] and d[0]["rows"] == m.h
+
+
+def test_a_steady_carrier_in_the_passband_does_not_hide_the_header():
+    m = sstv.MODES["robot36"]
+    img = picture(m.w, m.h)
+    a = sstv.encode(img, m, FS, 0.5)
+    a = a + 0.15 * np.sin(2 * np.pi * 1800 * np.arange(len(a)) / FS)
+    d = done(receive(a))
+    assert d and d[0]["complete"] and psnr(img, d[0]["rgb"]) > 10
+
+
+def test_noise_alone_is_not_taken_for_a_header():
+    rng = np.random.default_rng(5)
+    assert not [e for e in receive(rng.normal(0, 0.2, 20 * FS)) if e["k"] in ("start", "vis")]

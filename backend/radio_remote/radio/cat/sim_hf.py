@@ -91,6 +91,27 @@ class SimulatedYaesuHf(SimulatedFT991A):
         if name == "ID" and not p:
             self.log.append(c)
             return await self._send(f"ID{self.m.radio_id};")
+        if self.model == "ftdx10":                                       # BENCH-FOUND on the real radio: SV; only switches the operating VFO (VS0 / VS1), it does not swap A and B
+            if name == "SV" and not p:
+                self.log.append(c)
+                self.vs ^= 1
+                return await self._send(f"VS{self.vs};")
+            if name == "VS":
+                self.log.append(c)
+                if not p:
+                    return await self._send(f"VS{self.vs};")
+                if p in ("0", "1"):
+                    self.vs = int(p)
+                    return
+                return await self._send("?;")
+            if name == "MD" and p[:1] == "0" and self.vs == 1:           # the mode command reaches the operating VFO
+                self.log.append(c)
+                if len(p) == 1:
+                    return await self._send(f"MD0{HF_MODE_CODES[self.mode_b]};")
+                if len(p) == 2 and p[1] in HF_MODES:
+                    self.mode_b = HF_MODES[p[1]]
+                    return
+                return await self._send("?;")
         if name == "OI" and not p:
             self.log.append(c)
             return await self._send(f"OI001{self.freq_b:09d}+0000{self.reg.get('RT', '0')}{self.reg.get('XT', '0')}"

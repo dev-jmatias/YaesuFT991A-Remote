@@ -8,7 +8,7 @@ The **CW** switch on the **Digital** tab decodes Morse from the radio's audio in
 2. Pick a band, type a frequency (MHz, kHz or Hz), or step with **-** and **+**. Use the radio's own CW filter (narrow, 250-500 Hz) for the best result.
 3. The decoded text appears in the **Received** box. **Copy** copies it; **Clear** empties it for everyone on this radio.
 
-Leaving the screen switches decoding off and puts back the mode and frequency the radio had.
+Leaving the screen for another digital screen switches decoding off and puts back the mode and frequency the radio had; leaving it for the Radio tab or the Menu leaves it running until you switch it off here.
 
 ## What you see
 

@@ -4,7 +4,7 @@ The **RTTY** switch on the **Digital** tab decodes radio teletype into text and 
 
 ## Using it
 
-1. Open **Digital** and press **RTTY**. The radio is put in USB (or the mode and frequency you last used on this screen) and decoding starts. Leaving puts back what the radio had.
+1. Open **Digital** and press **RTTY**. The radio is put in USB (or the mode and frequency you last used on this screen) and decoding starts. Leaving for another digital screen puts back what the radio had; leaving for the Radio tab or the Menu leaves RTTY running until you switch it off here.
 2. Pick a band (the usual calling frequencies), type a frequency, or step with **-** and **+**.
 3. The spectrum shows the audio from 300 to 3000 Hz. The decoder looks for two steady tones one shift apart: the **green** line is the mark tone and the **red** line the space tone. **Auto** keeps them tuned by itself; untick it to type the lower tone in Hz, or click the spectrum to put the lower tone there.
 4. The decoded text is in the **Received** box. **Double-click a callsign** in the text to fill the *Call* box of the log below.

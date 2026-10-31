@@ -344,7 +344,13 @@ export function renderRadio(root, { onLogout, onAuthLost }) {
     const screenOf = (tab, dig) => (tab === "digital" ? dig : tab);
     const go = (tab, dig = ui.dig) => {
       const from = screenOf(ui.tab, ui.dig), to = screenOf(tab, dig);
-      if (from !== to) ui.hooks = (ui.hooks || Promise.resolve()).then(async () => { await ctx[DIGITAL[from]?.[1]]?.(false); await ctx[DIGITAL[to]?.[1]]?.(true); });
+      // Leaving a digital screen for another digital one switches the old mode off (they share the radio and the audio). Leaving it for the Radio tab or the Menu does not: a running mode
+      // keeps running and the operator switches it off on its own screen.
+      if (from !== to) ui.hooks = (ui.hooks || Promise.resolve()).then(async () => {
+        const kept = await ctx[DIGITAL[from]?.[1]]?.(false, !DIGITAL[to]);
+        await ctx[DIGITAL[to]?.[1]]?.(true);
+        if (kept && !DIGITAL[to]) toast(`${DIGITAL[from][0]} is still running. Switch it off on its own screen when you are done.`);
+      });
       ui.tab = tab; ui.dig = dig;
       if (dig) pref.set("digital", dig);
       view.dataset.tab = tab; view.dataset.dig = dig;
@@ -436,6 +442,7 @@ export function renderRadio(root, { onLogout, onAuthLost }) {
       } else if (m.t === "js8") {
         ctx.js8Event?.(m);
       } else if (m.t === "menu") {
+        if (m.k === "preset") toast(`Radio menu set for the app: ${m.changed.join(", ")}`);
         ctx.menuEvent?.(m);
       } else if (m.t === "rtty") {
         ctx.rttyEvent?.(m);

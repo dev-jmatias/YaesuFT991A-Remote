@@ -17,12 +17,14 @@ export function createMenu(host, ctx) {
       <label>Group <select id="mn-g" aria-label="Menu group"></select></label>
       <button type="button" id="mn-all" title="Read every item from the radio (about 10 seconds)">Read all</button>
       <a id="mn-bk" class="btn" href="/api/menu/backup.json" download title="Read the whole menu and save it as a file">Back up menu</a>
+      <button type="button" id="mn-pre" class="active" title="Set the radio's menu items the app needs (the audio-over-USB settings); you see what changes first">Set up for the app</button>
       <label class="btn" id="mn-rsw" title="Write a saved menu back to the radio (administrators)">Restore...<input type="file" id="mn-rs" accept="application/json,.json" hidden></label>
       <span class="dim" id="mn-st"></span>
     </div>
     <p class="ftx-notice" id="mn-note" hidden></p>
     <div class="menu-rows" id="mn-rows" role="list"></div>
     <div id="mn-rep" class="menu-rep" hidden></div>
+    <div id="mn-pr" class="menu-rep" hidden></div>
   </div>`);
   host.append(root);
   const $ = (id) => root.querySelector("#" + id);
@@ -43,7 +45,7 @@ export function createMenu(host, ctx) {
   function control(it) {
     const dis = !can();
     if (it.locked || it.kind === "none" || it.kind === "raw") return el(`<span class="menu-val dim" title="${esc(it.locked || "")}">${esc(show(it)) || "-"} <small>read only</small></span>`);
-    if (it.raw == null) return el(`<span class="dim">not read yet</span>`);
+    if (it.raw == null) return el(`<span class="dim">${loading && !it.error ? "reading..." : it.error ? "not read: " + esc(it.error) : "not read yet"}</span>`);
     if (it.kind === "enum") {
       const sel = el(`<select aria-label="${esc(it.name)}">${it.options.map((o) => `<option value="${o.v}">${esc(o.label)}</option>`).join("")}${it.ok ? "" : `<option value="">${esc(show(it))}</option>`}</select>`);
       sel.value = it.ok ? String(it.value) : "";
@@ -124,7 +126,7 @@ export function createMenu(host, ctx) {
   async function readShown() {
     if (loading || !data) return;
     loading = true;
-    try { await readItems(mine().slice(0, 80)); } finally { loading = false; }
+    try { await readItems(mine()); } finally { loading = false; }              // everything shown (the whole menu is about 200 items, 20 seconds), not only the first 80
   }
   async function set(it, value) {
     try {
@@ -143,6 +145,33 @@ export function createMenu(host, ctx) {
     loading = true;
     try { await readItems(data.items); } finally { loading = false; }
   };
+  // ---- "Set up for the app": what the radio needs so that the app's audio works (server: menu.py APP_PRESET). Shown first, applied by an administrator, checked by reading back, and undoable.
+  async function preset() {
+    const box = $("mn-pr");
+    box.hidden = false;
+    box.textContent = "Reading the radio...";
+    let plan;
+    try { plan = await api("/api/menu/preset"); } catch (e) { box.textContent = "Could not read the radio: " + e.message; return; }
+    const rows = plan.items.map((r) => `<li><b>${esc(r.num)} ${esc(r.name)}</b>: ${r.error ? `<span class="bad">${esc(r.error)}</span>` : r.change ? `${esc(r.now_label)} &rarr; <b>${esc(r.want_label)}</b>` : `${esc(r.now_label)} (already right)`} <small class="dim">${esc(r.why)}</small></li>`).join("");
+    box.innerHTML = `<b>Set up for the app</b>` + (plan.items.length
+      ? `<p class="dim">${plan.pending ? `${plan.pending} item${plan.pending === 1 ? "" : "s"} to change. Nothing else is touched; each value is read back and checked.` : "The radio already has everything the app needs."}</p><ul>${rows}</ul>`
+      : `<p class="dim">This radio needs no menu change for the app: the microphone button chooses the USB audio source by itself.</p>`)
+      + `<div class="row">${plan.pending && admin ? `<button type="button" class="active" data-go>Apply</button>` : ""}${plan.undo && admin ? `<button type="button" data-undo>Undo the last preset</button>` : ""}<button type="button" data-close>Close</button></div>`
+      + (plan.pending && !admin ? `<p class="dim">An administrator applies it.</p>` : "");
+    box.querySelector("[data-close]").onclick = () => { box.hidden = true; };
+    const run = async (body, what) => {
+      box.querySelectorAll("button").forEach((b) => { b.disabled = true; });
+      try {
+        const res = await api("/api/menu/preset", "POST", body);
+        toast(res.changed.length ? `${what}: ${res.changed.length} item${res.changed.length === 1 ? "" : "s"}` : "Nothing needed changing");
+        if (res.failed?.length) toast(res.failed.map((f) => `${f.name}: ${f.why}`).join("; "));
+      } catch (e) { toast(e.message); }
+      preset();
+    };
+    box.querySelector("[data-go]")?.addEventListener("click", () => { if (confirm("Change these radio menu items now?")) run({ confirm: true }, "Set"); });
+    box.querySelector("[data-undo]")?.addEventListener("click", () => { if (confirm("Put back what the last preset found?")) run({ confirm: true, undo: true }, "Put back"); });
+  }
+  $("mn-pre").onclick = () => { if (!S.state.connected) { toast("The radio is not connected."); return; } preset(); };
   $("mn-bk").onclick = (e) => {
     if (!S.state.connected) { e.preventDefault(); toast("The radio is not connected."); return; }
     toast("Reading the whole menu: the file downloads when it is ready (about 10 seconds).");

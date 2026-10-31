@@ -2,7 +2,7 @@
 
 Control a Yaesu radio from a phone, tablet or computer: frequency, mode, filters, meters, memories, transmit with server-side safety and
 remote audio, from a Raspberry Pi next to the radio. The **FT-991A** and the **FTDX101D** are verified on real radios, the **FTDX101MP** has the same commands as the D;
-FTDX10 and FT-710 are included but **experimental** (written from the manuals, simulator-tested only).
+the **FTDX10** has been tested on a real radio; the FT-710 is included but **experimental** (written from the manual, simulator-tested only).
 
 ### Get started: pick one
 
@@ -41,6 +41,15 @@ and goes back by itself if the new version does not start. Settings and accounts
 | `radio-remote-v….tar.gz` | the program only: used by `self_update.sh`, or by hand to update a running Pi |
 | `radio-remote-rade-linux-aarch64.tar.xz` | the optional RADE library (FreeDV neural modes V1 and V2) for a Raspberry Pi, installed with `install_rade.sh` (the PC build is `…-x86_64.tar.xz`) |
 | `SHA256SUMS` | checksums of all of the above |
+
+### What is new in 1.1.62
+
+- **FTDX10 tested on a real radio.** Frequency, mode, every receive control, width, split and the VFOs work; the radio's own names are used (DNF, NOTCH, CLAR RX, CLAR TX). **A/B key** selects the VFO the dial operates and the selected VFO is shown in bold green; **A>B, B>A, A=B** and the swap work (on the FTDX10 `SV;` does not swap, so the app does it) and the selected VFO takes the main display as on the radio. The **Tune** button is on. The power bar matches the radio; the ALC bar has its own default full scale (48); the speech processor can be switched on and off, and the COMP bar shows *off* while it is off. Set CAT RATE 38400 and CAT RTS OFF on the radio.
+- **Menu tab: everything shown is read** (no more "not read yet" rows) and, on the FTDX10, 192 of 196 items read.
+- **"Set up for the app" preset** (Menu tab): shows the radio menu items the app needs (the rear/port select so the USB audio is used), applies the ones that differ and can undo them. Optionally automatic when an operator connects (**Admin > Config > Radio**, off by default). The microphone button now switches the modulation source for SSB, AM, FM and DATA on the FTDX10 and FTDX101.
+- **Digital screens stay on when you go to the Radio tab.** FT8/FT4, SSTV, RTTY, CW and JS8 keep running until you switch them off on their own screen (a note says so). Moving to another digital screen still switches the old one off.
+- **SSTV finds the start of a picture on weak and noisy signals.** The calibration header is measured over its whole length and corrected for the pull of the noise, so pictures that did not start before (about 10 dB signal to noise, or a carrier in the passband) now do, down to about 6 dB; a fade of a few seconds no longer ends the picture early.
+- **Not yet tried on real radios:** the preset lists of the FT-991A, FTDX101 and FT-710; the FTDX10 Tune button and transmitting audio over USB.
 
 ### What is new in 1.1.61
 

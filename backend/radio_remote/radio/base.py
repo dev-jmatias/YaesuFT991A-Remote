@@ -57,7 +57,7 @@ class Capabilities:
             "model": {k: self.data["model"][k] for k in ("id", "name")},
             "experimental": not self.data["model"].get("bench_tested", False) and not self.is_mock,
             "bands": self.data.get("bands", {}).get("list", []),
-            "controls": controls.available(feats),
+            "controls": controls.available(feats, self.data.get("labels")),
             "mock": self.is_mock,
             "features": feats,
             "modes": self.modes(),

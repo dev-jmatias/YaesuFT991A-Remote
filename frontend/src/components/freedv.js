@@ -362,10 +362,11 @@ export function createFreeDV(host, ctx) {
   // during the visit), leaving the screen puts the radio back on the mode and frequency it had before.
   let away = null, used = false;
   const canTune = () => S.user.role !== "viewer" && S.lease.holder?.conn === S.conn;
-  ctx.freedvActive = async (active) => {
+  ctx.freedvActive = async (active, keep) => {
     if (active) { away = { mode: S.state.mode, hz: S.state.frequency }; used = on(); return; }
     const a = away; away = null;
-    if (on() || !used || !canTune()) return;               // still on: leave everything as it is
+    if (on()) return keep;                                 // still on: leave everything as it is (and say so when leaving for the Radio tab)
+    if (!used || !canTune()) return;
     used = false;
     try {
       if (a?.mode) await send("set_mode", { mode: a.mode });

@@ -446,13 +446,15 @@ export function createFtx(host, ctx) {
   };
   $("fs-snd").value = pref.get("ftxSound", "off");
   $("fs-snd").onchange = () => { pref.set("ftxSound", $("fs-snd").value); sound(); };
-  ctx.ftxActive = async (active) => {
+  ctx.ftxActive = async (active, keep) => {
     here = active; sound();
+    if (!active && keep && info.on) { away = null; return true; }                  // leaving for the Radio tab: it keeps running until it is switched off here
     if (!info.available || !can()) return;
     try {
       if (active) {
         if (S.state.freedv_on) { await send("freedv", { on: false }); toast("FreeDV switched off: FT8/FT4 and FreeDV cannot share the radio."); }       // the FT8 tones would otherwise go through the FreeDV modem
         away = { mode: S.state.mode, hz: S.state.frequency };
+        if (info.on) return;                                                           // still running from before: leave the radio where it is
         const list = info.bands[info.mode] || [];
         const hz = pref.get("ftxHz" + info.mode, 0) || bandOf(info.mode, S.state.frequency)?.hz || list.find((b) => b.name === "20m")?.hz || list[0]?.hz;
         if (hz) await tune(hz);

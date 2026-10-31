@@ -23,13 +23,13 @@ HF = ["ftdx10", "ftdx101d", "ftdx101mp", "ft710"]
 def test_profile_loads_and_is_marked_experimental_unless_tested(model):
     caps = Capabilities.load(model)
     pub = caps.public()
-    assert pub["experimental"] is (not model.startswith("ftdx101")) and pub["mock"] is False        # the FTDX101D was tested on a real radio and the MP has the same commands: no banner
+    assert pub["experimental"] is (model == "ft710") and pub["mock"] is False        # the FTDX101D and the FTDX10 were tested on real radios and the MP has the D's commands: no banner
     assert pub["model"]["id"] == model
     assert "tuner_tune" not in {c["name"] for c in pub["controls"]}
-    assert pub["features"]["tuner_tune"] is model.startswith("ftdx101")               # TX-keying: only the FTDX101 D / MP (same commands), enabled at the operator's request
+    assert pub["features"]["tuner_tune"] is (model.startswith("ftdx101") or model == "ftdx10")      # TX-keying: the FTDX101 D / MP (same commands) and the FTDX10, each enabled at its operator's request
     names = {c["name"] for c in pub["controls"]}
     assert {"agc", "att_level", "mic_select", "nr", "nb", "notch", "contour", "if_shift", "width"} <= names
-    assert ("processor" in names) == model.startswith("ftdx101")                     # bench-verified on the FTDX101D; the MP uses the same commands
+    assert ("processor" in names) == (model.startswith("ftdx101") or model == "ftdx10")      # bench-verified on the FTDX101D (the MP uses the same commands) and the FTDX10
     assert "apf" not in names and "dgid" not in names                                # unverified / hidden
     assert pub["bands"] == ["160m", "80m", "60m", "40m", "30m", "20m", "17m", "15m", "12m", "10m", "6m"]
     assert pub["features"]["vhf"] is False and pub["features"]["uhf"] is False
@@ -55,7 +55,7 @@ def test_dual_receiver_radios_vfo_b_and_split():
     f = Capabilities.load("ftdx101mp").public()["features"]         # the MP uses the same commands as the D
     assert f["vfo_b"] is True and f["dual_receiver"] is True and f["split"] is False and f["quick_split"] is False
     f = Capabilities.load("ftdx10").public()["features"]
-    assert f["vfo_b"] and f["split"] and f["quick_split"]
+    assert f["vfo_b"] and f["split"] and not f["quick_split"]                       # FTDX10: quick split is not offered (its owner does not need it)
     f = Capabilities.load("ft710").public()["features"]
     assert f["vfo_b"] and f["split"] and not f["quick_split"] and not f["rit"]        # no QS / RT / RU / RD / RC in the FT-710 manual
 
@@ -97,9 +97,11 @@ def test_mic_source_menu_per_radio():
     # SSB MOD SOURCE: FTDX10 EX 01 01 13 (p.11), FTDX101 EX 01 01 11 (p.10), FT-710 MOD SOURCE EX 01 01 14 (p.10)
     assert proto_for("ftdx10").ENCODE["mic_select"][0] == "EX010113;" and proto_for("ftdx101d").ENCODE["mic_select"][0] == "EX010111;"
     assert proto_for("ft710").ENCODE["mic_select"][0] == "EX010114;"
-    assert proto_for("ftdx10").ENCODE["mic_select"][1]("REAR") == ["EX0101131;"]
-    assert proto_for("ftdx101d").ENCODE["mic_select"][1]("MIC") == ["EX0101110;"]
-    assert proto_for("ft710").ENCODE["mic_select"][1]("REAR") == ["EX0101141;"]
+    # the microphone button writes the modulation source of every mode family (SSB, AM, FM, DATA), so that FT8, RTTY and FreeDV (DATA modes) follow it too
+    assert proto_for("ftdx10").ENCODE["mic_select"][1]("REAR") == ["EX0101131;", "EX0102131;", "EX0103121;", "EX0104151;"]
+    assert proto_for("ftdx101d").ENCODE["mic_select"][1]("MIC") == ["EX0101110;", "EX0102110;", "EX0103100;", "EX0104130;"]
+    assert proto_for("ftdx101mp").ENCODE["mic_select"][1]("MIC") == proto_for("ftdx101d").ENCODE["mic_select"][1]("MIC")
+    assert proto_for("ft710").ENCODE["mic_select"][1]("REAR") == ["EX0101141;", "EX0102141;", "EX0103131;", "EX0104141;"]
     assert proto_for("ftdx10").decode("EX0101131;") == {"mic_select": "REAR"}
     assert proto_for("ft710").decode("EX0101140;") == {"mic_select": "MIC"}
     assert proto_for("ftdx10").decode("EX0101140;") == {}                                  # another radio's menu is not interpreted
@@ -210,6 +212,72 @@ async def test_wrong_radio_is_refused():
     await r.sim.stop()
 
 
+async def test_ftdx10_swap_exchanges_frequencies_and_modes_without_sv():
+    """BENCH-FOUND: SV; on a real FTDX10 only switches the operating VFO. The swap is done with FA / FB and the modes through VS."""
+    r, d = await connect("ftdx10")
+    try:
+        await d.set_mode("USB"); await d.set_frequency(14_200_000); await d.set_frequency_b(7_100_000)
+        r.sim.mode_b = "LSB"
+        await wait_for(lambda: d.state.get("frequency_b") == 7_100_000)
+        await d.vfo_op("swap")
+        await wait_for(lambda: d.state.get("frequency") == 7_100_000 and d.state.get("frequency_b") == 14_200_000)
+        await wait_for(lambda: d.state.get("mode") == "LSB" and d.state.get("mode_b") == "USB")
+        assert "SV" not in r.sim.log and r.sim.vs == 0                            # nothing sent SV; and VFO A is the operating VFO again
+    finally:
+        await d.stop()
+        await r.sim.stop()
+
+
+async def test_ftdx10_main_display_is_the_vfo_the_dial_operates():
+    """Like the radio's own screen: the main frequency, mode and band are those of the operated VFO, the other one is the small tab."""
+    r, d = await connect("ftdx10")
+    try:
+        await d.set_mode("USB"); await d.set_frequency(14_200_000); await d.set_frequency_b(7_100_000)
+        r.sim.mode_b = "LSB"
+        await wait_for(lambda: d.state.get("frequency_b") == 7_100_000 and d.state.get("frequency") == 14_200_000)
+        r.sim.vs = 1                                                              # the radio's own A/B key: B is operated now
+        await wait_for(lambda: d.state.get("active_vfo") == "b")
+        await wait_for(lambda: d.state.get("frequency") == 7_100_000 and d.state.get("frequency_b") == 14_200_000)
+        await wait_for(lambda: d.state.get("mode") == "LSB" and d.state.get("mode_b") == "USB" and d.state.get("band") == "40m")
+        await d.set_mode("CW-U")                                                  # MD0 reaches the operated VFO (B), which is the main one on the page
+        await wait_for(lambda: d.state.get("mode") == "CW-U" and d.state.get("mode_b") == "USB" and r.sim.mode_b == "CW-U")
+        await d.set_active_vfo("a")
+        await wait_for(lambda: d.state.get("frequency") == 14_200_000 and d.state.get("mode") == "USB" and d.state.get("mode_b") == "CW-U")
+    finally:
+        await d.stop()
+        await r.sim.stop()
+
+
+async def test_ftdx10_swap_keeps_the_operated_vfo():
+    r, d = await connect("ftdx10")
+    try:
+        await d.set_mode("USB"); await d.set_frequency(14_200_000); await d.set_frequency_b(7_100_000)
+        r.sim.mode_b = "LSB"
+        r.sim.vs = 1
+        await wait_for(lambda: d.state.get("active_vfo") == "b" and d.state.get("frequency") == 7_100_000)
+        await d.vfo_op("swap")
+        await wait_for(lambda: r.sim.freq == 7_100_000 and r.sim.freq_b == 14_200_000 and r.sim.mode == "LSB" and r.sim.mode_b == "USB")
+        assert r.sim.vs == 1 and "SV" not in r.sim.log                            # B is still the operated VFO
+        await wait_for(lambda: d.state.get("frequency") == 14_200_000 and d.state.get("mode") == "USB")      # so the main display now shows what B holds
+    finally:
+        await d.stop()
+        await r.sim.stop()
+
+
+async def test_ftdx10_reports_which_vfo_the_dial_operates():
+    r, d = await connect("ftdx10")
+    try:
+        await wait_for(lambda: d.state.get("active_vfo") == "a")
+        r.sim.vs = 1                                                              # the radio's own A/B key
+        await wait_for(lambda: d.state.get("active_vfo") == "b")
+        await d.set_active_vfo("a")                                               # the app's A/B key
+        assert r.sim.vs == 0
+        await wait_for(lambda: d.state.get("active_vfo") == "a")
+    finally:
+        await d.stop()
+        await r.sim.stop()
+
+
 async def test_ftdx10_controls_split_and_vfo_ops():
     r, d = await connect("ftdx10")
     try:
@@ -238,8 +306,9 @@ async def test_ftdx10_controls_split_and_vfo_ops():
             await d.set_control("processor", True)                                   # not offered on these profiles
         with pytest.raises(RadioError):
             await d.set_control("dgid", "5")
-        with pytest.raises(RadioError):
-            await d.tune_start()                                                      # tuner_tune is "unverified": never keys the radio
+        assert d.caps.has("tuner_tune")                                               # enabled for the FTDX10 at its owner's request
+        await d.tune_start()
+        assert "AC002" in r.sim.log
     finally:
         await d.stop()
         await r.sim.stop()

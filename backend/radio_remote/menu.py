@@ -49,6 +49,22 @@ def format_int(item: dict, v: int) -> str:
     return str(v).zfill(d)
 
 
+# What the app needs from the radio's own menu, per radio: the settings that make the audio arrive over USB (the transmit audio source "port" of each mode family).
+# (menu address, wanted value, why). The microphone button switches the modulation source (MIC / REAR) by itself, and the levels are left as the owner has them.
+# The addresses are the radio's own: the three digits of the FT-991A's menu number, or the six digits P1 P2 P3 of the newer radios.
+APP_PRESET: dict[str, list[tuple[str, int, str]]] = {
+    "ft991a": [("109", 1, "SSB: transmit audio from the USB port"), ("048", 1, "AM: transmit audio from the USB port"),
+               ("077", 2, "FM packet: transmit audio from the USB port"), ("072", 2, "Data: transmit audio from the USB port")],
+    "ftdx10": [("010114", 1, "SSB: transmit audio from the USB port"), ("010215", 1, "AM: transmit audio from the USB port"),
+               ("010314", 1, "FM: transmit audio from the USB port"), ("010416", 1, "Data: transmit audio from the USB port")],
+    "ftdx101d": [("010112", 1, "SSB: transmit audio from the USB port"), ("010213", 1, "AM: transmit audio from the USB port"),
+                 ("010312", 1, "FM: transmit audio from the USB port"), ("010414", 1, "Data: transmit audio from the USB port")],
+    "ftdx101mp": [("010112", 1, "SSB: transmit audio from the USB port"), ("010213", 1, "AM: transmit audio from the USB port"),
+                  ("010312", 1, "FM: transmit audio from the USB port"), ("010414", 1, "Data: transmit audio from the USB port")],
+    "ft710": [],                                   # the FT-710 chooses USB audio with MOD SOURCE, which the microphone button sets
+}
+
+
 class MenuDef:
     def __init__(self, data: dict):
         self.model = data["model"]
@@ -132,6 +148,7 @@ class MenuService:
         self.driver, self.guard, self.broadcast, self.audit, self.defs = driver, guard, broadcast, audit, defs
         self.cache: dict[int, tuple[str, float]] = {}
         self._lock = asyncio.Lock()
+        self.preset_prev: dict[int, str] = {}          # what the last preset found, so that it can be undone (until the service restarts; the audit log keeps it too)
 
     def listing(self) -> dict:
         items = [self.defs.public(n, *(self.cache.get(n) or (None, None))) for n in sorted(self.defs.items)]
@@ -184,6 +201,86 @@ class MenuService:
         item = self.defs.public(n, raw, time.time())
         self.broadcast({"t": "menu", "k": "item", "item": item})
         return item
+
+    # --------------------------------------------------------------- the preset for the app
+    def _preset_specs(self) -> list[tuple[int, str, int, str]]:
+        by_addr = {self.defs.address(n): n for n in self.defs.items}
+        return [(by_addr[a], a, want, why) for a, want, why in APP_PRESET.get(self.defs.model, []) if a in by_addr]
+
+    async def _preset_plan_locked(self) -> dict:
+        items = []
+        for n, addr, want, why in self._preset_specs():
+            it = self.defs.items[n]
+            want_raw = str(want).zfill(it["digits"])
+            row = {"n": n, "num": it.get("num") or f"{n:03d}", "name": it["name"], "group": it["group"], "why": why,
+                   "want": want_raw, "want_label": next((o["label"] for o in it.get("options", []) if o["v"] == want), want_raw)}
+            try:
+                now = await self._read_one(n)
+            except RadioError as e:
+                items.append({**row, "now": None, "now_label": "", "change": False, "error": str(e)})
+                continue
+            items.append({**row, "now": now, "now_label": self.defs.decode(n, now)["label"], "change": now != want_raw})
+        return {"model": self.defs.model, "items": items, "pending": sum(1 for r in items if r["change"]), "undo": bool(self.preset_prev)}
+
+    async def preset_plan(self) -> dict:
+        """What the preset would change on this radio now (read from the radio; nothing is written)."""
+        async with self._lock:
+            return await self._preset_plan_locked()
+
+    async def preset_apply(self, who: str, auto: bool = False) -> dict:
+        """Write the settings the app needs, only where the radio differs, and read each one back. Remembers what it found so that it can be undone."""
+        if self.guard.keyed:
+            raise ValueError("not while transmitting")
+        done, failed = [], []
+        async with self._lock:
+            plan = await self._preset_plan_locked()
+            for r in plan["items"]:
+                if r.get("error"):
+                    failed.append({"name": r["name"], "why": r["error"]})
+                    continue
+                if not r["change"]:
+                    continue
+                n = r["n"]
+                try:
+                    await self.driver.menu_write(self.defs.address(n), r["want"])
+                    back = await self._read_one(n)
+                except RadioError as e:
+                    failed.append({"name": r["name"], "why": str(e)})
+                    continue
+                if back != r["want"]:
+                    failed.append({"name": r["name"], "why": f"the radio did not take it (it says {back})"})
+                    continue
+                self.preset_prev.setdefault(n, r["now"])
+                done.append({"n": n, "num": r["num"], "name": r["name"], "from": r["now_label"], "to": r["want_label"], "why": r["why"]})
+                self.audit("menu_preset", f"{r['num']} {r['name']}: {r['now']} -> {r['want']} ({'automatic, ' if auto else ''}by {who})")
+                self.broadcast({"t": "menu", "k": "item", "item": self.defs.public(n, back, time.time())})
+            same = sum(1 for r in plan["items"] if not r["change"] and not r.get("error"))
+        if done:
+            self.broadcast({"t": "menu", "k": "preset", "auto": auto, "changed": [f"{d['num']} {d['name']}" for d in done]})
+        return {"changed": done, "same": same, "failed": failed}
+
+    async def preset_undo(self, who: str) -> dict:
+        """Put back what the preset found."""
+        if self.guard.keyed:
+            raise ValueError("not while transmitting")
+        done, failed = [], []
+        async with self._lock:
+            for n, old in list(self.preset_prev.items()):
+                it = self.defs.items[n]
+                try:
+                    await self.driver.menu_write(self.defs.address(n), old)
+                    back = await self._read_one(n)
+                except RadioError as e:
+                    failed.append({"name": it["name"], "why": str(e)})
+                    continue
+                if back != old:
+                    failed.append({"name": it["name"], "why": f"the radio did not take it (it says {back})"})
+                    continue
+                del self.preset_prev[n]
+                done.append({"n": n, "num": it.get("num") or f"{n:03d}", "name": it["name"], "to": self.defs.decode(n, old)["label"]})
+                self.audit("menu_preset_undo", f"{it.get('num') or n} {it['name']}: back to {old} (by {who})")
+                self.broadcast({"t": "menu", "k": "item", "item": self.defs.public(n, back, time.time())})
+        return {"changed": done, "failed": failed}
 
     async def backup(self) -> dict:
         """Every item that can be read, as the radio's own text: a file the operator can keep and load back later."""

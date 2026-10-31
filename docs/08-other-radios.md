@@ -1,13 +1,28 @@
 # Other radios: FTDX101D (tested), FTDX101MP (same commands), FTDX10, FT-710
 
 These four profiles were written from the Yaesu CAT manuals (FTDX10 2308-F, FTDX101MP/D 2101-I, FT-710 2306-C). The app shows an amber
-*EXPERIMENTAL PROFILE* banner whenever one is selected whose capability file says `bench_tested = false` (the FTDX10 and FT-710; the FTDX101D was tested on a real radio, and the MP, which has the same commands, shows no banner either).
+*EXPERIMENTAL PROFILE* banner whenever one is selected whose capability file says `bench_tested = false` (only the FT-710 now; the FTDX101D and the FTDX10 were tested on real radios, and the MP, which has the D's commands, shows no banner either).
 
 * **FTDX101D: tested on a real radio** (2026-10-05, Raspberry Pi 4, USB), see the next section for what works and what the manual gets wrong.
   Not everything is tried yet (transmitting on the SUB receiver, the MP variant).
 * **FTDX101MP**: same CAT commands as the D (one shared manual), so its profile is **enabled exactly like the D's**, with transmit power 5 to 200 W (the D: 5 to 100 W). No MP has been
   available here, so please report anything that differs; the first owner to try it should follow the checklist below.
-* **FTDX10 and FT-710**: still only on paper. Nothing there has been seen working on a real radio.
+* **FTDX10**: tested on a real radio (2026-10-30/31, Raspberry Pi, USB, 38400); see *FTDX10: what was verified* below.
+* **FT-710**: still only on paper. Nothing there has been seen working on a real radio.
+
+## FTDX10: what was verified on a real radio
+
+On the radio set CAT RATE 38400 and CAT RTS OFF (otherwise the link drops and comes back). Verified: `ID0761;`; frequency, mode, all receive controls (AF/RF gain, NB, NR/DNR, DNF, NOTCH, CLAR RX/TX, contour, IF shift, AGC, attenuator, width) set and read back; split; VFO A/B copy and swap; the Menu tab (192 of 196 items); the speech processor (`PR0`), the power and the ALC meters.
+
+What the manual does not say or gets wrong:
+
+* **`SV;` does not swap VFO A and B.** It toggles the VFO the dial operates (`VS0;` / `VS1;`). `FA`/`IF` always describe VFO A and `FB`/`OI` VFO B, while `MD0` answers for the operated VFO. The app swaps them itself (modes first, then frequencies), and its **A/B key** selects the operated VFO. The operated VFO is the one in the MAIN display.
+* Changing LSB <-> USB moves the stored frequency by about 1.4 kHz, so modes are set before frequencies.
+* `SH0xx` width code 20 = 3000 Hz in SSB. `BS;` cannot be read (`?;`), and `MG;` is refused outside the microphone modes (harmless).
+* The radio's names differ from the app's: auto notch is **DNF**, manual notch is **NOTCH**, RIT is **CLAR RX**, XIT is **CLAR TX**; the app shows those names for this radio.
+* Meters: the power bar is linear (raw/255 of 100 W) and matched the radio's watts; the ALC bar needs a full scale of about 48 (the FT-991A's 160 read far too low), now the FTDX10 default. With the speech processor off the COMP value is not a compression reading (full scale), so the bar shows *off*.
+* Menus for the app: REAR SELECT must be USB (menus 01-01-14, 01-02-15, 01-03-14, 01-04-16) and the MOD SOURCE menus are 01-01-13, 01-02-13, 01-03-12, 01-04-15; the microphone button switches all four.
+* Not yet tried: the Tune button and transmitting audio over USB into a dummy load.
 
 ## FTDX101D: what was verified on a real radio
 

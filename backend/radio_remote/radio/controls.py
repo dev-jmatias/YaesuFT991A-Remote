@@ -77,8 +77,10 @@ SPECS: list[dict[str, Any]] = [
 SPEC_BY_NAME = {s["name"]: s for s in SPECS}
 
 
-def available(features: dict[str, bool]) -> list[dict[str, Any]]:
-    return [s for s in SPECS if features.get(s["feature"]) is True]
+def available(features: dict[str, bool], labels: dict[str, str] | None = None) -> list[dict[str, Any]]:
+    """The controls a radio has. `labels` renames some of them to what that radio's own panel calls them (the capability file's [labels] table)."""
+    labels = labels or {}
+    return [{**s, "label": labels[s["name"]]} if s["name"] in labels else s for s in SPECS if features.get(s["feature"]) is True]
 
 
 def coerce(spec: dict[str, Any], value: Any) -> Any:

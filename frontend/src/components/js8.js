@@ -277,8 +277,9 @@ export function createJs8(host, ctx) {
 
   // Entering the screen puts the radio on the last JS8 frequency (20 m, 14.078 MHz, the first time) in DATA-U and switches JS8 on when the system is ready; leaving switches it off and puts back the radio's mode and frequency.
   let away = null;
-  ctx.js8Active = async (active) => {
+  ctx.js8Active = async (active, keep) => {
     sound.set(active);
+    if (!active && keep && info.on) { auto = false; tracking = false; away = null; return true; }   // leaving for the Radio tab: it keeps running until it is switched off here
     auto = active;
     if (!can()) return;
     try {
@@ -286,6 +287,7 @@ export function createJs8(host, ctx) {
         await load();
         if (S.state.freedv_on) { await send("freedv", { on: false }); toast("FreeDV switched off: JS8 and FreeDV cannot share the radio."); }
         away = { mode: S.state.mode, hz: S.state.frequency };
+        if (info.on) { auto = false; tracking = true; return; }                        // still running from before: leave the radio where it is
         const last = pref.get("js8Last", null);
         const want = last && last.hz && RMODES.includes(last.mode) ? last : { hz: 14078000, mode: RMODES[0] || "USB" };
         const band = info.bands.find((b) => Math.abs(b.hz - (S.state.frequency || 0)) < 3000);

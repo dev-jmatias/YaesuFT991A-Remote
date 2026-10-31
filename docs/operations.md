@@ -44,7 +44,8 @@ started by systemd) reboots the machine after about 3 seconds, and does nothing 
 | `audio.rx_gain_db` / `tx_gain_db` | -30..30 dB; a limiter always follows TX gain | 0 |
 | `audio.opus_bitrate` / `max_peers` | codec rate; simultaneous listeners | 32000 / 3 |
 | `ui.tuning_steps_hz` | step choices in the UI | 10..10000 |
-| `ui.meter_alc_full` / `meter_comp_full` | raw ALC / COMP value at which the radio's own meter is full (provisional calibration) | 160 / 255 |
+| `ui.meter_alc_full` / `meter_comp_full` | raw ALC / COMP value at which the radio's own meter is full (provisional calibration) | 160 (48 on the FTDX10 unless set here) / 255 |
+| `radio.app_preset` | when an operator connects, set the radio menu items the app needs (see [the Menu tab](menu.md)) | false |
 | `ui.swr_warn` | SWR warning: while transmitting at or above this ratio the SWR bar turns red and a message appears; `0` = off, otherwise 1.2..10 | 3.0 |
 | `ui.swr_raw_at_3` | only for radios that report a raw SWR value (FT-991A): the raw reading (10..255) at which the radio's own meter shows 3:1; the ratio is estimated on a straight line from 1:1 = 0. **Provisional**: the CAT manual gives no calibration | 100 |
 | `logging.level` | DEBUG/INFO/WARNING/ERROR | INFO |

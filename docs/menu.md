@@ -22,6 +22,19 @@ On the FT-991A these are 027 to 033, 047, 048, 060, 071, 072, 076, 077, 087, 096
 
 If you really need one of them, change it on the radio itself.
 
+## Set up for the app
+
+The **Set up for the app** panel (top of the Menu tab) lists the few radio menu items the app needs and shows each as *now -> wanted*. **Apply** (administrators) writes only the ones that differ, reads each back and checks it; **Undo the last preset** puts the old values back (until the service restarts; the audit log keeps them). It does not write while the radio is transmitting.
+
+* **FT-991A:** the four port-select items (DATA/SSB/AM/FM PORT SELECT) so the audio goes through the USB cable.
+* **FTDX10, FTDX101D and MP:** REAR SELECT in the SSB, AM, FM and DATA groups (DATA -> USB).
+* **FT-710:** nothing; its USB audio comes from the microphone button.
+* Not in the preset: the CAT rate and RTS (set those on the radio once: 38400 and OFF), audio levels, power limits.
+
+**Automatic:** with **Admin > Config > Radio > "Set the radio's menu for the app"** ticked (`radio.app_preset`, off by default), the same check runs once each time the app connects to the radio and an operator is present, and fixes only what differs. It is off by default because it rewrites the radio's menu and the rear DATA jack may be used for something else.
+
+The FTDX101 and FT-991A lists have not been tried on those radios; the FTDX10 list has.
+
 ## Backup and restore
 
 **Back up menu** reads the whole menu and saves it as a file (`menu-ft991a-DATE.json`). **Restore...** (administrators) writes such a file back: only the items that differ are written, the items that cannot be changed here are skipped, and a report lists what was changed. Keep a backup before trying new settings: the radio itself can only do this with an SD card.
@@ -32,4 +45,4 @@ Every change, backup and restore is written to the audit log (Admin) with the ol
 
 The item numbers, names and allowed values come from the radio's CAT Operation Reference Book (the EX MENU table). The groups are ours. Where the manual has a mistake (for example the RTTY shift codes, or the digit counts of 068 and 069) the table follows what the radio does; if the radio ever answers with something the table does not expect, the item shows the raw answer with a `?` and is not edited. This is new: it has been tested against a simulated radio, not yet on a real one.
 
-The tables of the FTDX10, FTDX101D/MP and FT-710 were built the same way from their CAT manuals (the FTDX101MP uses the FTDX101D's table). The addresses of the items the app already uses (the mic source, the rear port select, the out levels) agree with what was read on a real FTDX101D. None of these four radios has been tried with the Menu tab yet.
+The tables of the FTDX10, FTDX101D/MP and FT-710 were built the same way from their CAT manuals (the FTDX101MP uses the FTDX101D's table). The addresses of the items the app already uses (the mic source, the rear port select, the out levels) agree with what was read on a real FTDX101D. The FTDX10 has been tried on a real radio: 192 of its 196 items read, writes read back correctly, and 19 items are shown read only (REAR SELECT and RPTT SELECT individually, the shift and PC keying items, the CAT and 232C speed/time-out/RTS items, MIC GAIN for AM and FM, the mark frequency, MY CALL). The other three have not been tried with the Menu tab yet.

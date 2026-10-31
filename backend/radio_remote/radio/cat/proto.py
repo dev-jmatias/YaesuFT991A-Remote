@@ -106,6 +106,7 @@ class HfModel:
     mode_class: dict
     mic_menu: str                  # EX P1P1 P2P2 P3P3 of the SSB "mod source" menu item
     mic_values: dict               # UI value -> menu parameter
+    mic_menus: tuple = ()          # the same item of every mode family (SSB, AM, FM, DATA), all written together; mic_menu (SSB) is the one that is read
     has_rt: bool = True            # RT / RU / RD / RC clarifier commands exist (not in the FT-710 manual)
     tune_start: str = "AC002;"     # AC P1 P2 P3: P3 2 = tuning start/stop (FTDX10, FTDX101); the FT-710 uses P3 3 = start, 0 = stop
     tune_stop: str = "AC002;"
@@ -115,13 +116,15 @@ class HfModel:
 
 MODELS: dict[str, HfModel] = {
     "ftdx10": HfModel("ftdx10", "Yaesu FTDX10", "0761", 100, _SSB_FTDX10, _CW_FTDX10, _CLASS_FTDX,
-                      "010113", {"MIC": 0, "REAR": 1}),                           # EX 01 01 13 SSB MOD SOURCE (p.11)
+                      "010113", {"MIC": 0, "REAR": 1},                          # EX 01 01 13 SSB MOD SOURCE (p.11)
+                      mic_menus=("010113", "010213", "010312", "010415")),        # SSB, AM, FM, DATA MOD SOURCE (the radio's menu table)
     "ftdx101d": HfModel("ftdx101d", "Yaesu FTDX101D", "0681", 100, _SSB_FTDX101, _CW_FTDX101, _CLASS_FTDX,
-                        "010111", {"MIC": 0, "REAR": 1}),                         # EX 01 01 11 SSB MOD SOURCE (p.10)
+                        "010111", {"MIC": 0, "REAR": 1},                        # EX 01 01 11 SSB MOD SOURCE (p.10)
+                        mic_menus=("010111", "010211", "010310", "010413")),      # SSB, AM, FM, DATA MOD SOURCE
     "ftdx101mp": HfModel("ftdx101mp", "Yaesu FTDX101MP", "0682", 200, _SSB_FTDX101, _CW_FTDX101, _CLASS_FTDX,
-                         "010111", {"MIC": 0, "REAR": 1}),
+                         "010111", {"MIC": 0, "REAR": 1}, mic_menus=("010111", "010211", "010310", "010413")),
     "ft710": HfModel("ft710", "Yaesu FT-710", "0800", 100, _SSB_FT710, _CW_FT710, _CLASS_FT710,
-                     "010114", {"MIC": 0, "REAR": 1}, has_rt=False,               # EX 01 01 14 MOD SOURCE 0 MIC 1 USB 2 REAR 3 AUTO (p.10)
+                     "010114", {"MIC": 0, "REAR": 1}, has_rt=False, mic_menus=("010114", "010214", "010313", "010414"),               # EX 01 01 14 MOD SOURCE 0 MIC 1 USB 2 REAR 3 AUTO (p.10)
                      tune_start="AC003;", tune_stop="AC000;"),                    # AC P3: 3 = tuning start, 0 = tuning stop (FT-710 p.4)
 }
 
@@ -148,6 +151,7 @@ class HfProto:
     S_METER_READ = "SM0;"
     TX_METER_CYCLE = ("RM5;", "RM6;", "RM4;", "RM3;")        # PO, SWR, ALC, COMP
     CLARIFIER_ON = "RT1;"
+    VFO_SELECT = ("VS0;", "VS1;")                            # VS P1: the VFO the radio's dial operates (A, B)
 
     def __init__(self, model: str):
         self.m = MODELS[model]
@@ -168,6 +172,11 @@ class HfProto:
         self._mic_by_value = {v: k for k, v in self.m.mic_values.items()}
 
     # ------------------------------------------------------------------ building commands
+    @property
+    def sv_swaps(self) -> bool:
+        """False where SV; does not swap the two VFOs. BENCH-FOUND on a real FTDX10: SV; only switches the VFO the dial operates (VS0 / VS1) and leaves FA and FB as they are."""
+        return self.m.key != "ftdx10"
+
     def freq_set(self, hz: int, vfo: str = "A") -> str:
         if not 30_000 <= hz <= 75_000_000:
             raise FrameError(f"frequency {hz} outside 30000..75000000")
@@ -245,6 +254,8 @@ class HfProto:
             out += ["FB;", "OI;"]
         if caps.has("split"):
             out.append(self.SPLIT_READ)
+        if caps.has("vfo_select"):
+            out.append("VS;")
         if caps.has("dual_receiver"):
             out += ["FR;", "FT;", "VS;", "AG1;"]
         if "squelch" in caps.data.get("levels", {}):
@@ -257,6 +268,8 @@ class HfProto:
             out += ["FB;", "OI;"]
         if caps.has("split"):
             out.append(self.SPLIT_READ)
+        if caps.has("vfo_select"):
+            out.append("VS;")
         if caps.has("dual_receiver"):
             out += ["FR;", "FT;", "VS;"]
         return out
@@ -279,6 +292,8 @@ class HfProto:
         out = ["FA;", "FB;", "OI;"]
         if caps.has("split"):
             out.append(self.SPLIT_READ)
+        if caps.has("vfo_select"):
+            out.append("VS;")
         return out + ["MD0;"]
 
     # ------------------------------------------------------------------ controls: name -> (read, encode(value) -> [commands])
@@ -317,7 +332,7 @@ class HfProto:
             "break_in": ("BI;", lambda v: [f"BI{_b(v)};"]),
             "processor": ("PR0;", lambda v: [f"PR0{_b(v)};"]),
             "processor_level": ("PL;", lambda v: [f"PL{v:03d};"]),                         # PL P1P1P1 000..100
-            "mic_select": (f"EX{m.mic_menu};", lambda v: [f"EX{m.mic_menu}{m.mic_values[v]};"]),
+            "mic_select": (f"EX{m.mic_menu};", lambda v: [f"EX{a}{m.mic_values[v]};" for a in (m.mic_menus or (m.mic_menu,))]),
         }
         if self.model.startswith("ftdx101"):
             enc["audio_out_level"] = ("EX010109;", lambda v: [f"EX{g}{v:03d};" for g in ("010109", "010209", "010309", "010411", "010511", "020109")])    # SSB / AM / FM / DATA / RTTY / CW OUT LEVEL
@@ -399,6 +414,8 @@ class HfProto:
         if cmd == "VS":
             if p not in ("0", "1"):
                 raise FrameError("bad VS")
+            if self.model == "ftdx10":                                              # one receiver, two VFOs: VS tells which one the dial operates
+                return {"active_vfo": "a" if p == "0" else "b"}
             return {"active_receiver": "main" if p == "0" else "sub"}
         if cmd == "FT":
             if p not in ("0", "1"):

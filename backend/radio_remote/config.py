@@ -19,6 +19,7 @@ DEFAULTS: dict[str, dict[str, Any]] = {
         "serial_port": "auto",
         "baud": 38400,
         "hamlib_model": 0,
+        "app_preset": False,                 # set the radio's menu items the app needs (menu.py APP_PRESET) when an operator connects
     },
     "safety": {
         "allow_ptt": False,
@@ -120,6 +121,8 @@ def validate(cfg: dict) -> dict:
         raise ConfigError("radio.baud must be a standard CAT rate")
     if not 5 <= cfg["safety"]["tx_timeout_s"] <= 600:
         raise ConfigError("safety.tx_timeout_s must be 5..600")
+    if not isinstance(cfg["radio"]["app_preset"], bool):
+        raise ConfigError("radio.app_preset must be true or false")
     if not isinstance(cfg["safety"]["tx_warn"], bool):
         raise ConfigError("safety.tx_warn must be true or false")
     if not 1 <= cfg["safety"]["tx_warn_s"] <= 60:
@@ -219,11 +222,18 @@ def validate(cfg: dict) -> dict:
     return cfg
 
 
+# Radios whose ALC meter does not use the FT-991A's full scale of 160 (what the config default is). Applies only when the file does not set it.
+ALC_FULL_BY_MODEL = {"ftdx10": 48}              # real FTDX10: a normal SSB voice sat just under the 50 % mark of the radio's ALC zone
+
+
 def load(path: str | os.PathLike | None) -> dict:
     cfg = copy.deepcopy(DEFAULTS)
     if path and Path(path).exists():
         with open(path, "rb") as f:
-            cfg = _merge(cfg, tomllib.load(f))
+            user = tomllib.load(f)
+        cfg = _merge(cfg, user)
+        if "meter_alc_full" not in user.get("ui", {}):
+            cfg["ui"]["meter_alc_full"] = ALC_FULL_BY_MODEL.get(cfg["radio"].get("model"), cfg["ui"]["meter_alc_full"])
     return validate(cfg)
 
 

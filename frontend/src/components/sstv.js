@@ -279,15 +279,18 @@ export function createSstv(host, ctx) {
     if (!b) return;
     try { await tune(b); if (!info.on) await setOn(true); } catch (err) { toast(err.message); }
   };
-  // Entering this screen puts the radio on the last SSTV frequency and switches reception on; leaving it switches reception off and puts back the mode and frequency the radio had.
+  // Entering this screen puts the radio on the last SSTV frequency and switches reception on; leaving it for another digital screen switches reception off and puts back the mode and frequency the radio had.
+  // Leaving it for the Radio tab (or the Menu) leaves reception running: the operator switches it off here.
   let away = null;
-  ctx.sstvActive = async (active) => {
+  ctx.sstvActive = async (active, keep) => {
     sound.set(active);
+    if (!active && keep && info.on) { tracking = false; away = null; return true; }              // leaving for the Radio tab: reception keeps running until it is switched off here
     if (!can()) return;
     try {
       if (active) {
         if (S.state.freedv_on) { await send("freedv", { on: false }); toast("FreeDV switched off: SSTV and FreeDV cannot share the radio."); }
         away = { mode: S.state.mode, hz: S.state.frequency };
+        if (info.on) { tracking = true; return; }                                      // still running from before: leave the radio where it is
         const last = pref.get("sstvLast", null);                                     // the frequency and mode of the last visit, whatever they were (a preset, a typed frequency, the radio's knob)
         if (last && last.hz && MODES.includes(last.mode)) {
           await send("set_mode", { mode: last.mode });

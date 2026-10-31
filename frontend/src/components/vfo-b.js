@@ -13,18 +13,26 @@ export function createVfoB(host, ctx) {
   const f = ctx.S.caps.features;
   const dual = !!f.dual_receiver;                      // MAIN / SUB receivers: the copy / swap / split buttons mean something else here, so they are not offered
   const root = el(`<div class="vfob">
-    <div class="vfob-read"><span class="dim">${dual ? "SUB" : "VFO B"}</span> <b data-fb>-</b> <small class="dim">MHz</small>
+    <div class="vfob-read">${f.vfo_select ? `<span class="vfosel" role="group" aria-label="The VFO the radio operates"><span class="vbadge" data-act="a" title="The radio's dial operates VFO A">A</span><span class="vbadge" data-act="b" title="The radio's dial operates VFO B (press the A/B key on the radio to change)">B</span></span> ` : ""}<span class="dim">${dual ? "SUB" : "VFO B"}</span> <b data-fb>-</b> <small class="dim">MHz</small>
       <span class="vfob-band dim" data-bb></span> <span class="vbadge split" data-splitpill hidden>SPLIT: TX on B</span></div>
     <div class="row vfob-ctl${dual ? " dualctl" : ""}">
       ${dual ? `<button class="led" data-swapms title="Swap the frequencies of the MAIN and SUB receivers (the modes stay as they are)">MAIN &#8596; SUB</button><span class="rxtx" role="group" aria-label="Receive and transmit receivers"><span class="rxtxg" role="group" aria-label="MAIN receiver"><button class="led sm selrx" data-sel="main" aria-pressed="false" title="Operate the MAIN receiver: the radio's dial and keys act on it">MAIN</button><button class="led sm" data-rx="main" aria-pressed="false" title="Listen to the MAIN receiver (on / off)">RX</button><button class="led sm txsel" data-tx="main" aria-pressed="false" title="Transmit on the MAIN receiver's frequency">TX</button></span><span class="rxtxg" role="group" aria-label="SUB receiver"><button class="led sm selrx" data-sel="sub" aria-pressed="false" title="Operate the SUB receiver: the radio's dial and keys act on it">SUB</button><button class="led sm" data-rx="sub" aria-pressed="false" title="Listen to the SUB receiver (on / off)">RX</button><button class="led sm txsel" data-tx="sub" aria-pressed="false" title="Transmit on the SUB receiver's frequency">TX</button></span></span>` : `<button class="led" data-op="a_to_b" title="Copy the A frequency to B">A &rarr; B</button>
       <button class="led" data-op="b_to_a" title="Copy the B frequency to A">B &rarr; A</button>
       <button class="led" data-op="swap" title="Swap VFO A and B">A &#8596; B</button>`}
+      ${f.vfo_select ? `<button class="led" data-abkey title="Switch the VFO the radio operates, like the A/B key on the radio. The one in use is shown by the green ACTIVE badge.">A/B</button>` : ""}
       ${f.split ? `<button class="led" data-split title="Split: receive on A, transmit on B">Split</button>` : ""}
       ${f.quick_split ? `<button class="led" data-op="quick_split" title="Radio's quick split: sets B from A using the offset in radio menu 035 and turns split on">Quick split</button>` : ""}
-      ${dual ? "" : `<form class="row bform" data-form><input inputmode="decimal" placeholder="B MHz" size="7" aria-label="Set the VFO B frequency in MHz"><button>Set B</button></form>`}
+      ${dual ? "" : `<form class="row bform" data-form><input inputmode="decimal" placeholder="B MHz" size="7" aria-label="Set the small VFO's frequency in MHz"><button data-setb>Set B</button></form>`}
     </div></div>`);
   host.append(root);
-  root.querySelectorAll("[data-op]").forEach((b) => (b.onclick = () => ctx.send("vfo", { op: b.dataset.op })));
+  // These buttons do something once and have no on / off state, so each one lights for a moment when pressed, to show the press was taken.
+  root.querySelectorAll("[data-op]").forEach((b) => {
+    b.onclick = () => {
+      ctx.send("vfo", { op: b.dataset.op });
+      b.classList.add("on");
+      setTimeout(() => b.classList.remove("on"), 450);
+    };
+  });
   // MAIN / SUB groups (FTDX101): RX = which receivers are listening (at least one stays on), TX = which one transmits; listening to one and transmitting on the other is split
   const rxBtns = [...root.querySelectorAll("[data-rx]")], txBtns = [...root.querySelectorAll("[data-tx]")];
   rxBtns.forEach((b) => (b.onclick = () => {
@@ -43,9 +51,11 @@ export function createVfoB(host, ctx) {
     ctx.send("set_frequency", { hz: s.frequency_b });
     ctx.send("set_frequency", { hz: s.frequency, vfo: "B" });
   };
+  const abKey = root.querySelector("[data-abkey]");
+  if (abKey) abKey.onclick = () => ctx.send("vfo_select", { vfo: ctx.S.state.active_vfo === "b" ? "a" : "b" });
   const splitBtn = root.querySelector("[data-split]");
   if (splitBtn) splitBtn.onclick = () => ctx.send("split", { on: !ctx.S.state.split });
-  const bForm = root.querySelector("[data-form]");
+  const bForm = root.querySelector("[data-form]"), setB = root.querySelector("[data-setb]");
   if (bForm) bForm.onsubmit = (e) => {
     e.preventDefault();
     const inp = e.target.querySelector("input"), v = parseFloat(inp.value.replace(",", "."));
@@ -67,6 +77,13 @@ export function createVfoB(host, ctx) {
         txBtns.forEach((b) => { b.classList.toggle("on", b.dataset.tx === tx); b.setAttribute("aria-pressed", String(b.dataset.tx === tx)); });
       }
       if (splitBtn) splitBtn.classList.toggle("on", !!s.split);
+      if (abKey) abKey.classList.toggle("on", s.active_vfo === "b");
+      if (f.vfo_select) {                                                       // the main display is the operated VFO: "B" is whichever VFO is the small one
+        const o = s.active_vfo === "b" ? "A" : "B";
+        if (setB && setB.textContent !== `Set ${o}`) { setB.textContent = `Set ${o}`; bForm.querySelector("input").placeholder = `${o} MHz`; }
+        pill.textContent = `SPLIT: TX on ${o}`;
+      }
+      root.querySelectorAll("[data-act]").forEach((b) => b.classList.toggle("on", b.dataset.act === s.active_vfo));
     },
   };
 }

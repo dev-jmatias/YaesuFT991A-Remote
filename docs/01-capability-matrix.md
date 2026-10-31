@@ -21,37 +21,37 @@ How to read the table:
 | Function | FT-991A | FTDX10 | FTDX101D | FTDX101MP | FT-710 |
 |---|---|---|---|---|---|
 | **Transmit** | | | | | |
-| Antenna tuner on/off | works | from the manual | works | works | from the manual |
-| Microphone input (menu: MIC / REAR) | works | from the manual | works | works | from the manual |
-| Monitor | works | from the manual | works | works | from the manual |
-| PTT (hold to transmit) | works | from the manual | works | works | from the manual |
-| Speech processor | works | not offered yet | works | works | not offered yet |
-| TUNE (start the tuner: transmits a carrier) | works | not offered yet | works | works | not offered yet |
+| Antenna tuner on/off | works | works | works | works | from the manual |
+| Microphone input (menu: MIC / REAR) | works | works | works | works | from the manual |
+| Monitor | works | works | works | works | from the manual |
+| PTT (hold to transmit) | works | works | works | works | from the manual |
+| Speech processor | works | works | works | works | not offered yet |
+| TUNE (start the tuner: transmits a carrier) | works | works | works | works | not offered yet |
 | **Meters** | | | | | |
-| ALC meter | works | from the manual | works | works | from the manual |
-| Compression meter | works | from the manual | works | works | from the manual |
-| SWR meter | works | from the manual | works | works | from the manual |
+| ALC meter | works | works | works | works | from the manual |
+| Compression meter | works | works | works | works | from the manual |
+| SWR meter | works | works | works | works | from the manual |
 | **Receiver** | | | | | |
-| AGC (OFF / FAST / MID / SLOW / AUTO) | works | from the manual | works | works | from the manual |
-| Attenuator (OFF / 6 / 12 / 18 dB) | - | from the manual | works | works | from the manual |
+| AGC (OFF / FAST / MID / SLOW / AUTO) | works | works | works | works | from the manual |
+| Attenuator (OFF / 6 / 12 / 18 dB) | - | works | works | works | from the manual |
 | Attenuator (on/off) | works | - | - | - | - |
 | Audio peak filter (CW) | not offered yet | not offered yet | not offered yet | not offered yet | not offered yet |
-| Auto notch | works | from the manual | works | works | from the manual |
-| Contour | works | from the manual | works | works | from the manual |
-| Filter width | works | from the manual | works | works | from the manual |
-| IF shift | works | from the manual | works | works | from the manual |
-| IPO / preamp (AMP1, AMP2) | works | from the manual | works | works | from the manual |
-| Manual notch | works | from the manual | works | works | from the manual |
-| Noise blanker | works | from the manual | works | works | from the manual |
-| Noise reduction (DNR) | works | from the manual | works | works | from the manual |
-| RIT | works | from the manual | works | works | not offered yet |
-| XIT | works | from the manual | works | works | not offered yet |
+| Auto notch | works | works | works | works | from the manual |
+| Contour | works | works | works | works | from the manual |
+| Filter width | works | works | works | works | from the manual |
+| IF shift | works | works | works | works | from the manual |
+| IPO / preamp (AMP1, AMP2) | works | works | works | works | from the manual |
+| Manual notch | works | works | works | works | from the manual |
+| Noise blanker | works | works | works | works | from the manual |
+| Noise reduction (DNR) | works | works | works | works | from the manual |
+| RIT | works | works | works | works | not offered yet |
+| XIT | works | works | works | works | not offered yet |
 | **VFOs and memories** | | | | | |
 | Memory channels: add and edit (MT write) | works | - | - | - | - |
 | Memory channels: list and recall | works | not offered yet | works | works | not offered yet |
-| Quick split (QS) | from the manual, untested | from the manual | not offered yet | not offered yet | not offered yet |
-| Split | works | from the manual | not offered yet | not offered yet | from the manual |
-| VFO B (A=B, B=A, swap, set frequency) | works | from the manual | works | works | from the manual |
+| Quick split (QS) | from the manual, untested | - | not offered yet | not offered yet | not offered yet |
+| Split | works | works | not offered yet | not offered yet | from the manual |
+| VFO B (A=B, B=A, swap, set frequency) | works | works | works | works | from the manual |
 | **Radio** | | | | | |
 | 144 MHz band | works | - | - | - | - |
 | 430 MHz band | works | - | - | - | - |
@@ -61,14 +61,15 @@ How to read the table:
 | audio_out_level | - | - | works | works | - |
 | C4FM mode (mode select only) | works | - | - | - | - |
 | cw_keyer | - | - | works | works | - |
-| cw_text | from the manual, untested | from the manual | works | works | from the manual |
+| cw_text | from the manual, untested | works | works | works | from the manual |
 | dual_receiver | - | - | works | works | - |
-| menu | works | from the manual | works | works | from the manual |
-| Power off over CAT | works | from the manual | works | works | from the manual |
-| Power on over CAT (from standby) | works | from the manual | works | works | from the manual |
+| menu | works | works | works | works | from the manual |
+| Power off over CAT | works | works | works | works | from the manual |
+| Power on over CAT (from standby) | works | works | works | works | from the manual |
 | range_scan | works | - | - | - | - |
 | rear_select | - | - | works | works | - |
 | scan | works | - | - | - | - |
+| vfo_select | - | works | - | - | - |
 | WIRES DG-ID menu value | works | - | - | - | - |
 
 ## Modes, bands and frequency range

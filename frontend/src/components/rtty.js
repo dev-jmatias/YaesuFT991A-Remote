@@ -236,13 +236,15 @@ export function createRtty(host, ctx) {
     } catch (err) { toast(err.message); }
   };
   let away = null;
-  ctx.rttyActive = async (active) => {
+  ctx.rttyActive = async (active, keep) => {
     sound.set(active);
+    if (!active && keep && info.on) { tracking = false; away = null; return true; }              // leaving for the Radio tab: it keeps running until it is switched off here
     if (!can()) return;
     try {
       if (active) {
         if (S.state.freedv_on) { await send("freedv", { on: false }); toast("FreeDV switched off: RTTY and FreeDV cannot share the radio."); }
         away = { mode: S.state.mode, hz: S.state.frequency };
+        if (info.on) { tracking = true; return; }                                      // still running from before: leave the radio where it is
         const last = pref.get("rttyLast", null);
         if (last && last.hz && RMODES.includes(last.mode)) {
           await send("set_mode", { mode: last.mode });

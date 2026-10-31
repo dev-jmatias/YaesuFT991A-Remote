@@ -69,6 +69,7 @@ class YaesuCatDriver(RadioDriver):
         self._mic_menus: dict[str, str] = {}                      # microphone source per mode family (ssb / am / fm / data) as last read: "mic_select" is REAR when any is REAR
         self._mem_write_lock = asyncio.Lock()
         self._mem_edit_blocked = ""                              # set when a write changed another channel: editing stays off until the service restarts
+        self._raw_vfo: dict[str, object] = {}                    # FTDX10 (vfo_select): VFO A / B frequency and mode as the radio reports them, by letter
         self._last_vfo_freq: int | None = None                  # the VFO frequency and mode last seen outside memory mode (see _on_frame)
         self._last_vfo_mode: str | None = None
         self.state.update(connected=False, model=model, tx=False, tx_source=None)
@@ -265,6 +266,32 @@ class YaesuCatDriver(RadioDriver):
             i += 1
 
     # ---------------------------------------------------------------- frames
+    def _present_vfos(self, f: str, fields: dict) -> dict:
+        """FTDX10: like the radio's own screen, the MAIN frequency, mode and band shown are those of the VFO the dial operates (VS); the other VFO is the small one. BENCH-FOUND:
+        FA and IF always describe VFO A and FB / OI VFO B whichever is operated, while MD0 answers for the operated VFO. So the radio's letters are kept in _raw_vfo and
+        the state gets them presented by role."""
+        raw = self._raw_vfo
+        act = fields.get("active_vfo") or self.state.get("active_vfo") or "a"
+        cmd = f[:2]
+        if cmd == "MD" and "mode" in fields:                                   # MD0 answers for the operated VFO
+            raw["mb" if act == "b" else "ma"] = fields.pop("mode")
+        else:
+            if "frequency" in fields:
+                raw["fa"] = fields.pop("frequency")
+            if "mode" in fields:
+                raw["ma"] = fields.pop("mode")
+        if "frequency_b" in fields:
+            raw["fb"] = fields.pop("frequency_b")
+        if "mode_b" in fields:
+            raw["mb"] = fields.pop("mode_b")
+        main, other = ("fb", "mb"), ("fa", "ma")
+        if act != "b":
+            main, other = ("fa", "ma"), ("fb", "mb")
+        for key, src in (("frequency", main[0]), ("mode", main[1]), ("frequency_b", other[0]), ("mode_b", other[1])):
+            if src in raw and (key not in self.state or self.state.get(key) != raw[src]):
+                fields[key] = raw[src]
+        return fields
+
     def _on_frame(self, f: str) -> None:
         try:
             fields = self.proto.decode(f)
@@ -274,6 +301,8 @@ class YaesuCatDriver(RadioDriver):
         # BENCH-FOUND on a friend's FT-991A: in memory mode its IF answer carries the channel number but still the VFO's frequency (MC009 and MC001 both answered
         # 14.236000), so the page kept showing the VFO frequency. While the radio is in memory mode and only repeats the VFO frequency we last saw, the stored
         # frequency and mode of that channel (read from the radio's own memory list) are shown instead. A frequency that differs from the VFO's is trusted as before.
+        if self.caps.has("vfo_select"):
+            fields = self._present_vfos(f, fields)
         mic_keys = fields.keys() & {"mic_ssb", "mic_am", "mic_fm", "mic_data"}
         if mic_keys:
             self._mic_menus.update({k[4:]: fields[k] for k in mic_keys})
@@ -423,6 +452,16 @@ class YaesuCatDriver(RadioDriver):
         await self._guard_cat(c.send(cmd))
         await self._guard_cat(c.request("VS;"))
 
+    async def set_active_vfo(self, which: str) -> None:
+        """FTDX10: VS0; / VS1; choose the VFO the radio's dial (and its mode command) operates, like pressing the radio's A/B key. Nothing is transmitted."""
+        c = self._need_client()
+        if not self.caps.has("vfo_select"):
+            raise RadioError("this radio has no VFO select")
+        if self.state.get("tx") or self.state.get("tuning"):
+            raise RadioError("cannot change VFOs while transmitting")
+        await self._guard_cat(c.send(self.proto.VFO_SELECT[0 if which == "a" else 1]))
+        await self._settled_reads(["VS;", "MD0;", "FA;", "FB;", "OI;"])
+
     async def vfo_op(self, op: str) -> None:
         """SV; swap, AB; copy A to B, BA; copy B to A, QS; quick split (all documented, set-only). No command selects a VFO."""
         c = self._need_client()
@@ -433,8 +472,37 @@ class YaesuCatDriver(RadioDriver):
             raise RadioError("quick split is not enabled for this radio profile")
         if self.state.get("tx") or self.state.get("tuning"):
             raise RadioError("cannot change VFOs while transmitting")
-        await self._guard_cat(c.send(cmd))
+        if op == "swap" and not getattr(self.proto, "sv_swaps", True):
+            await self._swap_vfos(c)
+        else:
+            await self._guard_cat(c.send(cmd))
         await self._settled_reads(self.proto.settled_vfo_reads(self.caps))        # the radio is the truth: re-read what may have changed
+
+    async def _swap_vfos(self, c) -> None:
+        """A radio whose SV; does not swap (FTDX10): exchange the modes first (VS selects the VFO the mode command reaches; a mode change can shift the stored
+        frequency, e.g. LSB to USB), then the frequencies, and leave the operated VFO as it was."""
+        a_sel, b_sel = self.proto.VFO_SELECT
+        was = b_sel if self.state.get("active_vfo") == "b" else a_sel
+        await self._guard_cat(c.send(a_sel))                                 # MD0 answers for the operated VFO: make it A first
+        for r in ("VS;", "FA;", "FB;", "MD0;", "OI;"):
+            await self._guard_cat(c.request(r))
+        raw = self._raw_vfo
+        fa, fb, ma, mb = raw.get("fa"), raw.get("fb"), raw.get("ma"), raw.get("mb")
+        if not (fa and fb and ma and mb):
+            raise RadioError("the VFOs have not been read yet")
+        try:
+            if ma != mb:
+                await self._guard_cat(c.send(self.proto.mode_set(mb)))
+                await self._guard_cat(c.send(b_sel))
+                await self._guard_cat(c.send(self.proto.mode_set(ma)))
+                await self._guard_cat(c.send(a_sel))
+                await asyncio.sleep(self.t.settle_s)
+            await self._guard_cat(c.send(self.proto.freq_set(fb)))
+            await self._guard_cat(c.send(self.proto.freq_set(fa, "B")))
+        except frame.FrameError as e:
+            raise RadioError(str(e)) from None
+        finally:
+            await self._guard_cat(c.send(was))
 
     async def set_mode(self, mode: str) -> None:
         c = self._need_client()

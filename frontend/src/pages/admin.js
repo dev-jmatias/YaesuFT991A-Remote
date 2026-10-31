@@ -92,7 +92,8 @@ export function openSheet(root, { user, tab, sock }) {
             <label>Model<select name="radio.model">${opt(info.models, c.radio.model)}</select></label>
             <label>Serial port<input name="radio.serial_port" list="ports" value="${esc(c.radio.serial_port)}"><datalist id="ports"><option value="auto">${info.serial_ports.map((p) => `<option value="${esc(p.device)}">${esc(p.description)}</option>`).join("")}</datalist></label>
             <label>CAT baud<select name="radio.baud">${opt([4800, 9600, 19200, 38400, 115200], c.radio.baud)}</select></label>
-            <label>Hamlib model<input name="radio.hamlib_model" type="number" min="0" value="${c.radio.hamlib_model}"></label></fieldset>
+            <label>Hamlib model<input name="radio.hamlib_model" type="number" min="0" value="${c.radio.hamlib_model}"></label>
+            <label class="check"><input name="radio.app_preset" type="checkbox"${c.radio.app_preset ? " checked" : ""}> Set the radio's menu for the app when an operator connects <small class="dim">(the audio-over-USB settings; see Menu &gt; Set up for the app)</small></label></fieldset>
           <fieldset><legend>Audio</legend>
             <label class="chk"><input name="audio.enabled" type="checkbox" ${c.audio.enabled ? "checked" : ""}> Enabled</label>
             <label>Backend<select name="audio.backend">${opt(["auto", "alsa", "test"], c.audio.backend)}</select></label>

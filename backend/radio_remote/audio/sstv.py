@@ -252,7 +252,10 @@ MS = FS // 1000                                # samples per millisecond
 CHECK_EVERY = FS // 10                         # look for a header every 100 ms of new audio
 IDLE_KEEP = 2 * FS                             # audio kept while no picture is being received
 SYNC_GAIN = 0.0                                # how fast the sync pulses correct the tuning offset. 0: only the header's leader measures it (the 1200 Hz pulse reads a few Hz off through the receive filter, which cost more than the drift of a radio over a few minutes)
-MAX_MISSES = 8                                 # lines in a row without a sync pulse before the picture is given up
+MAX_MISSES = 8                                 # lines in a row without a sync pulse before the picture is given up (at least this many, and as many as fit in GIVE_UP_S: a fade of a few seconds must not end it)
+GIVE_UP_S = 10.0
+QUIET_S = 2.5                                  # ... but when the signal has also gone (a tenth of its power or less), the picture ends after this long
+QUIET_RATIO = 0.1
 GAP_S = 1.2                                    # a break in the audio longer than this ends the picture (our own transmission, a lost link)
 
 
@@ -285,6 +288,9 @@ class SstvRx:
         self.L0 = 0.0                                  # absolute sample index where that line starts
         self._pulse_off = 0.0
         self.misses = 0
+        self.quiet = 0                                 # lines in a row with (nearly) no signal
+        self.ref_lvl = 0.0                             # the signal level of the picture so far (the strongest line)
+        self.kscale = 1.0                              # how much noise pulls the measured frequencies toward the middle of the band (1 = not at all): measured from the header
         self.fofs = 0.0                                # how far the tuning of the radio is off: every tone arrives this many Hz high (+) or low (-); measured from the header and the sync pulses
         self.state = "idle"
         self.pend: dict = {}                           # Robot 36: the line of an even/odd pair that is waiting for its partner
@@ -301,6 +307,10 @@ class SstvRx:
         self.p = np.concatenate([self.p, (y * np.conj(prev)).astype(np.complex64)])
         self.n += len(x)
 
+    def _ft(self, s):
+        """The frequency of a sum of lag-1 products, corrected for the pull of the noise toward the middle of the band (measured from the header)."""
+        return FC + (_freq_of(s) - FC) / self.kscale
+
     @property
     def p_end(self) -> int:
         return self.p0 + len(self.p)
@@ -313,43 +323,68 @@ class SstvRx:
 
     # ---- header
     def _find_vis(self):
-        """Look for a calibration header in the recent audio. Returns (vis code, absolute sample index of the end of the header, tuning offset in Hz) or None.
-        The header is found with wide tolerances (a radio that is tuned a little off shifts every tone), and the offset is then measured from its leader, which must be 1900 Hz."""
+        """Look for a calibration header in the recent audio. Returns (vis code, absolute sample index of the end of the header, tuning offset in Hz, scale of the noise pull) or None.
+        Every part of the header is measured over its whole length (the leader 280 ms, each 30 ms bit 16 ms, the 10 ms break 6 ms), not millisecond by millisecond: the frequency of a
+        segment is read from the sum of its lag-1 products, so a noisy signal that is hopeless for a single millisecond still gives a clean number. A segment counts only when it is a
+        steady tone (the sum is a good part of the sum of the sizes: noise alone gives close to nothing). The tuning offset is measured from the leader, which must be 1900 Hz."""
         n = len(self.p) // MS
         if n < 700:
             return None
         P1 = self.p[len(self.p) - n * MS:].reshape(n, MS).astype(np.complex128).sum(axis=1)       # one value per millisecond, aligned to the END of the buffer
         base = self.p_end - n * MS
-        F, A = _freq_of(P1), np.abs(P1)
-        good = A > 0.15 * np.percentile(A, 97)
-        L = (np.abs(F - FREQ_LEADER) < 190) & good
-        S = (np.abs(F - FREQ_SYNC) < 190) & good
-        frac = lambda m, a, b: m[max(a, 0):max(b, 0)].mean() if b > a else 0.0
-        for i in range(min(n - 311, n - 1) - 1, 620, -1):            # candidates for the start of the VIS start bit, latest first
-            if not (S[i] and S[i + 1] and (L[i - 1] or L[i - 2]) and not S[i - 1]):          # the first millisecond of 1200 Hz after the leader (the bin of the change itself is neither)
-                continue
-            if frac(L, i - 290, i - 6) < 0.80 or frac(S, i - 307, i - 303) < 0.5 or frac(L, i - 600, i - 316) < 0.75:
-                continue
-            lead = F[i - 290:i - 6][L[i - 290:i - 6]]
-            off = float(np.median(lead)) - FREQ_LEADER                # the tuning offset, as the leader shows it
-            brk = F[i - 309:i - 301][S[i - 309:i - 301]]
-            if len(brk) and abs(float(np.median(brk)) - off - FREQ_SYNC) > 110:                # the break must be 700 Hz under the leader, with that same offset
-                continue
-            bits, ok = [], True
-            for k in range(8):
-                a = i + 30 + 30 * k + 7
-                m = F[a:a + 16].mean() - off
-                if abs(m - 1200) < 25:
-                    ok = False
-                    break
-                bits.append(1 if m < 1200 else 0)
-            if not ok or i + 300 > n or frac(S, i + 276, i + 296) < 0.6:
-                continue
-            if sum(bits) % 2:                                          # parity (7 data bits + the parity bit make an even number of ones)
-                continue
-            code = sum(b << k for k, b in enumerate(bits[:7]))
-            return code, base + (i + 300) * MS, off
-        return None
+        C = np.concatenate([[0], np.cumsum(P1)])
+        CA = np.concatenate([[0], np.cumsum(np.abs(P1))])
+        idx = np.arange(620, n - 301)                                   # candidates for the first millisecond of the VIS start bit
+        if len(idx) == 0:
+            return None
+
+        def seg(a, b):
+            """(frequency, steadiness 0..1) of the bins a+idx .. b+idx."""
+            lo, hi = idx + a, idx + b
+            s_ = C[hi] - C[lo]
+            return _freq_of(s_), np.abs(s_) / np.maximum(CA[hi] - CA[lo], 1e-12)
+
+        f_l2, c_l2 = seg(-290, -8)                                      # the second leader
+        f_l1, c_l1 = seg(-600, -318)                                    # the first one
+        f_bk, c_bk = seg(-307, -303)                                    # the break between them
+        f_st, c_st = seg(4, 26)                                         # the start bit
+        f_sp, c_sp = seg(274, 296)                                      # the stop bit
+        # Noise pulls every measured frequency toward the middle of the band (1700 Hz). The header holds two known tones, the 1900 Hz leader and the 1200 Hz start / stop bits, which give
+        # the scale of that pull (k) and the true tuning offset, and every other reading is corrected by them.
+        f_ref = 0.5 * (f_st + f_sp)
+        k = (f_l2 - f_ref) / (FREQ_LEADER - FREQ_SYNC)
+        k_ok = (k > 0.4) & (k < 1.2)
+        k = np.where(k_ok, k, 1.0)
+        fix = lambda f: FC + (f - FC) / k                               # a reading, as the tone really was
+        off = fix(f_l2) - FREQ_LEADER
+        ok = k_ok & (np.abs(off) < 200) & (np.abs(fix(f_l1) - fix(f_l2)) < 70) & (c_l2 > 0.3) & (c_l1 > 0.3)
+        ok &= (np.abs(fix(f_bk) - off - FREQ_SYNC) < 140) & (c_bk > 0.2)
+        ok &= (np.abs(fix(f_st) - off - FREQ_SYNC) < 90) & (np.abs(fix(f_sp) - off - FREQ_SYNC) < 90) & (c_st > 0.25) & (c_sp > 0.25)
+        bitf, bitc = [], []
+        for kk in range(8):
+            f_b, c_b = seg(30 + 30 * kk + 7, 30 + 30 * kk + 23)
+            bitf.append(fix(f_b) - off)
+            bitc.append(c_b)
+            ok &= (np.abs(bitf[-1] - 1200) > 40) & (np.abs(bitf[-1] - 1200) < 260) & (c_b > 0.25)
+        bits = np.stack([(f < 1200).astype(int) for f in bitf])         # 1100 Hz = 1
+        ok &= (bits.sum(axis=0) % 2 == 0)                               # parity (7 data bits + the parity bit make an even number of ones)
+        if not ok.any():
+            return None
+        score = np.where(ok, c_l2 + c_l1 + c_bk + c_st + c_sp + sum(bitc) / 8, -1.0)
+        # the header is found over several neighbouring candidates; take the middle of the best group of them
+        best = int(np.argmax(score))
+        lo = best
+        while lo - 1 >= 0 and ok[lo - 1]:
+            lo -= 1
+        hi = best
+        while hi + 1 < len(ok) and ok[hi + 1]:
+            hi += 1
+        j = (lo + hi) // 2 if hi - lo < 12 else best
+        if not ok[j]:
+            j = best
+        i = int(idx[j])
+        code = sum(int(bits[k][j]) << k for k in range(7))
+        return code, base + (i + 300) * MS, float(np.clip(off[j], -220.0, 220.0)), float(k[j])
 
     # ---- lines
     def _sync_end(self, expect_end: float, sync_ms: float, porch_ms: float, rad_ms: float):
@@ -363,8 +398,8 @@ class SstvRx:
         ks = np.arange(ls, 2 * r + ls + 1)                              # candidate END positions, relative to a
         pre = C[ks] - C[ks - ls]
         post = C[np.minimum(ks + lp, len(C) - 1)] - C[ks]
-        f_pre = _freq_of(pre) - self.fofs
-        e_pre, e_post = np.abs(f_pre - FREQ_SYNC), np.abs(_freq_of(post) - self.fofs - FREQ_BLACK)
+        f_pre = self._ft(pre) - self.fofs
+        e_pre, e_post = np.abs(f_pre - FREQ_SYNC), np.abs(self._ft(post) - self.fofs - FREQ_BLACK)
         score = e_pre + (0.5 * e_post if porch_ms > 0 else 0.0)
         i = int(np.argmin(score))
         if e_pre[i] > 140 or np.abs(pre[i]) < 0.3 * np.median(np.abs(self.p[a:b])) * ls:
@@ -380,7 +415,7 @@ class SstvRx:
         C = np.concatenate([[0], np.cumsum(seg)])
         e = edges - max(int(edges[0]), 0)
         s = C[e[1:]] - C[e[:-1]]
-        return np.clip((_freq_of(s) - self.fofs - FREQ_BLACK) / (FREQ_WHITE - FREQ_BLACK), 0.0, 1.0)
+        return np.clip((self._ft(s) - self.fofs - FREQ_BLACK) / (FREQ_WHITE - FREQ_BLACK), 0.0, 1.0)
 
     def _decode_line(self):
         """Decode the next line when the audio for it has arrived. Returns a list of events, or None when more audio is needed."""
@@ -393,13 +428,18 @@ class SstvRx:
             return None
         sy_t, sy_len, porch = m.sync_at(odd)
         first = self.line == 0
-        end = self._sync_end(self.L0 + (sy_t + sy_len) * MS, sy_len, porch, (13.0 if m.lead_ms else 6.0) if first else 2.5)
+        radius = (13.0 if m.lead_ms else 6.0) if first else min(2.5 + 1.5 * self.misses, 12.0)           # after lines without a pulse the search for it widens: the timing may have slipped meanwhile
+        end = self._sync_end(self.L0 + (sy_t + sy_len) * MS, sy_len, porch, radius)
         if end is not None:
             self.L0 = end - (sy_t + sy_len) * MS
             self.misses = 0
             self.fofs = float(np.clip(self.fofs + SYNC_GAIN * self._pulse_off, -220.0, 220.0))          # every sync pulse refines the tuning offset (and follows a radio that drifts)
         else:
             self.misses += 1
+        a0 = max(int(self.L0) - self.p0, 0)
+        lvl = float(np.abs(self.p[a0:a0 + int(line_ms * MS)]).mean()) if self.p_end > self.L0 else 0.0
+        self.ref_lvl = max(self.ref_lvl, lvl)
+        self.quiet = self.quiet + 1 if lvl < QUIET_RATIO * self.ref_lvl else 0
         vals, t = {}, 0.0
         for s in segs:
             if s.kind == "scan":
@@ -409,7 +449,7 @@ class SstvRx:
         self.line += 1
         self.L0 += line_ms * MS
         self._trim(self.L0 - 20 * MS)
-        if self.misses >= MAX_MISSES:
+        if self.misses >= max(MAX_MISSES, int(GIVE_UP_S * 1000.0 / line_ms)) or (self.misses >= MAX_MISSES and self.quiet >= max(MAX_MISSES, int(QUIET_S * 1000.0 / line_ms))):
             ev.append(self._finish(False))
         elif self.line >= m.lines:
             ev.append(self._finish(True))
@@ -473,7 +513,7 @@ class SstvRx:
                 self.since_check = 0
                 found = self._find_vis()
                 if found:
-                    code, at, off = found
+                    code, at, off, ksc = found
                     m = BY_VIS.get(code)
                     if m is None:
                         events.append({"k": "vis", "code": code})
@@ -482,7 +522,9 @@ class SstvRx:
                         self.mode, self.state = m, "image"
                         self.img = np.zeros((m.h, m.w, 3), dtype=np.uint8)
                         self.line, self.L0, self.misses, self.pend = 0, float(at) + m.lead_ms * MS, 0, {}
+                        self.quiet, self.ref_lvl = 0, 0.0
                         self.fofs = float(np.clip(off, -220.0, 220.0))
+                        self.kscale = float(np.clip(ksc, 0.5, 1.1))
                         self._trim(int(at) - 10 * MS)
                         events.append({"k": "start", "mode": m.key, "name": m.name, "w": m.w, "h": m.h, "seconds": round(m.seconds, 1)})
         if self.state == "image":

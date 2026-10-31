@@ -261,15 +261,17 @@ export function createCw(host, ctx) {
   };
   // Entering this screen puts the radio in a CW mode (on the last CW frequency, when there is one) and switches decoding on; leaving it switches decoding off and puts back the mode and frequency the radio had.
   let away = null;
-  ctx.cwActive = async (on) => {
+  ctx.cwActive = async (on, keep) => {
     const active_ = on;
     active = on; lastWant = null;
     sound.set(on);
+    if (!on && keep && info.on) { tracking = false; away = null; return true; }                   // leaving for the Radio tab: it keeps running until it is switched off here
     if (!can()) return;
     try {
       if (active_) {
         if (S.state.freedv_on) { await send("freedv", { on: false }); toast("FreeDV switched off: CW and FreeDV cannot share the radio."); }
         away = { mode: S.state.mode, hz: S.state.frequency };
+        if (info.on) { tracking = true; applyAuto(true); return; }                     // still running from before: leave the radio where it is
         const last = pref.get("cwLast", null);
         if (last && last.hz && MODES.includes(last.mode)) {
           await send("set_mode", { mode: last.mode });

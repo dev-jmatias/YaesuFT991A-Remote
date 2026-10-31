@@ -20,7 +20,7 @@ export function createTuneButton(host, ctx) {
       tune.classList.toggle("tuning", !!s.tuning);
       tune.disabled = locked;
       tune.title = locked ? "Locked: switch off the PTT lock to use TUNE (it transmits a carrier)" : "Start the antenna tuner. The radio transmits a carrier for a few seconds.";
-      tune.textContent = s.tuning ? "Tuning... (tap to stop)" : "Tune";
+      tune.textContent = s.tuning ? "Stop tune" : "Tune";
     },
   };
 }

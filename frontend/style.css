@@ -130,6 +130,10 @@ button.icon { width: 34px; padding: 0; } button.icon.wide { width: auto; padding
 .vbadge.txb.on { background: var(--red); color: #fff; border-color: transparent; animation: pulse 1s infinite; }
 .vbadge.split { background: var(--yellow); color: #1a1100; border-color: transparent; }
 .vbadge[hidden] { display: none; }
+.vfopanel header .vl.act { font-weight: 800; color: var(--green, #3ddc84); text-shadow: 0 0 8px rgba(61, 220, 132, .45); }
+.block .steprow button.led.tune, .steprow button.led.tune { padding-left: 10px; padding-right: 3px; min-width: 0; font-size: .78rem; letter-spacing: 0; }
+.vfosel { display: inline-flex; gap: 3px; margin-right: 6px; }
+.vfosel .vbadge.on { background: var(--green, #3ddc84); color: #06210f; border-color: transparent; }
 .vbadge.pick { cursor: pointer; user-select: none; }
 .vbadge.pick:hover { border-color: #8da2cc; }
 .vbadge.txb.sel { border-color: var(--red); color: #f3a3a3; }

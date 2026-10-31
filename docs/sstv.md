@@ -17,7 +17,7 @@ Robot 36 and Robot 72, Martin M1 and M2, Scottie S1, S2 and DX, PD50, PD90, PD12
    (see *Tuning* below). The presets are the usual calling frequencies: 80 m 3.845 LSB, 40 m 7.171 LSB, 20 m 14.230, 15 m 21.340, 10 m 28.680 USB, and the ISS SSTV events on 2 m 145.800 FM and 70 cm 437.550 FM.
 2. When a header is heard the picture area starts and fills line by line, with the mode, the line count and the time left. A finished picture is saved on the Pi and appears under **Received pictures**: tap it
    to see it large, download it as a PNG, or delete it. A picture that is cut short is kept as *partial* when it got at least 10 % of the way.
-3. Leaving the screen switches reception off and puts the radio back on the mode and frequency it had; **Clear** only empties the picture area. The next visit returns to the frequency, mode and step you used last.
+3. Leaving the screen for another digital screen switches reception off and puts the radio back on the mode and frequency it had. Leaving it for the **Radio** tab or the Menu leaves reception running (a note says so); switch it off here. **Clear** only empties the picture area. The next visit returns to the frequency, mode and step you used last.
 
 The receiver follows the transmitter's timing line by line, so a sound card that runs a little fast or slow does no harm, and a picture right behind another one is picked up too. Signals down to about
 12 dB signal-to-noise ratio (in 3 kHz) give a picture (noisy at that level); weaker ones are not recognised. The radio's filter must pass 1100 to 2300 Hz: if it is narrower, the Pi opens it (the same automatic widening as FreeDV,

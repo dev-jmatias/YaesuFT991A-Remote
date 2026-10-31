@@ -21,7 +21,7 @@ log = logging.getLogger("admin")
 # What the generic config form may change. Deliberately NOT here: safety.allow_ptt (it has its own endpoint, POST /api/admin/ptt,
 # which asks for the administrator's password), server.* (a typo would lock you out of your own radio), storage.*.
 EDITABLE = {
-    "radio": {"model", "serial_port", "baud", "hamlib_model"},
+    "radio": {"model", "serial_port", "baud", "hamlib_model", "app_preset"},
     "audio": {"enabled", "backend", "input_device", "output_device", "rx_gain_db", "tx_gain_db",
               "opus_bitrate", "max_peers"},
     "safety": {"tx_timeout_s", "tx_warn", "tx_warn_s", "ptt_heartbeat_timeout_s", "control_request_timeout_s"},

@@ -90,6 +90,9 @@ class Hub:
         self.auto_width = lambda: True           # freedv.auto_width (set by create_app): widen a narrow radio filter when FreeDV is on
         self._widen_task: asyncio.Task | None = None
         self.eq_presets: dict[str, dict] = {}    # the equalizer sets saved by the operators (name -> {bands, cut}), shared like the equalizer itself
+        self.app_preset = False                      # radio.app_preset: set the menu items the app needs when an operator connects (restart to change)
+        self._preset_client = None                   # the CAT client the preset was last checked on: once per connection to the radio
+        self._preset_task: asyncio.Task | None = None
         self.scan_list_path: Path | None = None     # the memory channels chosen for the list scan (scan_list.json in the data folder)
         self.eq_path: Path | None = None         # where the equalizer settings are kept (eq.json in the data folder)
         self._last_freq = driver.state.get("frequency") or 0
@@ -143,6 +146,8 @@ class Hub:
         return bool((self.audio and self.audio.freedv_state().get("on")) or (self.sstv and self.sstv.on))
 
     def _on_change(self, changed: dict) -> None:
+        if changed.get("connected") is True and self.app_preset and self._operators():
+            self.schedule_app_preset("the app")
         if "mode" in changed and self.audio is not None and self._wants_wide():
             self._schedule_widen()
         if "frequency" in changed:                                   # FreeDV keeps its software tuning when the dial moves a little
@@ -209,6 +214,31 @@ class Hub:
             self.auth.audit("mic_input_reset", None, None, "last operator left")
         except Exception as e:                    # the radio is off or busy: leave it as it is
             log.warning("could not switch the radio input back to MIC: %s", e)
+
+    def schedule_app_preset(self, who: str) -> None:
+        """An operator is here: once per connection to the radio, set the menu items the app needs (only the ones that differ), then tell the pages."""
+        if not self.app_preset or self.menu is None or self.driver.client is None or self._preset_client is self.driver.client:
+            return
+        if self._preset_task is not None and not self._preset_task.done():
+            return
+        self._preset_task = asyncio.ensure_future(self._app_preset_later(who))
+
+    async def _app_preset_later(self, who: str) -> None:
+        await asyncio.sleep(1.5)                                   # let the connection and the first readings settle
+        d = self.driver
+        if not d.state.get("connected") or d.state.get("tx") or d.state.get("tuning") or self.guard.keyed or d.client is None:
+            return
+        client = d.client
+        try:
+            res = await self.menu.preset_apply(who, auto=True)
+        except Exception as e:                                     # the radio is off or busy: leave it, try again at the next connection
+            log.warning("app preset: %s", e)
+            return
+        self._preset_client = client
+        if res["changed"]:
+            log.info("app preset: %s", "; ".join(f"{c['num']} {c['name']} {c['from']} -> {c['to']}" for c in res["changed"]))
+        if res["failed"]:
+            log.warning("app preset: not set: %s", res["failed"])
 
     # ---------------------------------------------------------- registry
     def clients_info(self) -> list[dict]:
@@ -382,6 +412,8 @@ class Hub:
             if not caps.frequency_ok(hz):
                 raise CommandError("frequency outside radio coverage")
             vfo = msg.get("vfo", "A")
+            if caps.has("vfo_select") and self.driver.state.get("active_vfo") == "b" and vfo in ("A", "B"):
+                vfo = "B" if vfo == "A" else "A"                          # FTDX10: A is the MAIN (operated) VFO on the page, B the other one, whichever letter the radio gives them
             if vfo == "B":
                 if not caps.has("vfo_b"):
                     raise CommandError("VFO B is not available for this radio")
@@ -400,6 +432,14 @@ class Hub:
                 raise CommandError("quick split is not available for this radio")
             self._not_while_transmitting()
             await self.driver.vfo_op(op)
+        elif typ == "vfo_select":                                      # FTDX10: the app's A/B key (VS0 / VS1), like the radio's own
+            if not caps.has("vfo_select"):
+                raise CommandError("this radio has no VFO select")
+            which = msg.get("vfo")
+            if which not in ("a", "b"):
+                raise CommandError("vfo must be a or b")
+            self._not_while_transmitting()
+            await self.driver.set_active_vfo(which)
         elif typ == "split":
             if not caps.has("split"):
                 raise CommandError("split is not available for this radio")
@@ -958,6 +998,7 @@ async def ws_handler(request):
     hub.clients[conn_id] = Client(ws, s, client_ip(request), sid)
     if s.role in ("operator", "admin"):
         hub.cancel_mic_reset()
+        hub.schedule_app_preset(s.username)
     bucket, strikes = TokenBucket(CMD_RATE, CMD_BURST), 0
     log.info("ws connect user=%s conn=%s", s.username, conn_id)
     try:
@@ -1138,6 +1179,34 @@ async def menu_backup(request):
     request.app[K_AUTH].audit("menu_backup", request[K_SESSION].username, client_ip(request), f"{len(data['values'])} items")
     name = f"menu-{data['model']}-{time.strftime('%Y%m%d-%H%M%S', time.gmtime())}.json"
     return web.Response(text=json.dumps(data, indent=1) + "\n", content_type="application/json", headers={"Content-Disposition": f'attachment; filename="{name}"'})
+
+
+async def menu_preset_plan(request):
+    """What the preset for the app would change on this radio (read from the radio now; any signed-in user)."""
+    menu = request.app.get(K_MENU)
+    if menu is None:
+        raise web.HTTPNotFound(text="this radio has no menu table")
+    if not request.app[K_DRIVER].state.get("connected"):
+        raise web.HTTPServiceUnavailable(text="the radio is not connected")
+    return web.json_response(await menu.preset_plan())
+
+
+async def menu_preset_apply(request):
+    """Set the menu items the app needs (administrators; confirmation; never while the radio transmits)."""
+    from .common import require_admin
+    admin_user = require_admin(request)
+    menu = request.app.get(K_MENU)
+    if menu is None:
+        raise web.HTTPNotFound(text="this radio has no menu table")
+    if not request.app[K_DRIVER].state.get("connected"):
+        raise web.HTTPServiceUnavailable(text="the radio is not connected")
+    b = await read_json(request)
+    if b.get("confirm") is not True:
+        raise web.HTTPBadRequest(text="confirmation needed")
+    try:
+        return web.json_response(await menu.preset_undo(admin_user.username) if b.get("undo") is True else await menu.preset_apply(admin_user.username))
+    except ValueError as e:
+        raise web.HTTPBadRequest(text=str(e)) from None
 
 
 async def menu_restore(request):
@@ -1522,6 +1591,7 @@ def create_app(cfg: dict, driver: RadioDriver | None = None, auth: AuthStore | N
                      "meter": {"alc_full": cfg["ui"]["meter_alc_full"], "comp_full": cfg["ui"]["meter_comp_full"],
                                "swr_warn": cfg["ui"]["swr_warn"], "swr_raw_at_3": cfg["ui"]["swr_raw_at_3"]}}
     app[K_HUB].tx_warn = {"on": cfg["safety"]["tx_warn"], "s": cfg["safety"]["tx_warn_s"]}
+    app[K_HUB].app_preset = bool(cfg["radio"].get("app_preset", False))
     app[K_STARTED] = time.monotonic()
     app[K_UPDATES] = updates.UpdateChecker(lambda: app[K_CFG]["updates"])        # reads the live config: Admin > Config applies at once
 
@@ -1617,6 +1687,8 @@ def create_app(cfg: dict, driver: RadioDriver | None = None, auth: AuthStore | N
     app.router.add_post("/api/menu/read", menu_read)
     app.router.add_get("/api/menu/backup.json", menu_backup)
     app.router.add_post("/api/menu/restore", menu_restore)
+    app.router.add_get("/api/menu/preset", menu_preset_plan)
+    app.router.add_post("/api/menu/preset", menu_preset_apply)
     app.router.add_get("/api/js8", js8_info)
     app.router.add_post("/api/js8/install", js8_install)
     app.router.add_post("/api/js8/setup", js8_setup)

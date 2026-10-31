@@ -21,7 +21,7 @@ Supported: a Raspberry Pi 4 or newer, or a 64-bit Linux PC. The Pi uses about a 
 
 ## Using it
 
-* Entering the screen puts the radio on the last JS8 frequency (14.078 MHz the first time) in DATA-U and switches JS8 on when everything is ready; leaving switches it off and puts the radio back as it was. Pick a band from the list (the usual JS8 frequencies), type a frequency, or step with **-** and **+**.
+* Entering the screen puts the radio on the last JS8 frequency (14.078 MHz the first time) in DATA-U and switches JS8 on when everything is ready; leaving for another digital screen switches it off and puts the radio back as it was; leaving for the Radio tab or the Menu leaves it running until you switch it off here. Pick a band from the list (the usual JS8 frequencies), type a frequency, or step with **-** and **+**.
 * **Speed:** Slow (30 s), Normal (15 s), Fast (10 s), Turbo (6 s) and JS8 60 (4 s, experimental). Everybody on a frequency must use the same speed; Normal is the usual one.
 * **TX offset:** where your signal sits in the radio's audio (300 to 2900 Hz). Pick a place where nobody else is: the **Band activity** list shows the offset of everything decoded.
 * **Band activity** lists everything decoded; **Messages** lists the messages directed at someone (yours are highlighted); **heard stations** are buttons: tap one to talk to it (its callsign goes into *To* and into the log form).
