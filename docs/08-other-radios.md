@@ -8,7 +8,7 @@ These four profiles were written from the Yaesu CAT manuals (FTDX10 2308-F, FTDX
 * **FTDX101MP**: same CAT commands as the D (one shared manual), so its profile is **enabled exactly like the D's**, with transmit power 5 to 200 W (the D: 5 to 100 W). No MP has been
   available here, so please report anything that differs; the first owner to try it should follow the checklist below.
 * **FTDX10**: tested on a real radio (2026-10-30/31, Raspberry Pi, USB, 38400); see *FTDX10: what was verified* below.
-* **FT-710**: connected to a real radio (2026-10-31): see *FT-710: what was verified* below. Still marked experimental until transmitting has been tried.
+* **FT-710**: connected to a real radio (2026-10-31): see *FT-710: what was verified* below. Still experimental: voice sent from the app did not modulate on the one radio tested.
 
 ## FTDX10: what was verified on a real radio
 
@@ -35,7 +35,8 @@ Connected over USB at 38400 (`ID0800;`): the power on and off CAT commands, freq
 * The radio's own settings were already right for the app: MOD SOURCE = USB in SSB, AM, FM and DATA, CAT-1 RATE 38400, RPTT SELECT = OFF (the app keys the radio by CAT). The app preset therefore changes nothing.
 * **USB audio and CAT together (bench-found):** on one FT-710 the radio's USB audio chip reset (the kernel logged `reset full-speed USB device`) whenever receive and transmit audio ran together while a CAT serial port was open; either direction alone, or both without the serial port, was stable, on any Pi USB port. The radio's own microphone was unaffected. `audio.half_duplex = true` works around it: receive audio stops while PTT is held and the transmit audio opens only then (the first syllable may be clipped); see [operations](operations.md).
 * **Meters (calibrated with the radio's own microphone and MOX on a dummy load):** the ALC full scale is 240 (a normal voice read raw ALC 110 to 130 with the radio's own bar at the middle), and the power meter uses the fitted curve in `PO_CURVES`. The speech processor is `PR0` (0 off, 1 on) and `PL` (3 digits), checked on the radio.
-* Not yet tried: the Tune button and voice transmit from the app's microphone (see the USB audio note above).
+* **Voice from the app did not modulate** on the one FT-710 tested. The cause is not found yet, which is why the profile is still experimental.
+* Not yet tried: the Tune button.
 
 ## FTDX101D: what was verified on a real radio
 
@@ -113,7 +114,7 @@ Different (and handled by the protocol object):
 
 ## What is deliberately NOT offered yet (`"unverified"` in the capability file)
 
-This list is for the radios that have **not** been tried (FTDX10, FT-710); the FTDX101D (and the MP, which uses the same commands) have these enabled as described above.
+This list is for the parts of the FTDX10 and FT-710 profiles that have not been tried yet; the FTDX101D (and the MP, which uses the same commands) have these enabled as described above.
 
 * **Speech processor** (`PR`/`PL`): the manual says `PR` 1 = OFF / 2 = ON, which is wrong on the FT-991A and on the FTDX101D (it is 0/1). Verify on the radio first.
 * **TUNE** (`tuner_tune`): it keys the transmitter. Enable it only after a dummy-load test, by setting `tuner_tune = true` in the model's toml.

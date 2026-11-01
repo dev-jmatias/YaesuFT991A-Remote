@@ -1,7 +1,8 @@
 # Connecting the radio
 
-**FT-991A:** complete and tested on a real radio. **FTDX10, FTDX101D, FTDX101MP and FT-710** have experimental profiles (written from their CAT
-manuals, tested only against a simulator): [other radios](08-other-radios.md). A built-in simulator ("mock") lets you try everything without a radio.
+**FT-991A:** complete and tested on a real radio. The **FTDX101D** and **FTDX10** were also tested on real radios, and the **FTDX101MP** uses the D's
+commands. The **FT-710** has been tried on a real radio but is still experimental (voice from the app did not modulate on the one radio tested):
+[other radios](08-other-radios.md). A built-in simulator ("mock") lets you try everything without a radio.
 What each radio supports: [capability matrix](01-capability-matrix.md).
 
 ## USB cable

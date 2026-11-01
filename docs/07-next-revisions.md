@@ -14,10 +14,17 @@ for what each radio supports see the [capability matrix](01-capability-matrix.md
 - Installation: the ready-made image (also through Raspberry Pi Imager's own screens), the installer pack, in-app update notice and `self_update.sh`
   with automatic rollback, Tailscale access (`tailscale_setup.sh`).
 
+## Tried on other real radios
+
+- **FTDX101D** (2026-10-05) and **FTDX10** (2026-10-30/31, v1.1.62): receive controls, VFOs, split, the Menu tab and the meters verified, so neither shows
+  the experimental banner. On the FTDX10, the Tune button and transmitting audio over USB are not tried yet. The **FTDX101MP** uses the D's commands
+  and has not been tried. Details in [other radios](08-other-radios.md).
+- **FT-710** (2026-10-31, v1.1.63): connected over USB; power on/off, frequency, mode, receive controls, the clarifier (`CF`) and the Menu tab work, and
+  ALC and power were calibrated on a dummy load. **Still experimental:** on the one FT-710 tested, voice sent from the app's microphone did not modulate
+  the radio, and its USB audio chip reset when receive and transmit audio ran together with CAT open (`audio.half_duplex` works around the reset).
+
 ## Done, but only against the simulator
 
-- **FTDX10, FTDX101D/MP and FT-710**: profiles written from their CAT manuals and marked experimental. They need someone with the radio to run the
-  first-contact checklist in [other radios](08-other-radios.md).
 - Quick split (`QS;`) on the FT-991A.
 
 ## Built, not yet released (simulator and real Hamlib `rigctl` only)
@@ -37,5 +44,6 @@ for what each radio supports see the [capability matrix](01-capability-matrix.md
 | C4FM RX/TX DG-ID | not reachable over CAT (checked on the radio); only the WIRES DG-ID menu value is read |
 | Writing memories from the page | deliberately not built: the program never changes a memory |
 | Automatic rollback test, `restore.sh`, `uninstall.sh` | scripts exist; a full real-Pi run of each is still to be recorded |
+| FT-710 voice transmit | voice from the app did not modulate the one FT-710 tested; the cause is not found yet, so the profile stays experimental |
 | Real-device UI testing | tablets, iPhone/iPad and PWA install have had little testing |
 | Colour themes / colour-blind mode | the dark theme is the only one |

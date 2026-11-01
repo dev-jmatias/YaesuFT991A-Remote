@@ -1,6 +1,6 @@
 # Yaesu FT-710 capability profile. Values: true | false | "unverified" ("unverified" is treated as false by the UI).
-# EXPERIMENTAL: written from the CAT manual only (FT-710_CAT_OM_ENG_2306-C); no Yaesu FT-710 has been available for testing,
-# so [model] bench_tested = false and the app shows an "experimental profile" banner. Everything marked true is documented in the manual.
+# EXPERIMENTAL: written from the CAT manual (FT-710_CAT_OM_ENG_2306-C) and connected to a real FT-710 on 2026-10-31 (receive controls, clarifier, menu,
+# meters); voice from the app did not modulate on that radio, so [model] bench_tested = false and the app shows an "experimental profile" banner.
 [model]
 id = "ft710"
 name = "Yaesu FT-710"

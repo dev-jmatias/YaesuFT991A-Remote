@@ -3,8 +3,9 @@
 Control a Yaesu radio from a phone, tablet or computer, at home or from anywhere: frequency, mode, filters, meters, memories,
 transmit with server-side safety, and remote audio. It runs on a Raspberry Pi next to the radio. No cloud account, no app store.
 
-**Radios:** the **FT-991A** and the **FTDX101D** are verified on real radios. The **FTDX101MP** (same commands as the D), **FTDX10** and **FT-710** are included but
-**experimental** (written from their manuals, tested only against a simulator). A built-in simulator lets you try everything without a radio.
+**Radios:** the **FT-991A**, the **FTDX101D** and the **FTDX10** are verified on real radios (on the FTDX10, transmitting audio over USB and the Tune button
+are not tried yet). The **FTDX101MP** has the same commands as the D. The **FT-710** has been connected to a real radio but is still **experimental**:
+receive and the controls work, but on the one radio tested, voice sent from the app did not modulate. A built-in simulator lets you try everything without a radio.
 
 **You need:** a Raspberry Pi 4 or 5 (64-bit) with a power supply and an SD card (8 GB or more), the radio's USB cable, and a network
 (cable or Wi-Fi). Everything below is free software. It also runs on a 64-bit **Debian 12 or 13 PC** instead of a Pi: see
@@ -99,7 +100,7 @@ The manual is installed on the Pi and served at `/docs/` (Help button in the app
 | [ft8.md](docs/ft8.md) | FT8 and FT4 from the browser, with an ADIF log and upload to QRZ and eQSL |
 | [logbook.md](docs/logbook.md) | follow and tune the radio from Log4OM or another logbook (Hamlib rigctl) |
 | [tailscale.md](docs/tailscale.md), [06-security-remote.md](docs/06-security-remote.md) | remote access and the security model |
-| [08-other-radios.md](docs/08-other-radios.md) | FTDX101D/MP (tested / same commands), FTDX10 and FT-710 (experimental) |
+| [08-other-radios.md](docs/08-other-radios.md) | FTDX101D/MP (tested / same commands), FTDX10 (tested), FT-710 (tried on a real radio, experimental) |
 
 <details>
 <summary>For developers and testers</summary>
