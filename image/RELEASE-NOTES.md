@@ -42,6 +42,11 @@ and goes back by itself if the new version does not start. Settings and accounts
 | `radio-remote-rade-linux-aarch64.tar.xz` | the optional RADE library (FreeDV neural modes V1 and V2) for a Raspberry Pi, installed with `install_rade.sh` (the PC build is `…-x86_64.tar.xz`) |
 | `SHA256SUMS` | checksums of all of the above |
 
+### What is new in 1.1.64
+
+- **FT-991A: the VFO's tone mode (CTCSS / DCS) is shown and can be switched off.** A tone squelch left on the VFO (from a memory channel, or set on the radio) keeps the radio silent for every signal without that tone: the meter shows a signal but nothing is heard. A **Tone** row under the mode buttons now shows the VFO's tone mode in FM, FM-N and DATA-FM, and in any mode while a tone is on; while ENC/DEC is on it turns red and has an **Off** button. Saving a memory channel with a tone now says so if the VFO's own tone could not be put back afterwards. Tested on a real FT-991A. Thanks to S50TOM for the report (issue #2).
+- **The PTT button no longer moves when you transmit.** The transmit timer under the buttons now keeps its space while hidden, so the buttons stay where they are when it appears.
+
 ### What is new in 1.1.63
 
 - **FT-710 brought up on a real radio.** Frequency, mode, the receive controls and the Menu tab (283 of 290 items) work. The radio's own names are used (DNF, NOTCH, CLAR RX, CLAR TX); the **clarifier** uses the FT-710's `CF` command; the **A/B key** and the VFO buttons follow the operated VFO as on the FTDX10; the **speech processor** and the **Tune button** are available; the audio card ("USB Audio Device") is found by itself. **Meters calibrated on a dummy load:** the ALC bar's full scale is 240 (the radio's mid mark reads 50%) and the power bar follows a fitted curve. **Still marked experimental:** on the one radio tested, voice from the app's microphone did not modulate (see the next item), so transmitting from the app is not proven on an FT-710.
