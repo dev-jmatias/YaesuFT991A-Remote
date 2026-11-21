@@ -52,6 +52,7 @@ How to read the table:
 | Quick split (QS) | from the manual, untested | - | not offered yet | not offered yet | - |
 | Split | works | works | not offered yet | not offered yet | from the manual |
 | VFO B (A=B, B=A, swap, set frequency) | works | works | works | works | from the manual |
+| VFO-A tone mode (CTCSS / DCS): show and switch off | from the manual, untested | - | - | - | - |
 | **Radio** | | | | | |
 | 144 MHz band | works | - | - | - | - |
 | 430 MHz band | works | - | - | - | - |

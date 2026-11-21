@@ -73,6 +73,7 @@ def _clar(v: int) -> list[str]:
 IPO_CODES = {"IPO": 0, "AMP1": 1, "AMP2": 2}
 AGC_CODES = {"OFF": 0, "FAST": 1, "MID": 2, "SLOW": 3, "AUTO": 4}                      # GT set P2 (manual: GT P1 P2, P1 = 0 fixed)
 AGC_NAMES = {0: "OFF", 1: "FAST", 2: "MID", 3: "SLOW", 4: "AUTO", 5: "AUTO", 6: "AUTO"}  # GT answer P3: 4/5/6 = AUTO-FAST/MID/SLOW
+TONE_NAMES = ("OFF", "CTCSS ENC/DEC", "CTCSS ENC", "DCS ENC/DEC", "DCS ENC")              # CT P2 0..4 (manual p.7), the same order as frame.TONE_MODES
 
 ENCODE: dict[str, tuple[str, Callable[[Any], list[str]]]] = {
     "narrow": ("NA0;", lambda v: [f"NA0{_b(v)};"]),
@@ -107,6 +108,7 @@ ENCODE: dict[str, tuple[str, Callable[[Any], list[str]]]] = {
     "mic_select": ("EX106;", lambda v: ([f"EX1061;", "EX0451;", "EX0741;", "EX0701;"] if v == "REAR" else ["EX1060;", "EX0450;", "EX0740;"])),
     "tuner": ("AC;", lambda v: [f"AC00{_b(v)};"]),                    # P3 0 = off, 1 = on (2 = start tune: NOT used)
     "scan": ("SC;", lambda v: [f"SC{_b(v)};"]),                       # P1 0 = off, 1 = scan up (2 = down: not offered)
+    "tone_mode": ("CT0;", lambda v: [f"CT0{TONE_NAMES.index(v)};"]),   # CT P1 0 (main band) P2 0..4: off, CTCSS ENC/DEC, CTCSS ENC, DCS ENC/DEC, DCS ENC
 }
 
 
@@ -209,6 +211,12 @@ def _p_sc(p):
     return {"scan": p != "0"}
 
 
+def _p_ct(p):
+    if len(p) != 2 or p[0] != "0" or p[1] not in "01234":
+        raise FrameError("bad CT")
+    return {"tone_mode": TONE_NAMES[int(p[1])]}
+
+
 def _p_flag0(name):
     def f(p):
         if len(p) != 2 or p[0] != "0" or p[1] not in "01":
@@ -261,5 +269,5 @@ PARSERS: dict[str, Callable[[str], dict]] = {
     "SH": _p_sh, "NA": _p_na, "IS": _p_is, "CO": _p_co, "BP": _p_bp, "PR": _p_pr, "ML": _p_ml,
     "BC": _p_flag0("auto_notch"), "NR": _p_flag0("nr"), "NB": _p_flag0("nb"), "RA": _p_flag0("att"),
     "RL": _p0("nr_level", 2), "NL": _p0("nb_level", 3), "PL": _p_pl,
-    "PA": _p_pa, "RT": _p_flag("rit"), "XT": _p_flag("xit"), "AC": _p_ac, "SC": _p_sc,
+    "PA": _p_pa, "RT": _p_flag("rit"), "XT": _p_flag("xit"), "AC": _p_ac, "SC": _p_sc, "CT": _p_ct,
 }
