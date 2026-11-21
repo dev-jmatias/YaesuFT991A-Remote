@@ -71,6 +71,10 @@ SPECS: list[dict[str, Any]] = [
     # Radio menu 106 "SSB MIC SELECT" (CAT manual p.9): 0 = MIC (front microphone), 1 = REAR (rear data/mic jack, used by the USB audio path).
     {"name": "mic_select", "label": "Mic input", "group": "Transmit", "kind": "enum", "feature": "mic_select", "quick": True,
      "choices": ["MIC", "REAR"]},
+    # CT P1 P2 (manual p.7): VFO-A's tone mode. Shown next to the mode row in the FM modes (and in any mode while it is not OFF), so a tone squelch left on from a memory channel can be
+    # seen and switched off: with CTCSS / DCS decoding on, the radio stays silent for a signal that does not carry the tone (issue #2).
+    {"name": "tone_mode", "label": "Tone", "group": "FM", "kind": "enum", "feature": "vfo_tone", "quick": True,
+     "choices": ["OFF", "CTCSS ENC/DEC", "CTCSS ENC", "DCS ENC/DEC", "DCS ENC"]},
     {"name": "dgid", "label": "WIRES DG-ID", "group": "C4FM", "kind": "enum", "feature": "dgid", "quick": True,
      "modes": ["C4FM"], "choices": ["AUTO"] + [str(n) for n in range(1, 100)]},
 ]

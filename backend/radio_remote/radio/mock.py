@@ -24,7 +24,7 @@ class MockDriver(RadioDriver):
             narrow=False, width_code=0, if_shift=0, contour=False, contour_freq=1500, apf=False, apf_freq=0,
             notch=False, notch_freq=1500, auto_notch=False, nr=False, nr_level=5, nb=False, nb_level=5,
             ipo="IPO", att=False, rit=False, xit=False, clarifier_hz=0, processor=False, processor_level=50,
-            monitor=False, monitor_level=50, tuner=False, tuning=False, dgid="AUTO", agc="AUTO", att_level="OFF", mic_select="REAR", frequency_b=7_100_000, band_b="40m", mode_b="LSB", split=False,
+            monitor=False, monitor_level=50, tuner=False, tuning=False, dgid="AUTO", tone_mode="OFF", agc="AUTO", att_level="OFF", mic_select="REAR", frequency_b=7_100_000, band_b="40m", mode_b="LSB", split=False,
         )
         self.state.update(vfo_memory="vfo", memory_channel=None)
         self.memories = [                                    # the simulated radio's stored channels

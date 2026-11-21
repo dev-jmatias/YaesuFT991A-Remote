@@ -33,6 +33,31 @@ export function createDgHint(host, ctx) {
   host.append(dg);
   return { update() { dg.hidden = ctx.S.state.mode !== "C4FM"; } };
 }
+// VFO-A's tone mode (CTCSS / DCS) under the mode row, in the FM modes, and in any mode while it is not OFF. A tone squelch left on (from a memory channel, or set on the radio) makes the radio
+// stay silent for every signal without that tone: a signal shows on the meter but nothing is heard (issue #2). The row turns red while a decoding mode is on, with an Off button.
+export function createToneMode(host, ctx) {
+  const spec = ctx.S.caps.controls.find((c) => c.name === "tone_mode");
+  if (!spec) return { update() {} };
+  const fmModes = ["FM", "FM-N", "DATA-FM"];
+  const w = el(`<div class="arow tonerow" hidden><span class="alabel" title="CTCSS / DCS tone of the VFO. ENC/DEC also keeps the radio silent for signals without the tone.">Tone</span>
+    <select aria-label="Tone mode">${spec.choices.map((v) => `<option value="${v}">${v}</option>`).join("")}</select>
+    <button class="led sm" data-off>Off</button></div>`);
+  const sel = w.querySelector("select"), off = w.querySelector("[data-off]");
+  sel.onchange = () => ctx.send("set_control", { name: "tone_mode", value: sel.value });
+  off.onclick = () => ctx.send("set_control", { name: "tone_mode", value: "OFF" });
+  host.append(w);
+  return {
+    update() {
+      const s = ctx.S.state, v = s.tone_mode;
+      w.hidden = v === undefined || !(fmModes.includes(s.mode) || v !== "OFF");
+      if (v === undefined) return;
+      if (document.activeElement !== sel) sel.value = v;
+      w.classList.toggle("tone-dec", v.endsWith("ENC/DEC"));
+      off.hidden = v === "OFF";
+      sel.disabled = off.disabled = ctx.S.user.role === "viewer";
+    },
+  };
+}
 // A squelch slider on the Radio tab, shown where a squelch is used: FM, AM and C4FM modes and the AIR band (it is also in the Levels tab, always).
 export function createSquelch(host, ctx) {
   // one row per receiver the radio has: MAIN (state mode/band) and, on a dual-receiver radio, SUB (mode_b/band_b)

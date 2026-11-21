@@ -484,6 +484,11 @@ button.aud:disabled { opacity: .35; }
 .tune.tuning::before { background: #fff; }
 .dghint { color: var(--cyan); font-size: .78rem; margin-left: 8px; }
 .dghint[hidden] { display: none; }
+.tonerow[hidden] { display: none; }
+.arow.tonerow select { grid-column: 2; }                                       /* the Off button takes the third column */
+.arow.tonerow:has([data-off][hidden]) select { grid-column: 2 / 4; }
+.tonerow [data-off][hidden] { display: none; }
+.tonerow.tone-dec .alabel, .tonerow.tone-dec select { color: var(--red, #ff6b6b); font-weight: 700; }
 
 /* big screens in tab mode: keep the tab bar in line with the centred page */
 html[data-tablet] .tabs { padding-left: max(10px, calc((100vw - 1240px) / 2)); padding-right: max(10px, calc((100vw - 1240px) / 2)); }

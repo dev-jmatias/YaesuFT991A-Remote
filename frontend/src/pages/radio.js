@@ -3,7 +3,7 @@ import { createAudioPanel } from "../audio.js";
 import { createVfoPanels } from "../components/vfo-panels.js";
 import { createVfoB } from "../components/vfo-b.js";
 import { createTuningStrip } from "../components/tuning-strip.js";
-import { createDgHint, createFilters, createLevels, createSquelch, createTuneButton } from "../components/controls.js";
+import { createDgHint, createFilters, createLevels, createSquelch, createToneMode, createTuneButton } from "../components/controls.js";
 import { createScanButton } from "../components/scan.js";
 import { createEqButtons, createEqualizer } from "../components/equalizer.js";
 import { createRecBar } from "../components/recordings.js";
@@ -291,6 +291,7 @@ export function renderRadio(root, { onLogout, onAuthLost }) {
     modeBox.append(modeRow);
     parts.push(createDgHint(modeBox, ctx));
     parts.push(createSquelch(modeBox, ctx));
+    parts.push(createToneMode(modeBox, ctx));
 
     // Recorder (under Mode): REC / Play / Send (voice keyer) / the last five recordings
     if (S.audio?.available && S.state.rec) parts.push(createRecBar(block(vfo, "Recorder"), ctx));

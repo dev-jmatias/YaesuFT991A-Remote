@@ -190,7 +190,7 @@ class YaesuCatDriver(RadioDriver):
         """Read commands for every control this radio profile exposes (width last: depends on mode/NA)."""
         feats = {k: self.caps.has(k) for k in ("width", "if_shift", "contour", "apf", "manual_notch", "auto_notch",
                                               "dnr", "noise_blanker", "ipo", "att", "att_levels", "agc", "rit", "xit", "processor",
-                                              "monitor", "tuner", "scan", "dgid", "mic_select", "audio_out_level", "audio_in_level", "amc_level", "cw_keyer", "rear_select")}
+                                              "monitor", "tuner", "scan", "dgid", "mic_select", "audio_out_level", "audio_in_level", "amc_level", "cw_keyer", "rear_select", "vfo_tone")}
         reads = []
         for spec in controls.available(feats):
             if spec["name"] in self.proto.ENCODE and self.proto.ENCODE[spec["name"]][0] not in reads:
@@ -346,7 +346,8 @@ class YaesuCatDriver(RadioDriver):
             t.add_done_callback(self._bg.discard)
         if "mode" in fields and old_mode is not None and fields["mode"] != old_mode and self.client:
             # Filter widths are per mode class: refresh them after any mode change.
-            t = asyncio.get_running_loop().create_task(self._reread(self.proto.NARROW_REREAD))
+            reads = [*self.proto.NARROW_REREAD, *(["CT0;"] if self.caps.has("vfo_tone") else [])]    # the tone mode only exists in the FM modes: read it as soon as one is chosen
+            t = asyncio.get_running_loop().create_task(self._reread(reads))
             self._bg.add(t)
             t.add_done_callback(self._bg.discard)
 
@@ -851,8 +852,8 @@ class YaesuCatDriver(RadioDriver):
                 key = "CN0" if tone[0] == "ctcss" else "CN1"
                 have = (await self._tone_state(c))[key]
                 if have != frame.tone_set(*tone):
-                    await self._put_tone_back(c, front, ctx)
-                    raise RadioError(f"the radio did not accept the tone on VFO-A (it reads {have})")
+                    problem = await self._put_tone_back(c, front, ctx)
+                    raise RadioError(f"the radio did not accept the tone on VFO-A (it reads {have})" + (f"; also, {problem}" if problem else ""))
             try:
                 await self._guard_cat(c.send(cmd))
                 await asyncio.sleep(0.6)                                             # the radio stores it
@@ -882,18 +883,28 @@ class YaesuCatDriver(RadioDriver):
                 log.info("memory write: channel %03d now %s", channel, got)
             finally:
                 if tone:
-                    await self._put_tone_back(c, front, ctx)
+                    problem = await self._put_tone_back(c, front, ctx)
+            if tone and problem:                                                     # the channel is stored, but VFO-A may keep the channel's tone squelch: say so (issue #2)
+                raise RadioError(f"channel {channel} was stored, but {problem}")
             await self._settled_reads(["IF;"])
             return got
 
-    async def _put_tone_back(self, c, front: dict, ctx: dict) -> None:
-        """After a write that used VFO-A: leave memory mode, put back VFO-A's own shift/tone for that band and mode, then its frequency and mode, then the V/M state."""
+    async def _put_tone_back(self, c, front: dict, ctx: dict) -> str | None:
+        """After a write that used VFO-A: leave memory mode, put back VFO-A's own shift/tone for that band and mode, then its frequency and mode, then the V/M state.
+        Returns None when that worked, otherwise what went wrong: a tone mode left on VFO-A makes the radio silent for every signal without that tone, so the caller reports it."""
+        problem = None
         try:
             await self._to_vfo(c)
             for ans in (ctx["OS"], ctx["CT"], ctx["CN0"], ctx["CN1"]):
                 if ans and ans != "?;":
                     await self._guard_cat(c.send(ans))
                     await asyncio.sleep(0.15)
+            want_ct = ctx.get("CT")
+            if want_ct and want_ct != "?;":
+                have_ct = await self._ask(c, "CT0;")
+                if have_ct != want_ct:
+                    problem = f"VFO-A's tone mode was not put back (it reads {have_ct}, was {want_ct}): check the Tone setting next to the mode"
+                    log.warning("memory write: %s", problem)
             for ans in (front["MD"], front["FA"]):
                 if ans and ans != "?;":
                     await self._guard_cat(c.send(ans))
@@ -905,6 +916,8 @@ class YaesuCatDriver(RadioDriver):
                     await self.memory_select(ch)
         except Exception as e:
             log.warning("could not put VFO-A back as it was: %s", e)
+            return f"VFO-A could not be put back as it was ({e}): check its frequency, mode and the Tone setting next to the mode"
+        return problem
 
     async def memory_delete(self, channel: int) -> None:
         """Empty one channel: recall it (and check that the radio really is on it), then AM; (VFO-A TO MEMORY CHANNEL, which on a recalled channel EMPTIES it: bench-found on a real FT-991A, 2026-10-08).
@@ -954,6 +967,8 @@ class YaesuCatDriver(RadioDriver):
         await asyncio.sleep(self.t.settle_s)
         log.info("back to VFO: sent VM;, radio answers IF with %s", await self._guard_cat(c.request("IF;")))
         await self._settled_reads(["IF;", "FA;", "MD0;"])
+        if self.caps.has("vfo_tone"):
+            await self._ask(c, "CT0;")                                   # the VFO's own tone mode, not the channel's (a refusal outside FM is fine)
 
     async def power_on(self) -> None:
         """PS1; (manual p.15): the radio must first receive dummy data, and PS1; follows after one but before two seconds.

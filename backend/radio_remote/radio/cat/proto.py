@@ -523,7 +523,7 @@ class HfProto:
                 raise FrameError("bad PR")
             return {("processor" if p[0] == "0" else "mic_eq"): p[1] == "1"}
         parser = fc.PARSERS.get(cmd)
-        return parser(p) if parser and cmd not in ("FT", "EX", "SH", "IS", "RA", "AC") else {}
+        return parser(p) if parser and cmd not in ("FT", "EX", "SH", "IS", "RA", "AC", "CT") else {}
 
 
 def proto_for(model: str):
